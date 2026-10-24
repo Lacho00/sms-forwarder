@@ -1,0 +1,8 @@
+.superpowers/
+.codebase-memory/
+*.jks
+*.keystore
+local.properties
+.gradle/
+build/
+private/
