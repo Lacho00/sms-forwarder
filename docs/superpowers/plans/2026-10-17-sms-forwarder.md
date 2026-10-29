@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- `minSdk = 31`, `compileSdk = 36`, `targetSdk = 36`. Paquete y `applicationId`: `dev.smsforwarder`. La build debug lleva `applicationIdSuffix = ".debug"` (convive con la release).
+- `minSdk = 31`, `compileSdk = 37` (lo exige Compose BOM 2026.09.00), `targetSdk = 36`. Paquete y `applicationId`: `dev.smsforwarder`. La build debug lleva `applicationIdSuffix = ".debug"` (convive con la release).
 - Versiones fijadas arriba en `gradle/libs.versions.toml`. Antes de la Task 1, comprobar con context7 la configuración de AGP 9 (Kotlin integrado en AGP: **no** aplicar `org.jetbrains.kotlin.android`) y la compatibilidad AGP 9.4.1 / Gradle 9.8.1 / KSP 2.3.12. Si algo no encaja, ajustar la versión mínima necesaria y anotarlo en el commit.
 - No hay Android SDK en local. Local: solo `./gradlew :core:test` con JDK 17 (`/usr/lib/jvm/java-17-openjdk`). Todo lo de `:app` se verifica en GitHub Actions (`gh run watch`).
 - `settings.gradle.kts` incluye `:app` solo si existe `ANDROID_HOME` o `local.properties`. Así `:core` compila sin SDK.
