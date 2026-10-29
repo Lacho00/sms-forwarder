@@ -6,3 +6,6 @@ local.properties
 .gradle/
 build/
 private/
+.idea/
+*.iml
+.kotlin/
