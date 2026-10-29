@@ -7,6 +7,7 @@ import dev.smsforwarder.core.classify
 import dev.smsforwarder.core.interpretConnectionTest
 import dev.smsforwarder.data.Credentials
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -71,6 +72,7 @@ class IngestClient(private val http: OkHttpClient) {
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont ->
     cont.invokeOnCancellation { cancel() }
     enqueue(
@@ -80,7 +82,7 @@ private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont 
             }
 
             override fun onResponse(call: Call, response: Response) {
-                if (cont.isActive) cont.resume(response) else response.close()
+                cont.resume(response) { response.close() }
             }
         },
     )

@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import dev.smsforwarder.SmsForwarderApp
 import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SmsStatus
+import kotlinx.coroutines.CancellationException
 
 class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -18,10 +19,16 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val sms = repo.get(id) ?: return Result.success()
         if (sms.status == SmsStatus.SENT) return Result.success()
 
-        // No credentials yet: keep the SMS queued and try again later.
-        val credentials = graph.secretStore.get() ?: return Result.retry()
-
-        val outcome = graph.ingestClient.send(credentials, sms.sender, sms.body, sms.receivedAt)
+        // Transient failures (Keystore provider, DataStore read) keep the SMS queued and back off.
+        val outcome = try {
+            // No credentials yet: keep the SMS queued and try again later.
+            val credentials = graph.secretStore.get() ?: return Result.retry()
+            graph.ingestClient.send(credentials, sms.sender, sms.body, sms.receivedAt)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return Result.retry()
+        }
         repo.recordAttempt(id, outcome)
         return when (outcome) {
             is SendOutcome.Retry -> Result.retry()

@@ -88,6 +88,16 @@ class SendWorkerTest {
         assertEquals(401, sms.lastHttpCode)
     }
 
+    @Test fun secretStoreFailureReturnsRetryAndStaysQueued() = runBlocking {
+        val id = insertSms()
+        graph.secretStore = object : SecretStore {
+            override suspend fun get(): Credentials? = throw java.security.ProviderException("keystore")
+            override suspend fun set(c: Credentials) = Unit
+        }
+        assertEquals(ListenableWorker.Result.retry(), run(id))
+        assertEquals(SmsStatus.QUEUED, graph.smsRepository.get(id)!!.status)
+    }
+
     @Test fun missingCredentialsReturnsRetry() = runBlocking {
         val id = insertSms()
         graph.secretStore = FakeSecretStore(null)
