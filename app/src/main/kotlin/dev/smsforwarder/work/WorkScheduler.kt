@@ -3,10 +3,12 @@ package dev.smsforwarder.work
 import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import java.util.concurrent.TimeUnit
@@ -33,9 +35,20 @@ object WorkScheduler {
         ids.forEach { enqueueSend(context, it, replace = true) }
     }
 
-    /** Filled in by Task 11. */
-    fun schedulePeriodicSweep(context: Context) = Unit
+    fun schedulePeriodicSweep(context: Context) {
+        val request = PeriodicWorkRequestBuilder<SweepWorker>(15, TimeUnit.MINUTES).build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "sweep-periodic",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
+    }
 
-    /** Filled in by Task 11. */
-    fun sweepNow(context: Context) = Unit
+    fun sweepNow(context: Context) {
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "sweep-now",
+            ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<SweepWorker>().build(),
+        )
+    }
 }

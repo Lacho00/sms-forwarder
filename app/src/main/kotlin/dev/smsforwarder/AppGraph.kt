@@ -7,9 +7,11 @@ import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.KeystoreSecretStore
 import dev.smsforwarder.data.SecretStore
 import dev.smsforwarder.data.SettingsRepository
+import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.net.IngestClient
 import dev.smsforwarder.net.defaultHttpClient
+import dev.smsforwarder.sms.SweepResult
 import dev.smsforwarder.work.WorkScheduler
 
 class AppGraph(context: Context) {
@@ -31,4 +33,8 @@ class AppGraph(context: Context) {
             scheduler = { id -> WorkScheduler.enqueueSend(context.applicationContext, id, replace = true) },
         )
     }
+
+    // Seams for the health check and notifications (Task 12); no-ops until then.
+    var onRecovered: (List<SmsEntity>) -> Unit = {}
+    var afterSweep: suspend (SweepResult) -> Unit = {}
 }
