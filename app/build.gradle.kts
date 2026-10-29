@@ -51,6 +51,9 @@ dependencies {
     implementation(libs.room.ktx)
     implementation(libs.kotlinx.coroutines.android)
     ksp(libs.room.compiler)
+    implementation(libs.okhttp)
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.datastore.preferences)
     implementation(platform(libs.compose.bom))
     implementation(libs.activity.compose)
     implementation(libs.compose.ui)
@@ -63,6 +66,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.work.testing)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
 }
