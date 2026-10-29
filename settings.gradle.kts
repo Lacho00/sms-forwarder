@@ -16,8 +16,8 @@ dependencyResolutionManagement {
 rootProject.name = "sms-forwarder"
 
 include(":core")
-if (file("app").isDirectory &&
-    (System.getenv("ANDROID_HOME") != null || file("local.properties").exists())
-) {
+val androidSdkPresent = System.getenv("ANDROID_HOME")?.let { file(it).isDirectory } == true ||
+    file("local.properties").exists()
+if (file("app").isDirectory && androidSdkPresent) {
     include(":app")
 }
