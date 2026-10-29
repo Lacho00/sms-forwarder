@@ -5,7 +5,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dev.smsforwarder.SmsForwarderApp
 import dev.smsforwarder.sms.ContentInboxReader
+import dev.smsforwarder.sms.SweepResult
 import dev.smsforwarder.sms.Sweeper
+import kotlin.coroutines.cancellation.CancellationException
 
 class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -20,7 +22,13 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             enqueue = { id -> WorkScheduler.enqueueSend(applicationContext, id) },
             onRecovered = graph.onRecovered,
         )
-        val result = sweeper.sweep()
+        val result = try {
+            sweeper.sweep()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            SweepResult(recovered = 0, inboxUnreadable = true)
+        }
         repo.purgeOld()
         WorkScheduler.kickQueued(applicationContext, repo.queuedIds())
         graph.afterSweep(result)

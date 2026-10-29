@@ -9,6 +9,7 @@ import dev.smsforwarder.work.WorkScheduler
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        WorkScheduler.schedulePeriodicSweep(context.applicationContext)
         WorkScheduler.sweepNow(context.applicationContext)
     }
 }

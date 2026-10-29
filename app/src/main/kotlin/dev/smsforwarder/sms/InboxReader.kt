@@ -44,12 +44,16 @@ class ContentInboxReader(context: Context) : InboxReader {
         }
     } catch (e: SecurityException) {
         null
+    } catch (e: RuntimeException) {
+        null
     }
 
     override fun hasAnyRow(): Boolean? = try {
         resolver.query(Telephony.Sms.Inbox.CONTENT_URI, arrayOf("_id"), null, null, "date DESC LIMIT 1")
             ?.use { it.moveToFirst() }
     } catch (e: SecurityException) {
+        null
+    } catch (e: RuntimeException) {
         null
     }
 

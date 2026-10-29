@@ -11,6 +11,7 @@ import dev.smsforwarder.work.WorkScheduler
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WorkScheduler.schedulePeriodicSweep(applicationContext)
         setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {
                 Text("SMS Forwarder")
