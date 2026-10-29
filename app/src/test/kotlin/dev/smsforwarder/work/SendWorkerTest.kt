@@ -103,8 +103,8 @@ class SendWorkerTest {
         val shadow = shadowOf(manager)
         assertEquals(1, shadow.allNotifications.size)
         assertNotNull(shadow.getNotification(Notifier.ID_TOKEN_REJECTED))
-        assertNull(shadow.getNotification(Notifier.ID_STUCK_BASE + first.toInt()))
-        assertNull(shadow.getNotification(Notifier.ID_STUCK_BASE + second.toInt()))
+        assertNull(shadow.getNotification(Notifier.STUCK_TAG, first.toInt()))
+        assertNull(shadow.getNotification(Notifier.STUCK_TAG, second.toInt()))
     }
 
     @Test fun secretStoreFailureReturnsRetryAndStaysQueued() = runBlocking {

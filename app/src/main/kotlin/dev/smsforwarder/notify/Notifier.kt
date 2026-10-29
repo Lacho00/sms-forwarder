@@ -44,9 +44,10 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
             "sin enviar (${item.attempts} intentos)"
         }
         post(
-            ID_STUCK_BASE + item.id.toInt(),
+            item.id.toInt(),
             "SMS atascado",
             "El SMS de ${item.sender} de las ${time(item.receivedAt)} está $state.",
+            STUCK_TAG,
         )
     }
 
@@ -80,7 +81,7 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
     private fun time(epochMs: Long): String =
         timeFormat.format(Instant.ofEpochMilli(epochMs).atZone(zone))
 
-    private fun post(id: Int, title: String, text: String) {
+    private fun post(id: Int, title: String, text: String, tag: String? = null) {
         val open = PendingIntent.getActivity(
             context,
             0,
@@ -95,13 +96,14 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
-        manager.notify(id, notification)
+        manager.notify(tag, id, notification)
     }
 
     companion object {
         const val CHANNEL_ID = "alerts"
         const val ID_RECOVERED = 1001
-        const val ID_STUCK_BASE = 2000
+        /** Stuck notifications use this tag with the SMS id, so they never clash with the fixed ids. */
+        const val STUCK_TAG = "stuck"
         const val ID_HEALTH = 3001
         const val ID_TOKEN_REJECTED = 3002
 

@@ -42,8 +42,12 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     private suspend fun notifyRejected(graph: AppGraph, id: Long, outcome: SendOutcome.Rejected) {
         try {
             when (outcome.httpCode) {
-                401 -> graph.notifier.tokenRejected(graph.smsRepository.idsWithError401().size)
-                400 -> graph.smsRepository.get(id)?.let {
+                401 -> {
+                    val waiting = graph.smsRepository.idsWithError401().size
+                    if (waiting > 0) graph.notifier.tokenRejected(waiting)
+                }
+                // A late result on an already-sent row was ignored by recordAttempt: stay silent.
+                400 -> graph.smsRepository.get(id)?.takeIf { it.status == SmsStatus.ERROR }?.let {
                     graph.notifier.stuck(it)
                     graph.smsRepository.markStuckNotified(id)
                 }
