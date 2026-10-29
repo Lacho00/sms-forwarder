@@ -56,6 +56,10 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
         db.withTransaction {
             val sms = dao.get(id) ?: return@withTransaction
             val now = clock.now()
+            // A late result from an overlapping worker must not undo a delivered SMS.
+            if (sms.status == SmsStatus.SENT) {
+                if (outcome !is SendOutcome.Accepted) return@withTransaction
+            }
             val (httpCode, error) = when (outcome) {
                 SendOutcome.Accepted -> 200 to null
                 is SendOutcome.Retry -> outcome.httpCode to outcome.reason
@@ -82,7 +86,9 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
     suspend fun requeue(id: Long) {
         db.withTransaction {
             val sms = dao.get(id) ?: return@withTransaction
-            dao.update(sms.copy(status = SmsStatus.QUEUED, stuckNotified = false))
+            if (sms.status == SmsStatus.SENT) return@withTransaction
+            // The stuck clock restarts: firstSeenAt only feeds the stuck check.
+            dao.update(sms.copy(status = SmsStatus.QUEUED, stuckNotified = false, firstSeenAt = clock.now()))
         }
     }
 

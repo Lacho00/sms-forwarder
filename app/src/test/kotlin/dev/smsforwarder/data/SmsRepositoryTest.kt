@@ -20,7 +20,7 @@ import org.robolectric.RuntimeEnvironment
 
 @RunWith(RobolectricTestRunner::class)
 class SmsRepositoryTest {
-    private val now = 1_800_000_000_000L
+    private var now = 1_800_000_000_000L
     private val clock = Clock { now }
     private lateinit var db: AppDatabase
     private lateinit var repo: SmsRepository
@@ -95,5 +95,26 @@ class SmsRepositoryTest {
         assertNotNull(repo.get(queued))
         assertNotNull(repo.get(error))
         assertEquals(null, repo.get(sent))
+    }
+
+    @Test fun requeueRestartsStuckClock() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        repo.recordAttempt(id, SendOutcome.Rejected(400, null))
+        now += QueuePolicy.STUCK_AFTER_MS + 1L
+        assertEquals(listOf(id), repo.stuckToNotify().map { it.id })
+
+        repo.requeue(id)
+
+        assertEquals(SmsStatus.QUEUED, repo.get(id)!!.status)
+        assertTrue(repo.stuckToNotify().isEmpty())
+    }
+
+    @Test fun lateRetryDoesNotUndoSent() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        repo.recordAttempt(id, SendOutcome.Accepted)
+        repo.recordAttempt(id, SendOutcome.Retry(null, "network"))
+        repo.requeue(id)
+        assertEquals(SmsStatus.SENT, repo.get(id)!!.status)
+        assertTrue(repo.queuedIds().isEmpty())
     }
 }
