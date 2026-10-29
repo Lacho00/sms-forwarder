@@ -1,5 +1,6 @@
 package dev.smsforwarder.work
 
+import android.app.NotificationManager
 import android.content.Context
 import androidx.work.ListenableWorker
 import androidx.work.testing.TestListenableWorkerBuilder
@@ -12,16 +13,20 @@ import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.IngestResult
 import dev.smsforwarder.data.SecretStore
+import dev.smsforwarder.notify.Notifier
 import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 
 private class FakeSecretStore(private var value: Credentials?) : SecretStore {
     override suspend fun get(): Credentials? = value
@@ -52,8 +57,8 @@ class SendWorkerTest {
         graph.db.close()
     }
 
-    private suspend fun insertSms(): Long {
-        val record = SmsRecord("OPERADOR", body, 1_800_000_000_000L, null, null)
+    private suspend fun insertSms(receivedAt: Long = 1_800_000_000_000L): Long {
+        val record = SmsRecord("OPERADOR", body, receivedAt, null, null)
         return (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER) as IngestResult.Inserted).id
     }
 
@@ -86,6 +91,20 @@ class SendWorkerTest {
         val sms = graph.smsRepository.get(id)!!
         assertEquals(SmsStatus.ERROR, sms.status)
         assertEquals(401, sms.lastHttpCode)
+    }
+
+    @Test fun `401DoesNotNotifyPerSms`() = runBlocking {
+        val first = insertSms(1_800_000_000_000L)
+        val second = insertSms(1_800_000_100_000L)
+        repeat(2) { server.enqueue(MockResponse.Builder().code(401).body("{\"error\":\"unauthorized\"}").build()) }
+        run(first)
+        run(second)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val shadow = shadowOf(manager)
+        assertEquals(1, shadow.allNotifications.size)
+        assertNotNull(shadow.getNotification(Notifier.ID_TOKEN_REJECTED))
+        assertNull(shadow.getNotification(Notifier.ID_STUCK_BASE + first.toInt()))
+        assertNull(shadow.getNotification(Notifier.ID_STUCK_BASE + second.toInt()))
     }
 
     @Test fun secretStoreFailureReturnsRetryAndStaysQueued() = runBlocking {

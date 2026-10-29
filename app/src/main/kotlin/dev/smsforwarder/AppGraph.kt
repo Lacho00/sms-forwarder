@@ -9,8 +9,10 @@ import dev.smsforwarder.data.SecretStore
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
+import dev.smsforwarder.health.HealthChecker
 import dev.smsforwarder.net.IngestClient
 import dev.smsforwarder.net.defaultHttpClient
+import dev.smsforwarder.notify.Notifier
 import dev.smsforwarder.sms.SweepResult
 import dev.smsforwarder.work.WorkScheduler
 
@@ -34,7 +36,24 @@ class AppGraph(context: Context) {
         )
     }
 
-    // Seams for the health check and notifications (Task 12); no-ops until then.
-    var onRecovered: (List<SmsEntity>) -> Unit = {}
-    var afterSweep: suspend (SweepResult) -> Unit = {}
+    val notifier by lazy { Notifier(context.applicationContext) }
+    val healthChecker by lazy {
+        HealthChecker(context.applicationContext, smsRepository, secretStore, settings)
+    }
+
+    // Seams so tests can replace the notifications; by default they use the real Notifier.
+    var onRecovered: (List<SmsEntity>) -> Unit = { notifier.recovered(it) }
+    var afterSweep: suspend (SweepResult) -> Unit = { runSweepAlerts(it) }
+
+    /** Runs after every sweep: stuck SMS first, then the health check (notified only when it changes). */
+    private suspend fun runSweepAlerts(result: SweepResult) {
+        for (item in smsRepository.stuckToNotify()) {
+            notifier.stuck(item)
+            smsRepository.markStuckNotified(item.id)
+        }
+        val issues = healthChecker.check(result.inboxUnreadable)
+        val names = issues.map { it.name }.toSet()
+        if (names != settings.lastNotifiedIssues()) notifier.health(issues)
+        settings.setLastNotifiedIssues(names)
+    }
 }

@@ -31,7 +31,13 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         }
         repo.purgeOld()
         WorkScheduler.kickQueued(applicationContext, repo.queuedIds())
-        graph.afterSweep(result)
+        try {
+            graph.afterSweep(result)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Alerts are best effort: a failed health check must not fail the sweep.
+        }
         return Result.success()
     }
 }
