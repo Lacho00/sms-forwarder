@@ -82,6 +82,10 @@ class HealthCheckerTest {
     }
 
     @Test fun inboxUnreadableWithPermissionIsMiuiSmsBlocked() = runBlocking {
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.READ_SMS,
+        )
         assertTrue(HealthIssue.MIUI_SMS_BLOCKED in checker.check(inboxUnreadable = true))
         assertFalse(HealthIssue.MIUI_SMS_BLOCKED in checker.check(inboxUnreadable = false))
     }
