@@ -80,6 +80,12 @@ no hace nada. Motivo: un SMS que llegue con la app anterior aún activa entrarí
 2. **Barrido periódico** con WorkManager, cada 15 minutos (mínimo de Android), sin requisito de red.
 3. **Barrido puntual** al abrir la app, al pulsar "Barrer bandeja ahora" y tras `BOOT_COMPLETED`.
 
+**Verificado en teléfono 2026-10-29** (Android 14, MIUI): para SMS de una y de dos partes, el
+receptor y la bandeja coinciden en remitente, hash y longitud del cuerpo, y `pduTimestamp` es igual
+a `date_sent` (`localKey` idéntica). `date` llega varios segundos después de `date_sent`, así que
+`date_sent` manda. `joinParts` reproduce el cuerpo de la bandeja, saltos de línea incluidos. Una app
+que nunca se abrió no recibe `SMS_RECEIVED`: el primer arranque debe lanzarla.
+
 ### Barrido
 
 - Lee `content://sms/inbox` (permiso `READ_SMS`) desde un cursor guardado, con **24 horas de
