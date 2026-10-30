@@ -33,6 +33,9 @@ interface SmsDao {
     @Query("SELECT * FROM sms ORDER BY receivedAt DESC, id DESC")
     fun observeAll(): Flow<List<SmsEntity>>
 
+    @Query("SELECT * FROM sms WHERE id = :id")
+    fun observe(id: Long): Flow<SmsEntity?>
+
     @Query("SELECT * FROM attempt WHERE smsId = :smsId ORDER BY at DESC, id DESC")
     fun observeAttempts(smsId: Long): Flow<List<AttemptEntity>>
 

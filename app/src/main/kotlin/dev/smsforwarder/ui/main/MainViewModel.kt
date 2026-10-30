@@ -75,7 +75,8 @@ class MainViewModel(
     init {
         // A finished sweep is a good moment to look at the health again.
         viewModelScope.launch {
-            settings.lastSweepAtFlow.collect { refreshIssues() }
+            combine(settings.lastSweepAtFlow, settings.inboxUnreadableFlow) { _, _ -> }
+                .collect { refreshIssues() }
         }
     }
 
@@ -83,7 +84,7 @@ class MainViewModel(
     fun refreshIssues() {
         viewModelScope.launch {
             try {
-                issues.value = healthChecker.check()
+                issues.value = healthChecker.check(inboxUnreadable = settings.inboxUnreadable())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -90,6 +90,15 @@ class SettingsRepositoryTest {
         assertEquals(ThemeMode.SYSTEM, settings.themeMode.first())
     }
 
+    @Test fun inboxUnreadableRoundTrips() = runBlocking {
+        assertEquals(false, settings.inboxUnreadable())
+        settings.setInboxUnreadable(true)
+        assertEquals(true, settings.inboxUnreadable())
+        assertEquals(true, settings.inboxUnreadableFlow.first())
+        settings.setInboxUnreadable(false)
+        assertEquals(false, settings.inboxUnreadable())
+    }
+
     @Test fun lastSweepAtRoundTrips() = runBlocking {
         assertEquals(null, settings.lastSweepAt())
         settings.setLastSweepAt(1_800_000_000_000L)

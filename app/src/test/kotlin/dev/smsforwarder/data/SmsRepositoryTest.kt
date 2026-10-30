@@ -7,6 +7,7 @@ import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.core.SmsStatus
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -41,6 +42,12 @@ class SmsRepositoryTest {
 
     @After fun tearDown() {
         db.close()
+    }
+
+    @Test fun observeEmitsRowAndNullWhenMissing() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        assertEquals(id, repo.observe(id).first()!!.id)
+        assertEquals(null, repo.observe(id + 100).first())
     }
 
     @Test fun ingestTwiceSameRecordIsAlreadyKnown() = runBlocking {

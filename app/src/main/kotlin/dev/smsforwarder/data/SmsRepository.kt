@@ -50,6 +50,8 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
 
     fun observeAll(): Flow<List<SmsEntity>> = dao.observeAll()
 
+    fun observe(id: Long): Flow<SmsEntity?> = dao.observe(id)
+
     fun observeAttempts(smsId: Long): Flow<List<AttemptEntity>> = dao.observeAttempts(smsId)
 
     suspend fun recordAttempt(id: Long, outcome: SendOutcome) {

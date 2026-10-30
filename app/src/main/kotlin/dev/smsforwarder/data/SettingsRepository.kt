@@ -86,6 +86,14 @@ class SettingsRepository(
         store.edit { it[LAST_SWEEP_AT_KEY] = t }
     }
 
+    val inboxUnreadableFlow: Flow<Boolean> = store.data.map { it[INBOX_UNREADABLE_KEY] ?: false }
+
+    suspend fun inboxUnreadable(): Boolean = store.data.first()[INBOX_UNREADABLE_KEY] ?: false
+
+    suspend fun setInboxUnreadable(v: Boolean) {
+        store.edit { it[INBOX_UNREADABLE_KEY] = v }
+    }
+
     /**
      * New credentials usually mean the old token failed (401) or none existed yet, so every
      * 401 row goes back to QUEUED and every queued SMS gets a fresh send, skipping its backoff.
@@ -114,6 +122,7 @@ class SettingsRepository(
         val SWEEP_FLOOR_KEY = longPreferencesKey("sweep_floor")
         val LAST_SWEEP_AT_KEY = longPreferencesKey("last_sweep_at")
         val ONBOARDING_KEY = booleanPreferencesKey("onboarding_done")
+        val INBOX_UNREADABLE_KEY = booleanPreferencesKey("inbox_unreadable")
         val NOTIFIED_ISSUES_KEY = stringSetPreferencesKey("last_notified_issues")
     }
 }

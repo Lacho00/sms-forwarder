@@ -9,7 +9,6 @@ import dev.smsforwarder.data.SmsRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -27,7 +26,7 @@ class DetailViewModel(
 ) : ViewModel() {
 
     val state: StateFlow<DetailUiState> = combine(
-        smsRepository.observeAll().map { list -> list.firstOrNull { it.id == smsId } },
+        smsRepository.observe(smsId),
         smsRepository.observeAttempts(smsId),
     ) { sms, attempts -> DetailUiState(sms, attempts) }
         .stateIn(
