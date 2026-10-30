@@ -89,4 +89,11 @@ class SettingsRepositoryTest {
     @Test fun themeDefaultsToSystem() = runBlocking {
         assertEquals(ThemeMode.SYSTEM, settings.themeMode.first())
     }
+
+    @Test fun lastSweepAtRoundTrips() = runBlocking {
+        assertEquals(null, settings.lastSweepAt())
+        settings.setLastSweepAt(1_800_000_000_000L)
+        assertEquals(1_800_000_000_000L, settings.lastSweepAt())
+        assertEquals(1_800_000_000_000L, settings.lastSweepAtFlow.first())
+    }
 }

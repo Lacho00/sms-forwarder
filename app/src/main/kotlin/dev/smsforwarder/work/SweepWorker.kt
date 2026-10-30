@@ -29,6 +29,7 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         } catch (e: Exception) {
             SweepResult(recovered = 0, inboxUnreadable = true)
         }
+        graph.settings.setLastSweepAt(graph.clock.now())
         repo.purgeOld()
         WorkScheduler.kickQueued(applicationContext, repo.queuedIds())
         try {
