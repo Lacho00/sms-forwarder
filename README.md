@@ -11,4 +11,9 @@ La app se compila en GitHub Actions, no en local. En local solo se prueba el mó
 
 ## Firma
 
-Ver [docs/signing.md](docs/signing.md) (pendiente de escribir).
+Ver [docs/signing.md](docs/signing.md). Las versiones se publican con una etiqueta `vX.Y.Z`;
+la Release incluye la APK firmada.
+
+## Pruebas manuales
+
+[docs/manual-test-checklist.md](docs/manual-test-checklist.md).
