@@ -83,7 +83,6 @@ fun SettingsScreen(
                 onValueChange = onUrlChange,
                 label = { Text("URL del Worker") },
                 singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
                 isError = form.urlError != null,
                 supportingText = form.urlError?.let { error -> { Text(error) } },
                 modifier = Modifier.fillMaxWidth().testTag("field_url"),

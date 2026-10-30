@@ -203,7 +203,7 @@ Detalle de un SMS (al tocar una fila): texto completo, remitente, SIM, hora, ori
 barrido), lista de intentos con su resultado. Botón "Reintentar" si está en error.
 
 Ajustes:
-- URL del Worker y token. Se muestran ocultos; el token **nunca se vuelve a mostrar**, solo se
+- URL del Worker y token. La URL se ve al teclear; el token se oculta y **nunca se vuelve a mostrar**, solo se
   sustituye.
 - Botón "Probar conexión": envía al Worker un POST con cuerpo `{}`. `400` = URL y token correctos
   (el Worker no guarda nada). `401` = token incorrecto. Otro resultado = error de red o URL.

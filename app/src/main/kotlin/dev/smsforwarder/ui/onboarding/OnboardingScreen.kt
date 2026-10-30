@@ -294,7 +294,6 @@ private fun ConnectionStep(state: OnboardingUiState, vm: OnboardingViewModel, on
         onValueChange = vm::setUrl,
         label = { Text("URL del Worker") },
         singleLine = true,
-        visualTransformation = PasswordVisualTransformation(),
         isError = state.urlError != null,
         supportingText = state.urlError?.let { error -> { Text(error) } },
         modifier = Modifier.fillMaxWidth().testTag("field_url"),

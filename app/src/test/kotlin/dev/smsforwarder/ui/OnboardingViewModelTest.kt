@@ -135,7 +135,7 @@ class OnboardingViewModelTest {
         vm.finish(loadedAt)
         assertEquals(loadedAt, settings.sweepFloor())
         assertEquals(loadedAt, settings.sweepCursor())
-        assertTrue(settings.sweepFloor() < now)
+        assertTrue(loadedAt < now)
     }
 
     private suspend fun reachConnection() {
