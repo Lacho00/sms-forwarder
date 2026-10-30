@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -96,5 +97,39 @@ class SettingsScreenTest {
         assertEquals("test-token", saved.single().token)
         compose.onAllNodes(hasText("test-token", substring = true), useUnmergedTree = true)
             .assertCountEquals(0)
+    }
+
+    private fun vmFor(tested: MutableList<Credentials>, savedCreds: Credentials?) = SettingsViewModel(
+        settings = settings,
+        testConnection = { tested += it; ConnectionTestResult.OK },
+        loadSaved = { savedCreds },
+        saveCredentials = {},
+        scope = CoroutineScope(Dispatchers.Unconfined),
+    )
+
+    @Test fun settingsTestWithOnlyOneFieldTypedDoesNotUseSavedCredentials() {
+        val tested = mutableListOf<Credentials>()
+        val vm = vmFor(tested, Credentials("https://saved.example.com/ingest", "saved-token"))
+
+        vm.setUrl("https://example.com/ingest")
+        vm.test()
+        assertEquals("Escribe la URL y el token para probarlos", vm.form.value.message)
+
+        vm.setUrl("")
+        vm.setToken("typed-token")
+        vm.test()
+        assertEquals("Escribe la URL y el token para probarlos", vm.form.value.message)
+
+        assertTrue(tested.isEmpty())
+    }
+
+    @Test fun settingsTestWithEmptyFieldsUsesSavedCredentials() {
+        val tested = mutableListOf<Credentials>()
+        val saved = Credentials("https://saved.example.com/ingest", "saved-token")
+        val vm = vmFor(tested, saved)
+
+        vm.test()
+
+        assertEquals(listOf(saved), tested)
     }
 }

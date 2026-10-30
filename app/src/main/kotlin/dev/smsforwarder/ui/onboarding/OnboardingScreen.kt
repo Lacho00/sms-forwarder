@@ -51,6 +51,7 @@ import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.health.MiuiIntents
 import dev.smsforwarder.ui.recovery.RecoveryList
 import dev.smsforwarder.ui.recovery.RecoveryViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /** Opens a system screen; vendor screens can be missing or refuse third-party apps. */
@@ -109,11 +110,19 @@ fun OnboardingScreen(
             if (state.step == OnboardingStep.RECOVERY) {
                 RecoveryStep(recoveryVm) {
                     scope.launch {
-                        recoveryVm.sendSelected()
-                        vm.finish()
-                        onFinished()
+                        vm.setFinishError(null)
+                        try {
+                            recoveryVm.sendSelected()
+                            vm.finish(recoveryVm.loadedAt)
+                            onFinished()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            vm.setFinishError(OnboardingTexts.FINISH_ERROR)
+                        }
                     }
                 }
+                state.finishError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             } else {
                 Column(
                     modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),

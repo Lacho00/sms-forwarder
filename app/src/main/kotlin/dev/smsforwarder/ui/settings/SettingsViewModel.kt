@@ -83,14 +83,20 @@ class SettingsViewModel(
     fun test() {
         val current = _form.value
         val typed = current.url.isNotBlank() || current.token.isNotBlank()
-        if (typed && !UrlValidator.isValid(current.url)) {
-            _form.update { it.copy(urlError = "La URL debe empezar por https://") }
-            return
+        if (typed) {
+            if (current.url.isBlank() || current.token.isBlank()) {
+                _form.update { it.copy(message = "Escribe la URL y el token para probarlos") }
+                return
+            }
+            if (!UrlValidator.isValid(current.url)) {
+                _form.update { it.copy(urlError = "La URL debe empezar por https://") }
+                return
+            }
         }
         launch {
             _form.update { it.copy(busy = true, message = null) }
             try {
-                val credentials = if (typed && current.token.isNotBlank()) {
+                val credentials = if (typed) {
                     Credentials(current.url.trim(), current.token)
                 } else {
                     loadSaved()

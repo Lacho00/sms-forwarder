@@ -32,8 +32,10 @@ import java.util.UUID
 class OnboardingViewModelTest {
     private class FakeSecrets : SecretStore {
         var saved: Credentials? = null
+        var failOnSet = false
         override suspend fun get(): Credentials? = saved
         override suspend fun set(c: Credentials) {
+            if (failOnSet) throw IllegalStateException("keystore unavailable")
             saved = c
         }
     }
@@ -122,9 +124,64 @@ class OnboardingViewModelTest {
 
     @Test fun onboardingFinishSetsFloorCursorAndDone() = runBlocking {
         assertFalse(settings.onboardingDone.first())
-        vm.finish()
+        vm.finish(now)
         assertEquals(now, settings.sweepFloor())
         assertEquals(now, settings.sweepCursor())
         assertTrue(settings.onboardingDone.first())
+    }
+
+    @Test fun onboardingFinishUsesGivenFloorNotCurrentTime() = runBlocking {
+        val loadedAt = now - 90_000L
+        vm.finish(loadedAt)
+        assertEquals(loadedAt, settings.sweepFloor())
+        assertEquals(loadedAt, settings.sweepCursor())
+        assertTrue(settings.sweepFloor() < now)
+    }
+
+    private suspend fun reachConnection() {
+        reachSenders()
+        vm.addSender("OPERADOR")
+        vm.next()
+        assertEquals(OnboardingStep.CONNECTION, vm.state.value.step)
+    }
+
+    @Test fun onboardingIgnoresTestResultWhenUrlChangedInFlight() = runBlocking {
+        lateinit var racing: OnboardingViewModel
+        racing = OnboardingViewModel(settings, Clock { now }) { _ ->
+            racing.setUrl("http://example.com/ingest") // user edits while the test runs
+            interpretConnectionTest(400)
+        }
+        racing.confirmCutover(true)
+        racing.next()
+        racing.onPermissionResult(smsGranted = true, restrictedHint = false)
+        repeat(3) { racing.next() }
+        racing.addSender("OPERADOR")
+        racing.next()
+        assertEquals(OnboardingStep.CONNECTION, racing.state.value.step)
+        racing.setUrl("https://example.com/ingest")
+        racing.setToken("test-token")
+
+        racing.testConnection()
+
+        assertNull(racing.state.value.testResult)
+        assertFalse(racing.state.value.canContinue)
+        racing.next()
+        assertEquals(OnboardingStep.CONNECTION, racing.state.value.step)
+        assertNull(secrets.saved)
+    }
+
+    @Test fun onboardingCredentialSaveFailureStaysOnConnectionAndShowsError() = runBlocking {
+        reachConnection()
+        vm.setUrl("https://example.com/ingest")
+        vm.setToken("test-token")
+        vm.testConnection()
+        assertTrue(vm.state.value.canContinue)
+        secrets.failOnSet = true
+
+        vm.next()
+
+        assertEquals(OnboardingStep.CONNECTION, vm.state.value.step)
+        assertEquals(OnboardingTexts.CREDENTIALS_SAVE_ERROR, vm.state.value.tokenError)
+        assertEquals("test-token", vm.state.value.token)
     }
 }

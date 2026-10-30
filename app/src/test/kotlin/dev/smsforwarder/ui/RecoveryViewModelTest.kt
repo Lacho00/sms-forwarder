@@ -123,4 +123,13 @@ class RecoveryViewModelTest {
         assertEquals(1, vm.candidates.value.count { it.alreadyKnown })
         assertEquals(0, vm.sendSelected())
     }
+
+    @Test fun recoveryLoadedAtIsTheInstantOfTheInboxRead() = runBlocking {
+        var t = now
+        val moving = RecoveryViewModel(reader, sms, settings, Clock { t }) { enqueued += it }
+        assertEquals(now, moving.loadedAt) // never loaded: falls back to the clock
+        moving.load()
+        t = now + 60_000L
+        assertEquals(now, moving.loadedAt)
+    }
 }

@@ -54,9 +54,21 @@ class RecoveryViewModel(
 
     private var records: Map<String, SmsRecord> = emptyMap()
 
+    @Volatile
+    private var lastLoadAt: Long? = null
+
+    /**
+     * The instant [load] read the inbox. Onboarding uses it as the sweep floor, so SMS that arrive
+     * after this read are still swept. Falls back to the current time if [load] never ran.
+     */
+    val loadedAt: Long
+        get() = lastLoadAt ?: clock.now()
+
     /** Reads the inbox again. Called by the screen when it opens. */
     suspend fun load() {
-        val from = clock.now() - QueuePolicy.MANUAL_RECOVERY_MS
+        val now = clock.now()
+        lastLoadAt = now
+        val from = now - QueuePolicy.MANUAL_RECOVERY_MS
         val rows = withContext(Dispatchers.IO) { reader.readSince(from) }
         if (rows == null) {
             _unreadable.value = true

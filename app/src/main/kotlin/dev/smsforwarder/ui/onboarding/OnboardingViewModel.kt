@@ -7,6 +7,7 @@ import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.core.UrlValidator
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.SettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +21,8 @@ object OnboardingTexts {
     const val REMINDER =
         "Recuerda: la app anterior debe seguir desinstalada o desactivada. " +
             "A continuación puedes recuperar a mano SMS de los últimos días."
+    const val CREDENTIALS_SAVE_ERROR = "No se pudieron guardar las credenciales"
+    const val FINISH_ERROR = "No se pudo terminar la configuración. Inténtalo de nuevo."
 }
 
 enum class OnboardingStep { CUTOVER, PERMISSIONS, BATTERY, MIUI, SENDERS, CONNECTION, REMINDER, RECOVERY }
@@ -36,6 +39,7 @@ data class OnboardingUiState(
     val tokenError: String? = null,
     val testing: Boolean = false,
     val testResult: ConnectionTestResult? = null,
+    val finishError: String? = null,
 ) {
     val canContinue: Boolean
         get() = when (step) {
@@ -106,7 +110,10 @@ class OnboardingViewModel(
         _state.update { it.copy(testing = true, urlError = null, tokenError = null, testResult = null) }
         try {
             val result = connectionTest(Credentials(current.url.trim(), current.token))
-            _state.update { it.copy(testResult = result) }
+            // Ignore the result if the user edited the fields while the test was running.
+            _state.update {
+                if (it.url == current.url && it.token == current.token) it.copy(testResult = result) else it
+            }
         } finally {
             _state.update { it.copy(testing = false) }
         }
@@ -117,7 +124,22 @@ class OnboardingViewModel(
         val current = _state.value
         if (!current.canContinue) return
         if (current.step == OnboardingStep.CONNECTION) {
-            settings.saveCredentials(Credentials(current.url.trim(), current.token))
+            if (!UrlValidator.isValid(current.url)) {
+                _state.update { it.copy(urlError = "La URL debe empezar por https://", testResult = null) }
+                return
+            }
+            if (current.token.isBlank()) {
+                _state.update { it.copy(tokenError = "Escribe el token", testResult = null) }
+                return
+            }
+            try {
+                settings.saveCredentials(Credentials(current.url.trim(), current.token))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(tokenError = OnboardingTexts.CREDENTIALS_SAVE_ERROR) }
+                return
+            }
             // The token is stored encrypted now; drop it from memory state.
             _state.update { it.copy(token = "") }
         }
@@ -126,14 +148,16 @@ class OnboardingViewModel(
         _state.update { it.copy(step = following) }
     }
 
+    fun setFinishError(message: String?) = _state.update { it.copy(finishError = message) }
+
     /**
-     * Ends the wizard. The sweep floor is "now": nothing older than this moment is ever swept,
-     * because the previous app already sent it.
+     * Ends the wizard. [floor] is the instant the recovery list read the inbox: nothing older is
+     * ever swept (the previous app already sent it) and nothing newer is skipped, because SMS that
+     * arrived since then were dropped by the receiver while onboarding was not done.
      */
-    suspend fun finish() {
-        val now = clock.now()
-        settings.setSweepFloor(now)
-        settings.setSweepCursor(now)
+    suspend fun finish(floor: Long) {
+        settings.setSweepFloor(floor)
+        settings.setSweepCursor(floor)
         settings.setOnboardingDone()
     }
 
