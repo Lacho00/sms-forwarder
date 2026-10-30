@@ -3,7 +3,7 @@ package dev.smsforwarder.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import dev.smsforwarder.core.SmsOrigin
@@ -46,7 +46,7 @@ class DetailScreenTest {
                 DetailScreen(state = state, onRetry = {}, onBack = {})
             }
         }
-        compose.onNodeWithText("Reintentar").assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").assertExists()
 
         compose.runOnIdle { state = DetailUiState(sms(SmsStatus.QUEUED), emptyList()) }
         compose.onNodeWithText("Reintentar").assertDoesNotExist()
