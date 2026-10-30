@@ -46,6 +46,17 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
         IngestResult.Inserted(id)
     }
 
+    /** Same identity check as [ingest], without inserting: true if this SMS is already stored. */
+    suspend fun isKnown(record: SmsRecord): Boolean {
+        if (dao.findByLocalKey(SmsIdentity.localKey(record)) != null) return true
+        val window = SmsIdentity.FALLBACK_WINDOW_MS
+        return dao.candidates(
+            SenderFilter.normalize(record.sender),
+            record.receivedAt - window,
+            record.receivedAt + window,
+        ).any { SmsIdentity.isSameSms(it.toRecord(), record) }
+    }
+
     suspend fun get(id: Long): SmsEntity? = dao.get(id)
 
     fun observeAll(): Flow<List<SmsEntity>> = dao.observeAll()

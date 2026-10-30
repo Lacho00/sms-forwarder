@@ -1,21 +1,15 @@
 package dev.smsforwarder.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -25,6 +19,14 @@ import dev.smsforwarder.ui.detail.DetailScreen
 import dev.smsforwarder.ui.detail.DetailViewModel
 import dev.smsforwarder.ui.main.MainScreen
 import dev.smsforwarder.ui.main.MainViewModel
+import dev.smsforwarder.ui.onboarding.OnboardingScreen
+import dev.smsforwarder.ui.onboarding.OnboardingViewModel
+import dev.smsforwarder.ui.recovery.RecoveryScreen
+import dev.smsforwarder.ui.recovery.RecoveryViewModel
+import dev.smsforwarder.ui.settings.SettingsScreen
+import dev.smsforwarder.ui.settings.SettingsViewModel
+import dev.smsforwarder.ui.theme.ThemeMode
+import kotlinx.coroutines.launch
 
 object Routes {
     const val ONBOARDING = "onboarding"
@@ -58,6 +60,9 @@ fun AppNavHost(
     startRoute: String,
     mainViewModel: MainViewModel,
     detailViewModel: (Long) -> DetailViewModel,
+    onboardingViewModel: OnboardingViewModel,
+    recoveryViewModel: RecoveryViewModel,
+    settingsViewModel: SettingsViewModel,
     onOpenSystemIssue: (HealthIssue) -> Unit,
     onSweepNow: () -> Unit,
 ) {
@@ -90,9 +95,50 @@ fun AppNavHost(
             val state by vm.state.collectAsState()
             DetailScreen(state = state, onRetry = { vm.retry() }, onBack = back)
         }
-        current == Routes.SETTINGS -> PlaceholderScreen("Ajustes", onBack = back)
-        current == Routes.RECOVERY -> PlaceholderScreen("Recuperación manual", onBack = back)
-        else -> OnboardingPlaceholder(onContinue = { stack = Routes.MAIN })
+        current == Routes.SETTINGS -> {
+            val form by settingsViewModel.form.collectAsState()
+            val senders by settingsViewModel.senders.collectAsState(initial = emptyList())
+            val themeMode by settingsViewModel.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+            SettingsScreen(
+                form = form,
+                senders = senders,
+                themeMode = themeMode,
+                onUrlChange = settingsViewModel::setUrl,
+                onTokenChange = settingsViewModel::setToken,
+                onSave = settingsViewModel::save,
+                onTest = settingsViewModel::test,
+                onAddSender = settingsViewModel::addSender,
+                onRemoveSender = settingsViewModel::removeSender,
+                onThemeChange = settingsViewModel::setTheme,
+                onOpenRecovery = { navigate(Routes.RECOVERY) },
+                onBack = back,
+            )
+        }
+        current == Routes.RECOVERY -> {
+            val items by recoveryViewModel.candidates.collectAsState()
+            val unreadable by recoveryViewModel.unreadable.collectAsState()
+            var result by remember { mutableStateOf<String?>(null) }
+            val scope = rememberCoroutineScope()
+            LaunchedEffect(Unit) { recoveryViewModel.load() }
+            RecoveryScreen(
+                items = items,
+                unreadable = unreadable,
+                resultMessage = result,
+                onToggle = recoveryViewModel::toggle,
+                onSend = {
+                    scope.launch {
+                        val sent = recoveryViewModel.sendSelected()
+                        result = "$sent SMS puestos en cola para enviar"
+                    }
+                },
+                onBack = back,
+            )
+        }
+        else -> OnboardingScreen(
+            vm = onboardingViewModel,
+            recoveryVm = recoveryViewModel,
+            onFinished = { stack = Routes.MAIN },
+        )
     }
 }
 
@@ -100,32 +146,4 @@ fun AppNavHost(
 @Composable
 fun LoadingScreen() {
     Text("SMS Forwarder", modifier = Modifier.padding(16.dp))
-}
-
-// Task 14 replaces the three placeholders below with the real screens.
-@Composable
-private fun OnboardingPlaceholder(onContinue: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text("SMS Forwarder")
-        Text("Configuración inicial (pendiente)")
-        Button(onClick = onContinue) { Text("Ir a la pantalla principal") }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PlaceholderScreen(title: String, onBack: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Atrás") } },
-            )
-        },
-    ) { padding ->
-        Text("Pendiente", modifier = Modifier.padding(padding).padding(16.dp))
-    }
 }
