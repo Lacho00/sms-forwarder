@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <!-- Adaptive icon source: 108x108 canvas, content scaled into the central 66 safe zone. -->
+  <rect width="108" height="108" fill="#5B4BDB"/>
+  <g transform="translate(55.2 55.5) scale(0.7) translate(-54 -54)">
+    <path d="M36 24h36a16 16 0 0 1 16 16v20a16 16 0 0 1-16 16H52c-4 6-10 10-18 11 3-3 4-7 4-11h-2a16 16 0 0 1-16-16V40a16 16 0 0 1 16-16z" fill="#FFFFFF" fill-opacity="0.32" transform="translate(-3.32 -3.32) scale(0.92)"/>
+    <g transform="translate(8.68 8.68) scale(0.92)">
+      <path d="M36 24h36a16 16 0 0 1 16 16v20a16 16 0 0 1-16 16H52c-4 6-10 10-18 11 3-3 4-7 4-11h-2a16 16 0 0 1-16-16V40a16 16 0 0 1 16-16z" fill="#FFFFFF"/>
+      <g fill="none" stroke="#4A3BC4" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M40 63c0-12 8-19 23-19"/>
+        <path d="M56 35.5l10 8.5-10 8.5"/>
+      </g>
+    </g>
+  </g>
+</svg>
