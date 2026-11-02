@@ -44,6 +44,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
 
 const val PRIMARY_DESTINATION_ID = 1L
 
+// Frozen on purpose: a migration must not change if the standard template changes later.
 private const val STANDARD_JSON_BODY = "{\"sender\":\"{sender}\",\"body\":\"{body}\",\"received_at\":{received_at}}"
 
 /**

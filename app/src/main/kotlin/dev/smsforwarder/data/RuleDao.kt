@@ -13,6 +13,10 @@ interface RuleDao {
     @Insert
     suspend fun insertLinks(links: List<RuleDestinationEntity>)
 
+    /**
+     * Callers must drop destinations with `deletedAt != null`; paused ones stay, since their
+     * deliveries are queued without attempts.
+     */
     @Transaction
     @Query("SELECT * FROM rule WHERE enabled = 1 ORDER BY id ASC")
     suspend fun activeWithDestinations(): List<RuleWithDestinations>

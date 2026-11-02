@@ -16,6 +16,7 @@ interface DestinationDao {
     @Query("SELECT * FROM destination WHERE id = :id")
     suspend fun get(id: Long): DestinationEntity?
 
-    @Query("SELECT * FROM destination WHERE enabled = 1 AND deletedAt IS NULL ORDER BY id ASC LIMIT 1")
-    suspend fun firstActive(): DestinationEntity?
+    /** The primary destination: lowest id not deleted, paused or not. */
+    @Query("SELECT * FROM destination WHERE deletedAt IS NULL ORDER BY id ASC LIMIT 1")
+    suspend fun primary(): DestinationEntity?
 }

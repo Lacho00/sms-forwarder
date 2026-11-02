@@ -142,8 +142,31 @@ class MigrationTest {
             val a1 = db.smsDao().observeAttempts(1).first()
             assertEquals(2, a1.size)
             assertEquals(setOf(d1.id), a1.map { it.deliveryId }.toSet())
+            assertEquals(listOf(20L, 10L), a1.map { it.at })
+            assertEquals(listOf(200, 500), a1.map { it.httpCode })
+            assertEquals(listOf(null, "HTTP 500"), a1.map { it.error })
             assertEquals(setOf(d3.id), db.smsDao().observeAttempts(3).first().map { it.deliveryId }.toSet())
             assertEquals(0, db.smsDao().observeAttempts(2).first().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test fun authRejectedCoversUnauthorizedAndForbiddenOnly() = runBlocking {
+        val file = newFile()
+        createSchema(file, 2)
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
+            insertSms(db, 1, "ERROR", 1, 403, "e", null)
+            insertSms(db, 2, "ERROR", 1, 400, "e", null)
+            insertSms(db, 3, "ERROR", 1, 401, "e", null)
+        }
+        val db = open(file)
+        try {
+            assertEquals(setOf(1L, 3L), db.deliveryDao().idsAuthRejected(PRIMARY_DESTINATION_ID).toSet())
+            assertEquals(PRIMARY_DESTINATION_ID, db.destinationDao().primary()!!.id)
+            val paused = db.destinationDao().get(PRIMARY_DESTINATION_ID)!!.copy(enabled = false)
+            db.destinationDao().update(paused)
+            assertEquals(PRIMARY_DESTINATION_ID, db.destinationDao().primary()!!.id)
         } finally {
             db.close()
         }

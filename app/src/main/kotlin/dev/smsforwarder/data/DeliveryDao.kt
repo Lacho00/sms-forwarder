@@ -33,10 +33,10 @@ interface DeliveryDao {
     )
     suspend fun smsIdsWithStatus(status: DeliveryStatus): List<Long>
 
-    /** SMS ids with an ERROR delivery to [destinationId] that the endpoint rejected with 401. */
+    /** SMS ids with an ERROR delivery to [destinationId] that the endpoint rejected with 401 or 403 (token rejection). */
     @Query(
         "SELECT DISTINCT d.smsId FROM delivery d JOIN sms s ON s.id = d.smsId " +
-            "WHERE d.destinationId = :destinationId AND d.status = 'ERROR' AND d.lastHttpCode = 401 " +
+            "WHERE d.destinationId = :destinationId AND d.status = 'ERROR' AND d.lastHttpCode IN (401, 403) " +
             "AND s.deletedAt IS NULL ORDER BY s.receivedAt ASC",
     )
     suspend fun idsAuthRejected(destinationId: Long): List<Long>
