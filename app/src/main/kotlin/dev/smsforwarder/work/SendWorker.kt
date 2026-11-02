@@ -16,6 +16,8 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         if (id < 0) return Result.failure()
 
         val graph = (applicationContext as SmsForwarderApp).graph
+        // Safe mode: nothing is sent until the 1.1 settings are imported.
+        if (!graph.legacyImport.run()) return Result.retry()
         val repo = graph.smsRepository
         val sms = repo.get(id) ?: return Result.success()
         if (sms.status == SmsStatus.SENT || sms.deletedAt != null) return Result.success()

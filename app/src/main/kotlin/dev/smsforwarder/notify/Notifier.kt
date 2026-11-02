@@ -110,6 +110,7 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
         HealthIssue.TOKEN_REJECTED -> R.string.notif_issue_token_rejected
         HealthIssue.NOT_CONFIGURED -> R.string.notif_issue_not_configured
         HealthIssue.NO_SENDERS -> R.string.notif_issue_no_senders
+        HealthIssue.MIGRATION_FAILED -> R.string.notif_issue_migration_failed
     }
 
     /** Re-creates the channel so its name follows the language chosen in settings. */

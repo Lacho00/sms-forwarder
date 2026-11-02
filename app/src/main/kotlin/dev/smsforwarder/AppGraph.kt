@@ -5,7 +5,10 @@ import androidx.room.Room
 import dev.smsforwarder.core.NotifyKind
 import dev.smsforwarder.core.SystemClock
 import dev.smsforwarder.data.AppDatabase
+import dev.smsforwarder.data.DestinationSecretStore
+import dev.smsforwarder.data.KeystoreDestinationSecretStore
 import dev.smsforwarder.data.KeystoreSecretStore
+import dev.smsforwarder.data.LegacyImport
 import dev.smsforwarder.data.MIGRATION_1_2
 import dev.smsforwarder.data.migration2to3
 import dev.smsforwarder.data.SecretStore
@@ -31,6 +34,8 @@ class AppGraph(context: Context) {
 
     /** `var` so tests can swap in a fake instead of the Android Keystore. */
     var secretStore: SecretStore = KeystoreSecretStore(context)
+    /** `var` so tests can swap in a fake instead of the Android Keystore. */
+    var destinationSecretStore: DestinationSecretStore = KeystoreDestinationSecretStore(context)
     val ingestClient = IngestClient(defaultHttpClient())
 
     /** Lazy so it picks up the secretStore a test may have swapped in. */
@@ -42,6 +47,16 @@ class AppGraph(context: Context) {
             scheduler = { id -> WorkScheduler.enqueueSend(context.applicationContext, id, replace = true) },
         )
     }
+
+    private var legacyImportOrNull: LegacyImport? = null
+
+    /** Built on first use; a test can assign its own with fake stores. */
+    var legacyImport: LegacyImport
+        get() = synchronized(this) {
+            legacyImportOrNull ?: LegacyImport(db, secretStore, destinationSecretStore, settings)
+                .also { legacyImportOrNull = it }
+        }
+        set(value) = synchronized(this) { legacyImportOrNull = value }
 
     val notifier by lazy { Notifier(context.applicationContext) }
     val healthChecker by lazy {

@@ -40,6 +40,28 @@ class SettingsRepository(
     // Stored as the user typed them, one per line; matching always goes through normalize.
     val senders: Flow<List<String>> = store.data.map { decodeSenders(it[SENDERS_KEY]) }
 
+    /**
+     * The 1.1.x sender list as stored, read straight from the raw key. [senders] may later be backed
+     * by rules; the import must keep reading what 1.1.x left behind.
+     */
+    suspend fun legacySenders(): List<String> = decodeSenders(store.data.first()[SENDERS_KEY])
+
+    suspend fun isImportDone(): Boolean = store.data.first()[IMPORT_DONE_KEY] == true
+
+    suspend fun isImportFailed(): Boolean = store.data.first()[IMPORT_FAILED_KEY] == true
+
+    /** Marks the import finished and clears an earlier failure in one write. */
+    suspend fun markImportDone() {
+        store.edit {
+            it[IMPORT_DONE_KEY] = true
+            it.remove(IMPORT_FAILED_KEY)
+        }
+    }
+
+    suspend fun markImportFailed() {
+        store.edit { it[IMPORT_FAILED_KEY] = true }
+    }
+
     suspend fun addSender(s: String) {
         val clean = s.trim()
         val normalized = SenderFilter.normalize(clean)
@@ -192,6 +214,8 @@ class SettingsRepository(
 
     private companion object {
         const val SEPARATOR = "\n"
+        val IMPORT_DONE_KEY = booleanPreferencesKey("v2_import_done")
+        val IMPORT_FAILED_KEY = booleanPreferencesKey("v2_import_failed")
         val SENDERS_KEY = stringPreferencesKey("senders")
         val THEME_KEY = stringPreferencesKey("theme_mode")
         val SWEEP_CURSOR_KEY = longPreferencesKey("sweep_cursor")

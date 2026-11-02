@@ -21,6 +21,10 @@ interface RuleDao {
     @Query("SELECT * FROM rule WHERE enabled = 1 ORDER BY id ASC")
     suspend fun activeWithDestinations(): List<RuleWithDestinations>
 
+    /** Patterns of every sender-only exact rule, enabled or not; the 1.1 import uses it to skip the ones that exist. */
+    @Query("SELECT senderPattern FROM rule WHERE senderMode = 'EXACT' AND bodyMode IS NULL")
+    suspend fun exactSenderOnlyPatterns(): List<String>
+
     /** Removes the sender-only exact rules for [pattern] that point at [destinationId]. */
     @Query(
         "DELETE FROM rule WHERE senderMode = 'EXACT' AND senderPattern = :pattern AND bodyMode IS NULL " +

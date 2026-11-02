@@ -77,6 +77,25 @@ class SendWorkerTest {
         assertEquals(1, sms.attempts)
     }
 
+    @Test fun failedImportKeepsSmsQueuedAndSendsNothing() = runBlocking {
+        graph.db.destinationDao().insert(
+            dev.smsforwarder.data.DestinationEntity(
+                id = dev.smsforwarder.data.PRIMARY_DESTINATION_ID, name = "Primary", enabled = true,
+                template = dev.smsforwarder.core.TemplateKind.STANDARD_JSON,
+                method = dev.smsforwarder.core.HttpMethod.POST, bodyTemplate = null, bodyIsJson = true,
+                publicHeaders = "[]", successPolicy = dev.smsforwarder.core.SuccessPolicy.ANY_2XX, createdAt = 1L,
+            ),
+        )
+        val failing = dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }
+        graph.legacyImport = dev.smsforwarder.data.LegacyImport(
+            graph.db, graph.secretStore, failing, graph.settings,
+        )
+        val id = insertSms()
+        assertEquals(ListenableWorker.Result.retry(), run(id))
+        assertEquals(0, server.requestCount)
+        assertEquals(SmsStatus.QUEUED, graph.smsRepository.get(id)!!.status)
+    }
+
     @Test fun `200MarksSent`() = runBlocking {
         val id = insertSms()
         server.enqueue(MockResponse.Builder().code(200).build())

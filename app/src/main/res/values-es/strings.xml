@@ -37,6 +37,7 @@
     <string name="issue_token_rejected">Token rechazado por el Worker</string>
     <string name="issue_not_configured">Falta configurar URL y token</string>
     <string name="issue_no_senders">No hay remitentes configurados</string>
+    <string name="issue_migration_failed">Falló la importación de los ajustes. El reenvío queda en pausa hasta que funcione.</string>
     <string name="status_error">Error</string>
     <string name="status_error_code">Error %d</string>
     <string name="status_sent">Enviado</string>
@@ -135,6 +136,7 @@
     <string name="notif_issue_token_rejected">El token fue rechazado.</string>
     <string name="notif_issue_not_configured">Falta configurar URL y token.</string>
     <string name="notif_issue_no_senders">No hay remitentes configurados.</string>
+    <string name="notif_issue_migration_failed">Falló la importación de los ajustes; la app lo reintentará.</string>
     <plurals name="status_queued">
         <item quantity="one">En cola · %d intento</item>
         <item quantity="other">En cola · %d intentos</item>

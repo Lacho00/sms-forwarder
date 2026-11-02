@@ -65,6 +65,14 @@ class HealthCheckerTest {
         assertFalse(HealthIssue.NO_SENDERS in checker.check())
     }
 
+    @Test fun failedImportIsReported() = runBlocking {
+        assertFalse(HealthIssue.MIGRATION_FAILED in checker.check())
+        settings.markImportFailed()
+        assertTrue(HealthIssue.MIGRATION_FAILED in checker.check())
+        settings.markImportDone()
+        assertFalse(HealthIssue.MIGRATION_FAILED in checker.check())
+    }
+
     @Test fun smsPermissionDeniedIsReported() = runBlocking {
         shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(
             Manifest.permission.RECEIVE_SMS,

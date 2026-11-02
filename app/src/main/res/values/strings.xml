@@ -37,6 +37,7 @@
     <string name="issue_token_rejected">Token rejected by the Worker</string>
     <string name="issue_not_configured">URL and token not set up</string>
     <string name="issue_no_senders">No senders configured</string>
+    <string name="issue_migration_failed">Settings import failed. Forwarding is paused until it succeeds.</string>
     <string name="status_error">Error</string>
     <string name="status_error_code">Error %d</string>
     <string name="status_sent">Sent</string>
@@ -135,6 +136,7 @@
     <string name="notif_issue_token_rejected">The token was rejected.</string>
     <string name="notif_issue_not_configured">URL and token not set up.</string>
     <string name="notif_issue_no_senders">No senders configured.</string>
+    <string name="notif_issue_migration_failed">Settings import failed; the app will retry.</string>
     <plurals name="status_queued">
         <item quantity="one">Queued · %d attempt</item>
         <item quantity="other">Queued · %d attempts</item>

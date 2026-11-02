@@ -24,6 +24,7 @@ enum class HealthIssue {
     TOKEN_REJECTED,
     NOT_CONFIGURED,
     NO_SENDERS,
+    MIGRATION_FAILED,
 }
 
 /** Looks at everything that can silently stop the app from forwarding and lists what is wrong. */
@@ -64,6 +65,8 @@ class HealthChecker(
 
         if (smsRepository.idsWithError401().isNotEmpty()) issues += HealthIssue.TOKEN_REJECTED
         if (settings.senders.first().isEmpty()) issues += HealthIssue.NO_SENDERS
+
+        if (settings.isImportFailed()) issues += HealthIssue.MIGRATION_FAILED
 
         // A Keystore hiccup is not "not configured": skip the check instead of raising a false alarm.
         try {
