@@ -3,6 +3,7 @@ package dev.smsforwarder.ui
 import android.content.Context
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.work.Configuration
@@ -77,13 +78,14 @@ class LocalizedTest {
         val graph = (context as SmsForwarderApp).graph
         runBlocking { graph.settings.setOnboardingDone() }
         // The test runs in English until the language is switched below.
-        compose.onNodeWithContentDescription(context.getString(R.string.settings_title)).performClick()
-        compose.onNodeWithText(context.getString(R.string.back)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.tab_settings)).performClick()
+        compose.onNodeWithTag("field_url").assertExists()
 
         runBlocking { graph.settings.setLanguage(Language.ES) }
         compose.activityRule.scenario.recreate()
 
-        compose.onNodeWithText(Localized.wrap(context, "es").getString(R.string.back)).assertExists()
+        compose.onNodeWithTag("field_url").assertExists()
+        compose.onNodeWithText(Localized.wrap(context, "es").getString(R.string.tab_home)).assertExists()
         compose.activity.let { activity ->
             assertEquals(
                 Localized.wrap(context, "es").getString(R.string.about_title),

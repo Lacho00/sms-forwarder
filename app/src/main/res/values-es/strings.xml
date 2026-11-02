@@ -146,4 +146,7 @@
         <item quantity="one">%d SMS puesto en cola para enviar</item>
         <item quantity="other">%d SMS puestos en cola para enviar</item>
     </plurals>
+    <string name="tab_home">Inicio</string>
+    <string name="tab_settings">Ajustes</string>
+    <string name="menu_more_options">Más opciones</string>
 </resources>

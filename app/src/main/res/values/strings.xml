@@ -146,4 +146,7 @@
         <item quantity="one">%d SMS queued for sending</item>
         <item quantity="other">%d SMS queued for sending</item>
     </plurals>
+    <string name="tab_home">Home</string>
+    <string name="tab_settings">Settings</string>
+    <string name="menu_more_options">More options</string>
 </resources>

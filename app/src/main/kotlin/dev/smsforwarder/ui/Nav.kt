@@ -37,6 +37,10 @@ object Routes {
     const val DETAIL = "detail/{id}"
     const val SETTINGS = "settings"
     const val RECOVERY = "recovery"
+    const val ABOUT = "about"
+
+    /** Top-level screens: the only ones wrapped by [AppShell]. */
+    fun isTab(route: String): Boolean = route == MAIN || route == SETTINGS
 
     fun detail(id: Long): String = "detail/$id"
 
@@ -53,6 +57,10 @@ private val IN_APP_ISSUES = setOf(
 )
 
 private const val STACK_SEPARATOR = "|"
+
+/** Selecting a tab pins the stack to `main` or `main|settings`; it never pushes on top of what is there. */
+internal fun stackForTab(tab: String): String =
+    if (tab == Routes.SETTINGS) Routes.MAIN + STACK_SEPARATOR + Routes.SETTINGS else Routes.MAIN
 
 /**
  * Minimal navigation: the back stack is a list of route strings kept in a single saveable String.
@@ -79,19 +87,28 @@ fun AppNavHost(
     }
     BackHandler(enabled = routes.size > 1) { back() }
 
+    val onTab: (String) -> Unit = { tab -> stack = stackForTab(tab) }
+
     val detailId = Routes.detailId(current)
     when {
         current == Routes.MAIN -> {
             val state by mainViewModel.state.collectAsState()
-            MainScreen(
-                state = state,
-                onOpenIssue = { issue ->
-                    if (issue in IN_APP_ISSUES) navigate(Routes.SETTINGS) else onOpenSystemIssue(issue)
-                },
-                onSweepNow = onSweepNow,
-                onOpen = { id -> navigate(Routes.detail(id)) },
-                onSettings = { navigate(Routes.SETTINGS) },
-            )
+            AppShell(
+                current = current,
+                title = stringResource(R.string.app_name),
+                onTab = onTab,
+                onAbout = { navigate(Routes.ABOUT) },
+            ) { padding ->
+                MainScreen(
+                    state = state,
+                    onOpenIssue = { issue ->
+                        if (issue in IN_APP_ISSUES) onTab(Routes.SETTINGS) else onOpenSystemIssue(issue)
+                    },
+                    onSweepNow = onSweepNow,
+                    onOpen = { id -> navigate(Routes.detail(id)) },
+                    padding = padding,
+                )
+            }
         }
         detailId != null -> {
             val vm = remember(detailId) { detailViewModel(detailId) }
@@ -102,6 +119,12 @@ fun AppNavHost(
             val form by settingsViewModel.form.collectAsState()
             val senders by settingsViewModel.senders.collectAsState(initial = emptyList())
             val themeMode by settingsViewModel.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+            AppShell(
+                current = current,
+                title = stringResource(R.string.settings_title),
+                onTab = onTab,
+                onAbout = { navigate(Routes.ABOUT) },
+            ) { padding ->
             SettingsScreen(
                 form = form,
                 senders = senders,
@@ -114,9 +137,12 @@ fun AppNavHost(
                 onRemoveSender = settingsViewModel::removeSender,
                 onThemeChange = settingsViewModel::setTheme,
                 onOpenRecovery = { navigate(Routes.RECOVERY) },
-                onBack = back,
+                padding = padding,
             )
+            }
         }
+        // Placeholder until the real About screen arrives.
+        current == Routes.ABOUT -> Text(stringResource(R.string.about_title), modifier = Modifier.padding(16.dp))
         current == Routes.RECOVERY -> {
             val items by recoveryViewModel.candidates.collectAsState()
             val unreadable by recoveryViewModel.unreadable.collectAsState()

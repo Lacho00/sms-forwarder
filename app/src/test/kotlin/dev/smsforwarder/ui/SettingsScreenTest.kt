@@ -85,7 +85,6 @@ class SettingsScreenTest {
                     onRemoveSender = {},
                     onThemeChange = {},
                     onOpenRecovery = {},
-                    onBack = {},
                 )
             }
         }

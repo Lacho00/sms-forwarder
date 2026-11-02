@@ -10,18 +10,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 import dev.smsforwarder.health.HealthIssue
@@ -60,31 +54,15 @@ internal fun agoLabel(lastSweepAt: Long?, now: Long): String {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     state: MainUiState,
     onOpenIssue: (HealthIssue) -> Unit,
     onSweepNow: () -> Unit,
     onOpen: (Long) -> Unit,
-    onSettings: () -> Unit,
+    padding: PaddingValues = PaddingValues(),
 ) {
-    val settingsLabel = stringResource(R.string.settings_title)
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
-                actions = {
-                    IconButton(
-                        onClick = onSettings,
-                        modifier = Modifier.semantics { contentDescription = settingsLabel },
-                    ) {
-                        Text("⚙")
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    run {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(

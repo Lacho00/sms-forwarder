@@ -2,6 +2,7 @@ package dev.smsforwarder.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,16 +11,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +43,6 @@ private fun themeLabel(mode: ThemeMode): String = stringResource(
 )
 
 /** Both credential fields are hidden while typing and start empty: the stored token is never shown. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     form: SettingsForm,
@@ -59,16 +56,9 @@ fun SettingsScreen(
     onRemoveSender: (String) -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
     onOpenRecovery: () -> Unit,
-    onBack: () -> Unit,
+    padding: PaddingValues = PaddingValues(),
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
-                navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(R.string.back)) } },
-            )
-        },
-    ) { padding ->
+    run {
         Column(
             modifier = Modifier
                 .fillMaxSize()

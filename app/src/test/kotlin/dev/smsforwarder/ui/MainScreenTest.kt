@@ -33,7 +33,6 @@ class MainScreenTest {
                     onOpenIssue = {},
                     onSweepNow = {},
                     onOpen = {},
-                    onSettings = {},
                 )
             }
         }
