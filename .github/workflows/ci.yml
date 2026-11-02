@@ -23,6 +23,11 @@ jobs:
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: room-schemas
+          path: app/schemas/
 
   gitleaks:
     runs-on: ubuntu-latest
