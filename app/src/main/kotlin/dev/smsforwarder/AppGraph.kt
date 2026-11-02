@@ -7,6 +7,7 @@ import dev.smsforwarder.core.SystemClock
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.KeystoreSecretStore
 import dev.smsforwarder.data.MIGRATION_1_2
+import dev.smsforwarder.data.migration2to3
 import dev.smsforwarder.data.SecretStore
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsEntity
@@ -23,7 +24,7 @@ import kotlinx.coroutines.runBlocking
 class AppGraph(context: Context) {
     val db: AppDatabase =
         Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "sms-forwarder.db")
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, migration2to3(context.getString(R.string.destination_primary_name)))
             .build()
     val clock = SystemClock
     val smsRepository = SmsRepository(db, clock)

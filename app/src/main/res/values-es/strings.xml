@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SMS Forwarder</string>
+    <string name="destination_primary_name">Principal</string>
     <string name="forwarding_paused">Reenvío en pausa</string>
     <string name="about_title">Acerca de</string>
     <string name="notif_channel_alerts">Avisos</string>

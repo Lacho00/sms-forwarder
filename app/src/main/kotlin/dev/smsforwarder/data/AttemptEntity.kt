@@ -14,8 +14,14 @@ import androidx.room.PrimaryKey
             childColumns = ["smsId"],
             onDelete = ForeignKey.CASCADE,
         ),
+        ForeignKey(
+            entity = DeliveryEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["deliveryId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
-    indices = [Index(value = ["smsId"])],
+    indices = [Index(value = ["smsId"]), Index(value = ["deliveryId"])],
 )
 data class AttemptEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -23,4 +29,5 @@ data class AttemptEntity(
     val at: Long,
     val httpCode: Int?,
     val error: String?,
+    val deliveryId: Long? = null,
 )
