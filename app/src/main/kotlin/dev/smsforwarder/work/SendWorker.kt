@@ -50,7 +50,7 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 }
                 // A late result on an already-sent row was ignored by recordAttempt: stay silent.
                 400 -> graph.smsRepository.get(id)?.takeIf { it.status == SmsStatus.ERROR }?.let {
-                    graph.notifier.stuck(it)
+                    graph.notifier.rejected(it)
                     graph.smsRepository.markStuckNotified(id)
                 }
             }

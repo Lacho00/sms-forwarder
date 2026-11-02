@@ -107,6 +107,15 @@ class SendWorkerTest {
         assertNull(shadow.getNotification(Notifier.STUCK_TAG, second.toInt()))
     }
 
+    @Test fun `400NotifiesEvenWhenStuckAlertsAreOff`() = runBlocking {
+        graph.settings.setNotifyEnabled(dev.smsforwarder.core.NotifyKind.STUCK, false)
+        val id = insertSms()
+        server.enqueue(MockResponse.Builder().code(400).body("{\"error\":\"bad\"}").build())
+        run(id)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        assertNotNull(shadowOf(manager).getNotification(Notifier.STUCK_TAG, id.toInt()))
+    }
+
     @Test fun secretStoreFailureReturnsRetryAndStaysQueued() = runBlocking {
         val id = insertSms()
         graph.secretStore = object : SecretStore {

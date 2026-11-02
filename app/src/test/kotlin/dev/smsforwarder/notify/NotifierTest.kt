@@ -68,4 +68,14 @@ class NotifierTest {
         val shown = text(shadowOf(manager).getNotification(Notifier.ID_RECOVERED))
         assertTrue(shown, shown.contains(context.getString(R.string.notif_recovered_one, "OPERADOR", "11:42")))
     }
+
+    @Test fun rejectedKeepsTheSameTextAsTheOldRejectedNotice() {
+        val item = entity(5, 1_800_000_000_000L).copy(status = SmsStatus.ERROR, lastHttpCode = 400)
+        Notifier(context, utc).rejected(item)
+        val n = shadowOf(manager).getNotification(Notifier.STUCK_TAG, 5)
+        assertNotNull(n)
+        val shown = text(n)
+        assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_title)))
+        assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_rejected, "OPERADOR", "08:00", 400)))
+    }
 }

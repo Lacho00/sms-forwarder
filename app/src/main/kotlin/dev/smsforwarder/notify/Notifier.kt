@@ -38,6 +38,17 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
         post(ID_RECOVERED, res.getString(R.string.notif_recovered_title), text)
     }
 
+    /** A 400 answer: shown at once, per SMS, and not something the user can turn off. */
+    fun rejected(item: SmsEntity) {
+        val res = localized()
+        post(
+            item.id.toInt(),
+            res.getString(R.string.notif_stuck_title),
+            res.getString(R.string.notif_stuck_rejected, item.sender, time(item.receivedAt), item.lastHttpCode ?: 0),
+            STUCK_TAG,
+        )
+    }
+
     fun stuck(item: SmsEntity) {
         val res = localized()
         val text = if (item.status == SmsStatus.ERROR) {
