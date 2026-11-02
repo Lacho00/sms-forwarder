@@ -64,5 +64,22 @@ class TemplatesTest {
         val s = r.toString()
         for (x in listOf("secret.example", "tok-123", "cuerpo-privado")) assertFalse(s.contains(x))
         assertNotNull(s)
+        val spec = Templates.standardJson("https://secret.example/path", "tok-123")
+        val ss = spec.toString()
+        for (x in listOf("secret.example", "tok-123", "sender")) assertFalse(ss.contains(x))
+        val vs = vars("cuerpo-privado", sender = "REMITENTE").toString()
+        for (x in listOf("cuerpo-privado", "REMITENTE", "dev")) assertFalse(vs.contains(x))
+    }
+
+    @Test fun headerVariablesAreAscii() {
+        val spec = DestinationSpec(HttpMethod.POST, "https://h/x", listOf("X" to "{body}"), null, false)
+        val v = Templates.render(spec, vars("sí 😀")).headers.single().second
+        assertEquals(true, v.all { it in ' '..'~' })
+    }
+
+    @Test fun simVariableRenders() {
+        val spec = DestinationSpec(HttpMethod.POST, "https://h/x", emptyList(), "{sim}|", false)
+        assertEquals("2|", Templates.render(spec, SmsVars("a", "b", 1L, 2, "d")).body)
+        assertEquals(setOf("sim_slot"), Templates.unknownVariables("{sim} {sim_slot}"))
     }
 }

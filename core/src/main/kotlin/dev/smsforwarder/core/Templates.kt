@@ -3,7 +3,9 @@ package dev.smsforwarder.core
 import kotlinx.serialization.json.JsonPrimitive
 import java.net.URLEncoder
 
-data class SmsVars(val sender: String, val body: String, val receivedAt: Long, val simSlot: Int?, val device: String)
+data class SmsVars(val sender: String, val body: String, val receivedAt: Long, val simSlot: Int?, val device: String) {
+    override fun toString(): String = "SmsVars(receivedAt=$receivedAt, simSlot=$simSlot)"
+}
 
 enum class HttpMethod { POST, PUT, GET }
 
@@ -17,7 +19,10 @@ data class DestinationSpec(
     val headers: List<Pair<String, String>>,
     val body: String?,
     val bodyIsJson: Boolean,
-)
+) {
+    override fun toString(): String =
+        "DestinationSpec(method=$method, headers=${headers.size}, hasBody=${body != null}, bodyIsJson=$bodyIsJson)"
+}
 
 /** `toString()` leaves out url, headers and body: they carry tokens and message text. */
 data class RenderedRequest(
@@ -31,7 +36,7 @@ data class RenderedRequest(
 }
 
 object Templates {
-    val VARIABLES: Set<String> = setOf("sender", "body", "received_at", "received_at_ms", "sim_slot", "device")
+    val VARIABLES: Set<String> = setOf("sender", "body", "received_at", "received_at_ms", "sim", "device")
 
     private val PLACEHOLDER = Regex("\\{([a-z_]+)\\}")
     private const val JSON_CONTENT_TYPE = "application/json; charset=utf-8"
@@ -42,7 +47,7 @@ object Templates {
 
     fun render(spec: DestinationSpec, vars: SmsVars): RenderedRequest {
         val url = substitute(spec.url, vars) { urlEncode(it) }
-        val headers = spec.headers.map { (k, v) -> k to substitute(v, vars) { it.replace("\r", "").replace("\n", "") } }
+        val headers = spec.headers.map { (k, v) -> k to substitute(v, vars) { urlEncode(it) } }
         val body = spec.body?.let { b ->
             substitute(b, vars) { if (spec.bodyIsJson) jsonEscape(it) else it }
         }
@@ -70,7 +75,7 @@ object Templates {
                 "body" -> escape(vars.body)
                 "device" -> escape(vars.device)
                 "received_at", "received_at_ms" -> vars.receivedAt.toString()
-                "sim_slot" -> vars.simSlot?.toString() ?: ""
+                "sim" -> vars.simSlot?.toString() ?: ""
                 else -> m.value
             }
         }
