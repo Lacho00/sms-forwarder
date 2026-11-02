@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -165,30 +167,40 @@ class KeystoreDestinationSecretStore(context: Context) : DestinationSecretStore 
             val plain = String(cipher.doFinal(Base64.decode(blob, Base64.NO_WRAP)), Charsets.UTF_8)
             DestinationSecrets.decode(plain)
         } catch (e: GeneralSecurityException) {
-            remove(destinationId)
+            clearIfUnchanged(destinationId, iv, blob)
             null
         } catch (e: IllegalArgumentException) {
-            remove(destinationId)
-            null
-        } catch (e: kotlinx.serialization.SerializationException) {
-            remove(destinationId)
+            // Also covers SerializationException.
+            clearIfUnchanged(destinationId, iv, blob)
             null
         } catch (e: NoSuchElementException) {
-            remove(destinationId)
+            clearIfUnchanged(destinationId, iv, blob)
             null
         } catch (e: IllegalStateException) {
-            remove(destinationId)
+            clearIfUnchanged(destinationId, iv, blob)
             null
         }
     }
 
-    override suspend fun set(destinationId: Long, s: DestinationSecrets) {
-        val cipher = Cipher.getInstance(CIPHER_MODE)
-        cipher.init(Cipher.ENCRYPT_MODE, existingSecretKey() ?: createSecretKey())
-        val encrypted = cipher.doFinal(DestinationSecrets.encode(s).toByteArray(Charsets.UTF_8))
+    /** Deletes the entries only if a concurrent set() has not replaced them since they were read. */
+    private suspend fun clearIfUnchanged(id: Long, iv: String, blob: String) {
         store.edit {
-            it[ivKey(destinationId)] = Base64.encodeToString(cipher.iv, Base64.NO_WRAP)
-            it[blobKey(destinationId)] = Base64.encodeToString(encrypted, Base64.NO_WRAP)
+            if (it[ivKey(id)] == iv && it[blobKey(id)] == blob) {
+                it.remove(ivKey(id))
+                it.remove(blobKey(id))
+            }
+        }
+    }
+
+    override suspend fun set(destinationId: Long, s: DestinationSecrets) {
+        keyMutex.withLock {
+            val cipher = Cipher.getInstance(CIPHER_MODE)
+            cipher.init(Cipher.ENCRYPT_MODE, existingSecretKey() ?: createSecretKey())
+            val encrypted = cipher.doFinal(DestinationSecrets.encode(s).toByteArray(Charsets.UTF_8))
+            store.edit {
+                it[ivKey(destinationId)] = Base64.encodeToString(cipher.iv, Base64.NO_WRAP)
+                it[blobKey(destinationId)] = Base64.encodeToString(encrypted, Base64.NO_WRAP)
+            }
         }
     }
 
@@ -202,6 +214,9 @@ class KeystoreDestinationSecretStore(context: Context) : DestinationSecretStore 
     private fun ivKey(id: Long) = stringPreferencesKey("dest_${id}_iv")
     private fun blobKey(id: Long) = stringPreferencesKey("dest_${id}_blob")
 }
+
+/** Process-wide: serialises key get-or-create and the encrypt+write of set(). */
+private val keyMutex = Mutex()
 
 private const val KS_PROVIDER = "AndroidKeyStore"
 private const val KS_ALIAS = "smsfwd-secrets"
