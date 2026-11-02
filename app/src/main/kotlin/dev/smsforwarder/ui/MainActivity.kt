@@ -1,6 +1,7 @@
 package dev.smsforwarder.ui
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,6 +32,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var onboardingViewModel: OnboardingViewModel
     private lateinit var recoveryViewModel: RecoveryViewModel
     private lateinit var settingsViewModel: SettingsViewModel
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(Localized.wrap(newBase, Localized.savedTag(newBase)))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

@@ -2,4 +2,7 @@
 <resources>
     <string name="app_name">SMS Forwarder</string>
     <string name="forwarding_paused">Forwarding paused</string>
+    <string name="about_title">About</string>
+    <string name="notif_channel_alerts">Alerts</string>
+    <string name="notif_stuck_title">Stuck SMS</string>
 </resources>

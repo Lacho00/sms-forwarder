@@ -6,9 +6,11 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import dev.smsforwarder.R
 import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.health.HealthIssue
+import dev.smsforwarder.ui.Localized
 import dev.smsforwarder.ui.MainActivity
 import java.time.Instant
 import java.time.ZoneId
@@ -45,7 +47,7 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
         }
         post(
             item.id.toInt(),
-            "SMS atascado",
+            localized().getString(R.string.notif_stuck_title),
             "El SMS de ${item.sender} de las ${time(item.receivedAt)} está $state.",
             STUCK_TAG,
         )
@@ -77,6 +79,11 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
         HealthIssue.NOT_CONFIGURED -> "Falta configurar URL y token."
         HealthIssue.NO_SENDERS -> "No hay remitentes configurados."
     }
+
+    /** Re-creates the channel so its name follows the language chosen in settings. */
+    fun refreshChannel() = ensureChannel(context)
+
+    private fun localized(): Context = Localized.wrap(context, Localized.savedTag(context))
 
     private fun time(epochMs: Long): String =
         timeFormat.format(Instant.ofEpochMilli(epochMs).atZone(zone))
@@ -111,7 +118,11 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
         fun ensureChannel(context: Context) {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Avisos", NotificationManager.IMPORTANCE_HIGH),
+                NotificationChannel(
+                    CHANNEL_ID,
+                    Localized.wrap(context, Localized.savedTag(context)).getString(R.string.notif_channel_alerts),
+                    NotificationManager.IMPORTANCE_HIGH,
+                ),
             )
         }
     }

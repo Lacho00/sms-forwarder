@@ -15,6 +15,8 @@ import dev.smsforwarder.core.Retention
 import dev.smsforwarder.core.SenderFilter
 import dev.smsforwarder.core.StuckAfter
 import dev.smsforwarder.core.SweepInterval
+import dev.smsforwarder.notify.Notifier
+import dev.smsforwarder.ui.Localized
 import dev.smsforwarder.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -32,6 +34,7 @@ class SettingsRepository(
     private val scheduler: (Long) -> Unit,
     storeFile: File = File(context.applicationContext.filesDir, "datastore/settings.preferences_pb"),
 ) {
+    private val appContext = context.applicationContext
     private val store: DataStore<Preferences> = PreferenceDataStoreFactory.create { storeFile }
 
     // Stored as the user typed them, one per line; matching always goes through normalize.
@@ -160,6 +163,9 @@ class SettingsRepository(
 
     suspend fun setLanguage(v: Language) {
         store.edit { it[LANGUAGE_KEY] = v.name }
+        // Synchronous mirror for attachBaseContext, then rename the channel in the new language.
+        Localized.saveTag(appContext, v.tag)
+        Notifier.ensureChannel(appContext)
     }
 
     fun notifyEnabled(kind: NotifyKind): Flow<Boolean> = store.data.map { it[notifyKey(kind)] ?: true }
