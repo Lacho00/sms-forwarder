@@ -1,9 +1,16 @@
 package dev.smsforwarder.data
 
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.room.Room
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
 import dev.smsforwarder.core.SystemClock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -29,15 +36,33 @@ private class LegacyStore(var value: Credentials?) : SecretStore {
 class LegacyImportTest {
     private lateinit var db: AppDatabase
     private lateinit var settings: SettingsRepository
+    private lateinit var sms: SmsRepository
+    private lateinit var repos: TestRepos
     private val creds = Credentials("https://example.invalid/ingest", "test-token")
 
     @Before fun setUp() {
         val context = RuntimeEnvironment.getApplication()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
+        sms = SmsRepository(db, SystemClock)
+        repos = TestRepos(db)
+        settings = settingsOver(File(context.cacheDir, "settings-${UUID.randomUUID()}.preferences_pb"))
+    }
+
+    private fun settingsOver(file: File) =
+        SettingsRepository(RuntimeEnvironment.getApplication(), repos.destinations, repos.rules, sms, { }, file)
+
+    /** Writes the 1.1.x raw sender list, as the old app left it, and reopens the settings over it. */
+    private suspend fun seedLegacySenders(vararg senders: String) {
+        val context = RuntimeEnvironment.getApplication()
         val file = File(context.cacheDir, "settings-${UUID.randomUUID()}.preferences_pb")
-        settings = SettingsRepository(
-            context, LegacyStore(null), SmsRepository(db, SystemClock), { }, file,
-        )
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val seed = PreferenceDataStoreFactory.create(scope = scope) { file }
+            seed.edit { it[stringPreferencesKey("senders")] = senders.joinToString("\n") }
+        } finally {
+            scope.cancel()
+        }
+        settings = settingsOver(file)
     }
 
     @After fun tearDown() {
@@ -60,8 +85,7 @@ class LegacyImportTest {
 
     @Test fun copiesCredentialsAndSenders() = runBlocking {
         withPrimary()
-        settings.addSender("AAA")
-        settings.addSender("B B")
+        seedLegacySenders("AAA", "B B")
         val secrets = FakeDestinationSecretStore()
         assertTrue(importer(creds, secrets).run())
         assertEquals(creds.toDestinationSecrets(), secrets.get(PRIMARY_DESTINATION_ID))
@@ -79,8 +103,7 @@ class LegacyImportTest {
 
     @Test fun idempotent() = runBlocking {
         withPrimary()
-        settings.addSender("AAA")
-        settings.addSender("B B")
+        seedLegacySenders("AAA", "B B")
         val imp = importer(creds, FakeDestinationSecretStore())
         assertTrue(imp.run())
         assertTrue(imp.run())
@@ -89,7 +112,7 @@ class LegacyImportTest {
 
     @Test fun noCredentialsStillImportsRules() = runBlocking {
         withPrimary()
-        settings.addSender("AAA")
+        seedLegacySenders("AAA")
         val secrets = FakeDestinationSecretStore()
         assertTrue(importer(null, secrets).run())
         assertNull(secrets.get(PRIMARY_DESTINATION_ID))
@@ -107,7 +130,7 @@ class LegacyImportTest {
 
     @Test fun keystoreFailureLeavesNothingHalfDone() = runBlocking {
         withPrimary()
-        settings.addSender("AAA")
+        seedLegacySenders("AAA")
         val failing = FakeDestinationSecretStore().apply { failOnSet = true }
         assertFalse(importer(creds, failing).run())
         assertEquals(0, db.ruleDao().activeWithDestinations().size)
@@ -121,7 +144,7 @@ class LegacyImportTest {
     }
 
     @Test fun freshInstallSkips() = runBlocking {
-        settings.addSender("AAA")
+        seedLegacySenders("AAA")
         val secrets = FakeDestinationSecretStore()
         assertTrue(importer(creds, secrets).run())
         assertEquals(0, db.ruleDao().activeWithDestinations().size)
@@ -137,13 +160,13 @@ class LegacyImportTest {
         val context = RuntimeEnvironment.getApplication()
         val file = File(context.cacheDir, "settings-${UUID.randomUUID()}.preferences_pb")
         file.writeBytes(ByteArray(64) { 0x7f })
-        val broken = SettingsRepository(context, LegacyStore(null), SmsRepository(db, SystemClock), { }, file)
+        val broken = SettingsRepository(context, repos.destinations, repos.rules, sms, { }, file)
         withPrimary()
         assertFalse(LegacyImport(db, LegacyStore(creds), FakeDestinationSecretStore(), broken).run())
     }
 
     @Test fun legacySendersReadsRawKey() = runBlocking {
-        settings.addSender("AAA")
+        seedLegacySenders("AAA")
         assertEquals(listOf("AAA"), settings.legacySenders())
     }
 }
