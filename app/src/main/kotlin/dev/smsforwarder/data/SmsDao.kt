@@ -54,7 +54,12 @@ interface SmsDao {
     @Query("UPDATE sms SET deletedAt = :at WHERE id = :id AND deletedAt IS NULL")
     suspend fun softDelete(id: Long, at: Long)
 
+    // Purged by when the app saw the SMS, not by the carrier stamp: the sweep window uses the phone
+    // date, so an old receivedAt on a row still inside that window would let the sweep re-ingest it.
     // Rows the user deleted go at the cutoff whatever their status; the rest only when already sent.
-    @Query("DELETE FROM sms WHERE receivedAt < :cutoff AND (status = :status OR deletedAt IS NOT NULL)")
+    @Query(
+        "DELETE FROM sms WHERE firstSeenAt < :cutoff AND " +
+            "(status = :status OR (deletedAt IS NOT NULL AND deletedAt < :cutoff))",
+    )
     suspend fun deleteOlderThan(status: SmsStatus, cutoff: Long): Int
 }
