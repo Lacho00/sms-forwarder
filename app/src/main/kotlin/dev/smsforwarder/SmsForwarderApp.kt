@@ -2,6 +2,7 @@ package dev.smsforwarder
 
 import android.app.Application
 import dev.smsforwarder.notify.Notifier
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,6 +16,14 @@ class SmsForwarderApp : Application() {
         super.onCreate()
         Notifier.ensureChannel(this)
         // Failures are stored by run() itself and surfaced by the health check.
-        applicationScope.launch { graph.legacyImport.run() }
+        applicationScope.launch {
+            try {
+                graph.legacyImport.run()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // run() reports failures itself; nothing here may crash the process.
+            }
+        }
     }
 }

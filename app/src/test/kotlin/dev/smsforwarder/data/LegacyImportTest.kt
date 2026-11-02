@@ -133,6 +133,15 @@ class LegacyImportTest {
         assertEquals(0, db.ruleDao().activeWithDestinations().size)
     }
 
+    @Test fun brokenSettingsStoreReturnsFalseWithoutThrowing() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val file = File(context.cacheDir, "settings-${UUID.randomUUID()}.preferences_pb")
+        file.writeBytes(ByteArray(64) { 0x7f })
+        val broken = SettingsRepository(context, LegacyStore(null), SmsRepository(db, SystemClock), { }, file)
+        withPrimary()
+        assertFalse(LegacyImport(db, LegacyStore(creds), FakeDestinationSecretStore(), broken).run())
+    }
+
     @Test fun legacySendersReadsRawKey() = runBlocking {
         settings.addSender("AAA")
         assertEquals(listOf("AAA"), settings.legacySenders())

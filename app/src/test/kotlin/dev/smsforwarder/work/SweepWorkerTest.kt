@@ -64,4 +64,30 @@ class SweepWorkerTest {
         assertEquals(0, server.requestCount)
         assertTrue(WorkManager.getInstance(context).getWorkInfosForUniqueWork("send-$id").get().isEmpty())
     }
+
+    @Test fun safeModeSkipsSweepButStillRunsAlerts() = runBlocking {
+        graph.db.destinationDao().insert(
+            dev.smsforwarder.data.DestinationEntity(
+                id = dev.smsforwarder.data.PRIMARY_DESTINATION_ID, name = "Primary", enabled = true,
+                template = dev.smsforwarder.core.TemplateKind.STANDARD_JSON,
+                method = dev.smsforwarder.core.HttpMethod.POST, bodyTemplate = null, bodyIsJson = true,
+                publicHeaders = "[]", successPolicy = dev.smsforwarder.core.SuccessPolicy.ANY_2XX, createdAt = 1L,
+            ),
+        )
+        graph.legacyImport = dev.smsforwarder.data.LegacyImport(
+            graph.db, graph.secretStore,
+            dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }, graph.settings,
+        )
+        val cursor = graph.settings.sweepCursor()
+        val floor = graph.settings.sweepFloor()
+        var alerts = 0
+        graph.afterSweep = { alerts++ }
+
+        val result = TestListenableWorkerBuilder<SweepWorker>(context).build().doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals(cursor, graph.settings.sweepCursor())
+        assertEquals(floor, graph.settings.sweepFloor())
+        assertEquals(1, alerts)
+    }
 }

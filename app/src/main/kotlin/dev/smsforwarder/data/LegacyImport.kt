@@ -28,8 +28,8 @@ class LegacyImport(
 
     /** True when the import is done or was never needed; false means "safe mode": do not send. */
     suspend fun run(): Boolean = lock.withLock {
-        if (settings.isImportDone()) return true
         try {
+            if (settings.isImportDone()) return true
             // A fresh install has no 1.1 data and no primary destination.
             if (db.destinationDao().get(PRIMARY_DESTINATION_ID) == null) {
                 settings.markImportDone()
@@ -64,12 +64,13 @@ class LegacyImport(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            // The same broken DataStore may fail again; the next run tries anyway.
             try {
                 settings.markImportFailed()
             } catch (inner: CancellationException) {
                 throw inner
             } catch (inner: Exception) {
-                // Nothing more to do: the next run tries again anyway.
+                // ignored on purpose
             }
             false
         }
