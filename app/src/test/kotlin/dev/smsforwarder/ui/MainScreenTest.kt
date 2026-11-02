@@ -4,6 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import dev.smsforwarder.R
+import dev.smsforwarder.core.StatusKind
+import dev.smsforwarder.core.StatusLabel
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.ui.main.MainScreen
 import dev.smsforwarder.ui.main.MainUiState
@@ -19,6 +21,9 @@ import org.robolectric.RuntimeEnvironment
 @RunWith(RobolectricTestRunner::class)
 class MainScreenTest {
     @get:Rule val compose = createComposeRule()
+
+    private fun str(id: Int, vararg args: Any): String =
+        RuntimeEnvironment.getApplication().getString(id, *args)
 
     private fun show(state: MainUiState) {
         compose.setContent {
@@ -41,20 +46,19 @@ class MainScreenTest {
 
     @Test fun showsWarningCardWithButtonForAutostartOff() {
         show(state(issues = setOf(HealthIssue.AUTOSTART_OFF)))
-        compose.onNodeWithText("Inicio automático desactivado").assertIsDisplayed()
-        compose.onNodeWithText("Abrir ajustes").assertIsDisplayed()
+        compose.onNodeWithText(str(R.string.issue_autostart_off)).assertIsDisplayed()
+        compose.onNodeWithText(str(R.string.main_open_settings)).assertIsDisplayed()
     }
 
     @Test fun showsPausedLineOnlyWhenPaused() {
-        val label = RuntimeEnvironment.getApplication().getString(R.string.forwarding_paused)
         show(state().copy(paused = true))
-        compose.onNodeWithText(label).assertIsDisplayed()
+        compose.onNodeWithText(str(R.string.forwarding_paused)).assertIsDisplayed()
     }
 
     @Test fun showsStatusLineAndSweepButton() {
         show(state())
-        compose.onNodeWithText("Cola: 2", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Barrer bandeja ahora").assertIsDisplayed()
+        compose.onNodeWithText(str(R.string.main_status_line, str(R.string.ago_never), 2, 1)).assertIsDisplayed()
+        compose.onNodeWithText(str(R.string.main_sweep_now)).assertIsDisplayed()
     }
 
     @Test fun rowShowsLabel() {
@@ -64,9 +68,9 @@ class MainScreenTest {
             subId = 1,
             receivedAt = 1_800_000_000_000L,
             preview = "Se ha comprado un plan de datos",
-            label = "Recuperado · 200",
+            label = StatusLabel(StatusKind.RECOVERED, 1, 200),
         )
         show(state(rows = listOf(row)))
-        compose.onNodeWithText("Recuperado · 200").assertIsDisplayed()
+        compose.onNodeWithText(str(R.string.status_recovered_code, 200)).assertIsDisplayed()
     }
 }

@@ -1,7 +1,9 @@
 package dev.smsforwarder.ui.onboarding
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import dev.smsforwarder.R
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.core.UrlValidator
@@ -14,17 +16,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 
-object OnboardingTexts {
-    const val CUTOVER =
-        "Antes de seguir, desinstala o desactiva la app anterior que reenviaba estos SMS. " +
-            "Si las dos siguen activas, el mismo SMS se enviaría dos veces."
-    const val REMINDER =
-        "Recuerda: la app anterior debe seguir desinstalada o desactivada. " +
-            "A continuación puedes recuperar a mano SMS de los últimos días."
-    const val CREDENTIALS_SAVE_ERROR = "No se pudieron guardar las credenciales"
-    const val FINISH_ERROR = "No se pudo terminar la configuración. Inténtalo de nuevo."
-}
-
 enum class OnboardingStep { CUTOVER, PERMISSIONS, BATTERY, MIUI, SENDERS, CONNECTION, REMINDER, RECOVERY }
 
 data class OnboardingUiState(
@@ -35,11 +26,11 @@ data class OnboardingUiState(
     val senders: List<String> = emptyList(),
     val url: String = "",
     val token: String = "",
-    val urlError: String? = null,
-    val tokenError: String? = null,
+    @StringRes val urlError: Int? = null,
+    @StringRes val tokenError: Int? = null,
     val testing: Boolean = false,
     val testResult: ConnectionTestResult? = null,
-    val finishError: String? = null,
+    @StringRes val finishError: Int? = null,
 ) {
     val canContinue: Boolean
         get() = when (step) {
@@ -100,11 +91,11 @@ class OnboardingViewModel(
     suspend fun testConnection() {
         val current = _state.value
         if (!UrlValidator.isValid(current.url)) {
-            _state.update { it.copy(urlError = "La URL debe empezar por https://", testResult = null) }
+            _state.update { it.copy(urlError = R.string.error_url_https, testResult = null) }
             return
         }
         if (current.token.isBlank()) {
-            _state.update { it.copy(tokenError = "Escribe el token", testResult = null) }
+            _state.update { it.copy(tokenError = R.string.error_token_required, testResult = null) }
             return
         }
         _state.update { it.copy(testing = true, urlError = null, tokenError = null, testResult = null) }
@@ -125,11 +116,11 @@ class OnboardingViewModel(
         if (!current.canContinue) return
         if (current.step == OnboardingStep.CONNECTION) {
             if (!UrlValidator.isValid(current.url)) {
-                _state.update { it.copy(urlError = "La URL debe empezar por https://", testResult = null) }
+                _state.update { it.copy(urlError = R.string.error_url_https, testResult = null) }
                 return
             }
             if (current.token.isBlank()) {
-                _state.update { it.copy(tokenError = "Escribe el token", testResult = null) }
+                _state.update { it.copy(tokenError = R.string.error_token_required, testResult = null) }
                 return
             }
             try {
@@ -137,7 +128,7 @@ class OnboardingViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(tokenError = OnboardingTexts.CREDENTIALS_SAVE_ERROR) }
+                _state.update { it.copy(tokenError = R.string.onboarding_credentials_save_error) }
                 return
             }
             // The token is stored encrypted now; drop it from memory state.
@@ -148,7 +139,7 @@ class OnboardingViewModel(
         _state.update { it.copy(step = following) }
     }
 
-    fun setFinishError(message: String?) = _state.update { it.copy(finishError = message) }
+    fun setFinishError(@StringRes message: Int?) = _state.update { it.copy(finishError = message) }
 
     /**
      * Ends the wizard. [floor] is the instant the recovery list read the inbox: nothing older is

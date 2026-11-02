@@ -28,27 +28,38 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
 
     fun recovered(items: List<SmsEntity>) {
         if (items.isEmpty()) return
+        val res = localized()
         val latest = items.maxBy { it.receivedAt }
         val text = if (items.size == 1) {
-            "Recuperado 1 SMS de ${latest.sender} de las ${time(latest.receivedAt)}. " +
-                "El receptor no se ejecutó: revisa Inicio automático."
+            res.getString(R.string.notif_recovered_one, latest.sender, time(latest.receivedAt))
         } else {
-            "Recuperados ${items.size} SMS (el último de ${latest.sender} de las ${time(latest.receivedAt)}). " +
-                "El receptor no se ejecutó: revisa Inicio automático."
+            res.getString(R.string.notif_recovered_many, items.size, latest.sender, time(latest.receivedAt))
         }
-        post(ID_RECOVERED, "SMS recuperados", text)
+        post(ID_RECOVERED, res.getString(R.string.notif_recovered_title), text)
     }
 
     fun stuck(item: SmsEntity) {
-        val state = if (item.status == SmsStatus.ERROR) {
-            "rechazado (Error ${item.lastHttpCode})"
+        val res = localized()
+        val text = if (item.status == SmsStatus.ERROR) {
+            res.getString(
+                R.string.notif_stuck_rejected,
+                item.sender,
+                time(item.receivedAt),
+                item.lastHttpCode ?: 0,
+            )
         } else {
-            "sin enviar (${item.attempts} intentos)"
+            res.resources.getQuantityString(
+                R.plurals.notif_stuck_unsent,
+                item.attempts,
+                item.sender,
+                time(item.receivedAt),
+                item.attempts,
+            )
         }
         post(
             item.id.toInt(),
-            localized().getString(R.string.notif_stuck_title),
-            "El SMS de ${item.sender} de las ${time(item.receivedAt)} está $state.",
+            res.getString(R.string.notif_stuck_title),
+            text,
             STUCK_TAG,
         )
     }
@@ -60,24 +71,34 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
             manager.cancel(ID_HEALTH)
             return
         }
-        post(ID_HEALTH, "Revisa la configuración", notifiable.joinToString(" ") { describe(it) })
+        val res = localized()
+        post(
+            ID_HEALTH,
+            res.getString(R.string.notif_health_title),
+            notifiable.joinToString(" ") { res.getString(describe(it)) },
+        )
     }
 
     fun tokenRejected(count: Int) {
-        post(ID_TOKEN_REJECTED, "Token rechazado", "Token rechazado: $count SMS esperando")
+        val res = localized()
+        post(
+            ID_TOKEN_REJECTED,
+            res.getString(R.string.notif_token_rejected_title),
+            res.getString(R.string.notif_token_rejected_text, count),
+        )
     }
 
-    private fun describe(issue: HealthIssue): String = when (issue) {
-        HealthIssue.SMS_PERMISSION -> "Falta el permiso de SMS."
-        HealthIssue.NOTIFICATION_PERMISSION -> "Las notificaciones están desactivadas."
-        HealthIssue.BATTERY_OPTIMIZED -> "La batería está optimizada para esta app."
-        HealthIssue.BACKGROUND_RESTRICTED -> "El segundo plano está restringido."
-        HealthIssue.AUTOSTART_OFF -> "Inicio automático desactivado."
-        HealthIssue.AUTOSTART_UNKNOWN -> "Inicio automático no comprobable."
-        HealthIssue.MIUI_SMS_BLOCKED -> "MIUI bloquea la lectura de SMS."
-        HealthIssue.TOKEN_REJECTED -> "El token fue rechazado."
-        HealthIssue.NOT_CONFIGURED -> "Falta configurar URL y token."
-        HealthIssue.NO_SENDERS -> "No hay remitentes configurados."
+    private fun describe(issue: HealthIssue): Int = when (issue) {
+        HealthIssue.SMS_PERMISSION -> R.string.notif_issue_sms_permission
+        HealthIssue.NOTIFICATION_PERMISSION -> R.string.notif_issue_notification_permission
+        HealthIssue.BATTERY_OPTIMIZED -> R.string.notif_issue_battery_optimized
+        HealthIssue.BACKGROUND_RESTRICTED -> R.string.notif_issue_background_restricted
+        HealthIssue.AUTOSTART_OFF -> R.string.notif_issue_autostart_off
+        HealthIssue.AUTOSTART_UNKNOWN -> R.string.notif_issue_autostart_unknown
+        HealthIssue.MIUI_SMS_BLOCKED -> R.string.notif_issue_miui_sms_blocked
+        HealthIssue.TOKEN_REJECTED -> R.string.notif_issue_token_rejected
+        HealthIssue.NOT_CONFIGURED -> R.string.notif_issue_not_configured
+        HealthIssue.NO_SENDERS -> R.string.notif_issue_no_senders
     }
 
     /** Re-creates the channel so its name follows the language chosen in settings. */

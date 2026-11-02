@@ -27,17 +27,22 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.smsforwarder.R
 import dev.smsforwarder.ui.theme.ThemeMode
 
-private fun themeLabel(mode: ThemeMode): String = when (mode) {
-    ThemeMode.SYSTEM -> "Sistema"
-    ThemeMode.LIGHT -> "Claro"
-    ThemeMode.DARK -> "Oscuro"
-}
+@Composable
+private fun themeLabel(mode: ThemeMode): String = stringResource(
+    when (mode) {
+        ThemeMode.SYSTEM -> R.string.theme_system
+        ThemeMode.LIGHT -> R.string.theme_light
+        ThemeMode.DARK -> R.string.theme_dark
+    },
+)
 
 /** Both credential fields are hidden while typing and start empty: the stored token is never shown. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,8 +64,8 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ajustes") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Atrás") } },
+                title = { Text(stringResource(R.string.settings_title)) },
+                navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(R.string.back)) } },
             )
         },
     ) { padding ->
@@ -72,40 +77,39 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Conexión con el Worker", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_worker_connection), style = MaterialTheme.typography.titleMedium)
             Text(
-                "Por seguridad la URL y el token guardados no se muestran. " +
-                    "Escribe valores nuevos para sustituirlos.",
+                stringResource(R.string.settings_credentials_hidden),
                 style = MaterialTheme.typography.bodySmall,
             )
             OutlinedTextField(
                 value = form.url,
                 onValueChange = onUrlChange,
-                label = { Text("URL del Worker") },
+                label = { Text(stringResource(R.string.field_worker_url)) },
                 singleLine = true,
                 isError = form.urlError != null,
-                supportingText = form.urlError?.let { error -> { Text(error) } },
+                supportingText = form.urlError?.let { error -> { Text(stringResource(error)) } },
                 modifier = Modifier.fillMaxWidth().testTag("field_url"),
             )
             OutlinedTextField(
                 value = form.token,
                 onValueChange = onTokenChange,
-                label = { Text("Token") },
+                label = { Text(stringResource(R.string.field_token)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth().testTag("field_token"),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onSave, enabled = !form.busy) { Text("Guardar credenciales") }
-                OutlinedButton(onClick = onTest, enabled = !form.busy) { Text("Probar conexión") }
+                Button(onClick = onSave, enabled = !form.busy) { Text(stringResource(R.string.settings_save_credentials)) }
+                OutlinedButton(onClick = onTest, enabled = !form.busy) { Text(stringResource(R.string.action_test_connection)) }
             }
-            form.message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            form.message?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium) }
 
             HorizontalDivider()
             SendersSection(senders, onAddSender, onRemoveSender)
 
             HorizontalDivider()
-            Text("Tema", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_theme), style = MaterialTheme.typography.titleMedium)
             ThemeMode.entries.forEach { mode ->
                 Row(
                     modifier = Modifier
@@ -119,7 +123,7 @@ fun SettingsScreen(
             }
 
             HorizontalDivider()
-            OutlinedButton(onClick = onOpenRecovery) { Text("Recuperar SMS") }
+            OutlinedButton(onClick = onOpenRecovery) { Text(stringResource(R.string.recover_sms)) }
         }
     }
 }
@@ -131,9 +135,9 @@ private fun SendersSection(
     onRemove: (String) -> Unit,
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
-    Text("Remitentes", style = MaterialTheme.typography.titleMedium)
+    Text(stringResource(R.string.settings_senders), style = MaterialTheme.typography.titleMedium)
     if (senders.isEmpty()) {
-        Text("No hay remitentes: la app no reenviará nada.", style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.settings_no_senders), style = MaterialTheme.typography.bodySmall)
     }
     senders.forEach { sender ->
         Row(
@@ -142,14 +146,14 @@ private fun SendersSection(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(sender)
-            TextButton(onClick = { onRemove(sender) }) { Text("Quitar") }
+            TextButton(onClick = { onRemove(sender) }) { Text(stringResource(R.string.action_remove)) }
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = draft,
             onValueChange = { draft = it },
-            label = { Text("Nuevo remitente") },
+            label = { Text(stringResource(R.string.settings_new_sender)) },
             singleLine = true,
             modifier = Modifier.weight(1f),
         )
@@ -159,6 +163,6 @@ private fun SendersSection(
                 draft = ""
             },
             enabled = draft.isNotBlank(),
-        ) { Text("Añadir") }
+        ) { Text(stringResource(R.string.action_add)) }
     }
 }

@@ -21,7 +21,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import dev.smsforwarder.R
 import dev.smsforwarder.ui.main.formatDateTime
 
 /** Explanation + checklist, shared by the Recovery screen and the last onboarding step. */
@@ -35,18 +37,17 @@ fun RecoveryList(
     LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item(key = "intro") {
             Text(
-                "SMS de los últimos 7 días de tus remitentes. Ninguno está marcado: " +
-                    "elige los que quieras enviar. Los que la app ya tiene aparecen desactivados.",
+                stringResource(R.string.recovery_intro),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         }
         if (unreadable) {
             item(key = "unreadable") {
-                Text("No se puede leer la bandeja de SMS. Revisa los permisos.")
+                Text(stringResource(R.string.recovery_unreadable))
             }
         } else if (items.isEmpty()) {
-            item(key = "empty") { Text("No hay SMS de tus remitentes en los últimos 7 días.") }
+            item(key = "empty") { Text(stringResource(R.string.recovery_empty)) }
         }
         items(items, key = { it.key }) { item ->
             Row(
@@ -66,7 +67,7 @@ fun RecoveryList(
                     Text(formatDateTime(item.receivedAt), style = MaterialTheme.typography.bodySmall)
                     Text(item.preview, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
                     if (item.alreadyKnown) {
-                        Text("Ya guardado en la app", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.recovery_already_saved), style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
@@ -88,8 +89,8 @@ fun RecoveryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Recuperar SMS") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Atrás") } },
+                title = { Text(stringResource(R.string.recover_sms)) },
+                navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(R.string.back)) } },
             )
         },
     ) { padding ->
@@ -100,7 +101,7 @@ fun RecoveryScreen(
             RecoveryList(items, unreadable, onToggle, modifier = Modifier.weight(1f))
             resultMessage?.let { Text(it) }
             val count = items.count { it.selected }
-            Button(onClick = onSend, enabled = count > 0) { Text("Enviar seleccionados ($count)") }
+            Button(onClick = onSend, enabled = count > 0) { Text(stringResource(R.string.recovery_send_selected, count)) }
         }
     }
 }

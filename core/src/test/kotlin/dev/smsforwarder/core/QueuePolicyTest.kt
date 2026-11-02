@@ -24,22 +24,6 @@ class QueuePolicyTest {
 
     @Test fun sweepFromNeverBelowFloor() = assertEquals(500L, QueuePolicy.sweepFrom(100L + 86_400_000L, 500L))
 
-    @Test fun labels() {
-        assertEquals("En cola · 3 intentos", statusLabel(SmsStatus.QUEUED, SmsOrigin.RECEIVER, 3, null))
-        assertEquals("Enviado 200", statusLabel(SmsStatus.SENT, SmsOrigin.RECEIVER, 1, 200))
-        assertEquals("Recuperado · 200", statusLabel(SmsStatus.SENT, SmsOrigin.SWEEP, 1, 200))
-        assertEquals("Manual · 200", statusLabel(SmsStatus.SENT, SmsOrigin.MANUAL, 1, 200))
-        assertEquals("Error 401", statusLabel(SmsStatus.ERROR, SmsOrigin.RECEIVER, 2, 401))
-        assertEquals("Error 400", statusLabel(SmsStatus.ERROR, SmsOrigin.SWEEP, 1, 400))
-    }
-
-    @Test fun labelsWithoutHttpCodeNeverShowNull() {
-        assertEquals("Error", statusLabel(SmsStatus.ERROR, SmsOrigin.RECEIVER, 1, null))
-        assertEquals("Enviado", statusLabel(SmsStatus.SENT, SmsOrigin.RECEIVER, 1, null))
-        assertEquals("Recuperado", statusLabel(SmsStatus.SENT, SmsOrigin.SWEEP, 1, null))
-        assertEquals("Manual", statusLabel(SmsStatus.SENT, SmsOrigin.MANUAL, 1, null))
-    }
-
     @Test fun stuckWindowIsConfigurable() {
         assertTrue(QueuePolicy.isStuck(SmsStatus.QUEUED, null, 0, 2 * 3_600_000, StuckAfter.H1.millis))
         assertFalse(QueuePolicy.isStuck(SmsStatus.QUEUED, null, 0, 2 * 3_600_000))

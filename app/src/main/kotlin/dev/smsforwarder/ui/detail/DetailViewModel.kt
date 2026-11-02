@@ -3,6 +3,8 @@ package dev.smsforwarder.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dev.smsforwarder.core.StatusLabel
+import dev.smsforwarder.core.statusLabelOf
 import dev.smsforwarder.data.AttemptEntity
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
@@ -17,7 +19,10 @@ data class DetailUiState(
     val sms: SmsEntity?,
     val attempts: List<AttemptEntity>,
     val loaded: Boolean = true,
-)
+) {
+    val label: StatusLabel?
+        get() = sms?.let { statusLabelOf(it.status, it.origin, it.attempts, it.lastHttpCode) }
+}
 
 class DetailViewModel(
     private val smsId: Long,

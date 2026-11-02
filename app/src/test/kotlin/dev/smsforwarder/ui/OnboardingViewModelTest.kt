@@ -1,6 +1,7 @@
 package dev.smsforwarder.ui
 
 import androidx.room.Room
+import dev.smsforwarder.R
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.core.interpretConnectionTest
@@ -10,7 +11,6 @@ import dev.smsforwarder.data.SecretStore
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.ui.onboarding.OnboardingStep
-import dev.smsforwarder.ui.onboarding.OnboardingTexts
 import dev.smsforwarder.ui.onboarding.OnboardingViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -99,7 +99,6 @@ class OnboardingViewModelTest {
 
     @Test fun onboarding400MeansOkAndShowsCutoverReminder() = runBlocking {
         assertEquals(OnboardingStep.CUTOVER, vm.state.value.step)
-        assertTrue(OnboardingTexts.CUTOVER.contains("desinstala o desactiva la app anterior"))
         vm.next()
         assertEquals("Needs confirmation", OnboardingStep.CUTOVER, vm.state.value.step)
 
@@ -181,7 +180,7 @@ class OnboardingViewModelTest {
         vm.next()
 
         assertEquals(OnboardingStep.CONNECTION, vm.state.value.step)
-        assertEquals(OnboardingTexts.CREDENTIALS_SAVE_ERROR, vm.state.value.tokenError)
+        assertEquals(R.string.onboarding_credentials_save_error, vm.state.value.tokenError)
         assertEquals("test-token", vm.state.value.token)
     }
 }

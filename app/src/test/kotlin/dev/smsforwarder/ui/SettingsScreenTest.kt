@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
+import dev.smsforwarder.R
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.data.AppDatabase
@@ -91,7 +92,7 @@ class SettingsScreenTest {
 
         compose.onNodeWithTag("field_url").performTextInput("https://example.com/ingest")
         compose.onNodeWithTag("field_token").performTextInput("test-token")
-        compose.onNodeWithText("Guardar credenciales").performClick()
+        compose.onNodeWithText(RuntimeEnvironment.getApplication().getString(R.string.settings_save_credentials)).performClick()
         compose.waitForIdle()
 
         assertEquals("test-token", saved.single().token)
@@ -113,12 +114,12 @@ class SettingsScreenTest {
 
         vm.setUrl("https://example.com/ingest")
         vm.test()
-        assertEquals("Escribe la URL y el token para probarlos", vm.form.value.message)
+        assertEquals(R.string.settings_msg_need_both, vm.form.value.message)
 
         vm.setUrl("")
         vm.setToken("typed-token")
         vm.test()
-        assertEquals("Escribe la URL y el token para probarlos", vm.form.value.message)
+        assertEquals(R.string.settings_msg_need_both, vm.form.value.message)
 
         assertTrue(tested.isEmpty())
     }

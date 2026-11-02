@@ -76,14 +76,14 @@ class LocalizedTest {
     @Test fun recreateAfterLanguageChangeKeepsNavigationStack() {
         val graph = (context as SmsForwarderApp).graph
         runBlocking { graph.settings.setOnboardingDone() }
-        // The settings button and back label are still literals; delivery 1 task 5 moves them to resources.
-        compose.onNodeWithContentDescription("Ajustes").performClick()
-        compose.onNodeWithText("Atrás").assertExists()
+        // The test runs in English until the language is switched below.
+        compose.onNodeWithContentDescription(context.getString(R.string.settings_title)).performClick()
+        compose.onNodeWithText(context.getString(R.string.back)).assertExists()
 
         runBlocking { graph.settings.setLanguage(Language.ES) }
         compose.activityRule.scenario.recreate()
 
-        compose.onNodeWithText("Atrás").assertExists()
+        compose.onNodeWithText(Localized.wrap(context, "es").getString(R.string.back)).assertExists()
         compose.activity.let { activity ->
             assertEquals(
                 Localized.wrap(context, "es").getString(R.string.about_title),

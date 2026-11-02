@@ -28,31 +28,35 @@ import dev.smsforwarder.health.HealthIssue
 import java.text.DateFormat
 import java.util.Date
 
-internal fun issueTitle(issue: HealthIssue): String = when (issue) {
-    HealthIssue.SMS_PERMISSION -> "Permisos de SMS no concedidos"
-    HealthIssue.NOTIFICATION_PERMISSION -> "Notificaciones desactivadas"
-    HealthIssue.BATTERY_OPTIMIZED -> "Optimización de batería activa"
-    HealthIssue.BACKGROUND_RESTRICTED -> "Segundo plano restringido"
-    HealthIssue.AUTOSTART_OFF -> "Inicio automático desactivado"
-    HealthIssue.AUTOSTART_UNKNOWN -> "Inicio automático no comprobable"
-    HealthIssue.MIUI_SMS_BLOCKED -> "MIUI bloquea la lectura de SMS"
-    HealthIssue.TOKEN_REJECTED -> "Token rechazado por el Worker"
-    HealthIssue.NOT_CONFIGURED -> "Falta configurar URL y token"
-    HealthIssue.NO_SENDERS -> "No hay remitentes configurados"
-}
+@Composable
+internal fun issueTitle(issue: HealthIssue): String = stringResource(
+    when (issue) {
+        HealthIssue.SMS_PERMISSION -> R.string.issue_sms_permission
+        HealthIssue.NOTIFICATION_PERMISSION -> R.string.issue_notification_permission
+        HealthIssue.BATTERY_OPTIMIZED -> R.string.issue_battery_optimized
+        HealthIssue.BACKGROUND_RESTRICTED -> R.string.issue_background_restricted
+        HealthIssue.AUTOSTART_OFF -> R.string.issue_autostart_off
+        HealthIssue.AUTOSTART_UNKNOWN -> R.string.issue_autostart_unknown
+        HealthIssue.MIUI_SMS_BLOCKED -> R.string.issue_miui_sms_blocked
+        HealthIssue.TOKEN_REJECTED -> R.string.issue_token_rejected
+        HealthIssue.NOT_CONFIGURED -> R.string.issue_not_configured
+        HealthIssue.NO_SENDERS -> R.string.issue_no_senders
+    },
+)
 
 internal fun formatDateTime(millis: Long): String =
     DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(millis))
 
-/** "hace N min" style text for the status line; [now] is a parameter so it can be tested. */
+/** "N min ago" style text for the status line; [now] is a parameter so it can be tested. */
+@Composable
 internal fun agoLabel(lastSweepAt: Long?, now: Long): String {
-    if (lastSweepAt == null) return "nunca"
+    if (lastSweepAt == null) return stringResource(R.string.ago_never)
     val minutes = (now - lastSweepAt).coerceAtLeast(0) / 60_000
     return when {
-        minutes < 1 -> "hace menos de 1 min"
-        minutes < 60 -> "hace $minutes min"
-        minutes < 24 * 60 -> "hace ${minutes / 60} h"
-        else -> "hace ${minutes / (24 * 60)} d"
+        minutes < 1 -> stringResource(R.string.ago_less_than_minute)
+        minutes < 60 -> stringResource(R.string.ago_minutes, minutes)
+        minutes < 24 * 60 -> stringResource(R.string.ago_hours, minutes / 60)
+        else -> stringResource(R.string.ago_days, minutes / (24 * 60))
     }
 }
 
@@ -65,14 +69,15 @@ fun MainScreen(
     onOpen: (Long) -> Unit,
     onSettings: () -> Unit,
 ) {
+    val settingsLabel = stringResource(R.string.settings_title)
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SMS Forwarder") },
+                title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(
                         onClick = onSettings,
-                        modifier = Modifier.semantics { contentDescription = "Ajustes" },
+                        modifier = Modifier.semantics { contentDescription = settingsLabel },
                     ) {
                         Text("⚙")
                     }
@@ -94,7 +99,7 @@ fun MainScreen(
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(issueTitle(issue), style = MaterialTheme.typography.titleMedium)
-                        Button(onClick = { onOpenIssue(issue) }) { Text("Abrir ajustes") }
+                        Button(onClick = { onOpenIssue(issue) }) { Text(stringResource(R.string.main_open_settings)) }
                     }
                 }
             }
@@ -107,15 +112,19 @@ fun MainScreen(
                         )
                     }
                     Text(
-                        "Último barrido: ${agoLabel(state.lastSweepAt, System.currentTimeMillis())}" +
-                            " · Cola: ${state.queued} · Errores: ${state.errors}",
+                        stringResource(
+                            R.string.main_status_line,
+                            agoLabel(state.lastSweepAt, System.currentTimeMillis()),
+                            state.queued,
+                            state.errors,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Button(onClick = onSweepNow) { Text("Barrer bandeja ahora") }
+                    Button(onClick = onSweepNow) { Text(stringResource(R.string.main_sweep_now)) }
                 }
             }
             if (state.rows.isEmpty()) {
-                item(key = "empty") { Text("Todavía no hay SMS", style = MaterialTheme.typography.bodyMedium) }
+                item(key = "empty") { Text(stringResource(R.string.main_empty), style = MaterialTheme.typography.bodyMedium) }
             }
             items(state.rows, key = { it.id }) { row ->
                 SmsRow(row, onClick = { onOpen(row.id) })
@@ -133,10 +142,10 @@ private fun SmsRow(row: RowUi, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp),
     ) {
-        val sim = row.subId?.let { " · SIM $it" }.orEmpty()
-        Text(row.sender + sim, style = MaterialTheme.typography.titleSmall)
+        val senderLine = row.subId?.let { stringResource(R.string.row_sender_sim, row.sender, it) } ?: row.sender
+        Text(senderLine, style = MaterialTheme.typography.titleSmall)
         Text(formatDateTime(row.receivedAt), style = MaterialTheme.typography.bodySmall)
         Text(row.preview, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-        Text(row.label, style = MaterialTheme.typography.labelMedium)
+        Text(statusText(row.label), style = MaterialTheme.typography.labelMedium)
     }
 }

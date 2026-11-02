@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import dev.smsforwarder.R
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.data.SmsEntity
@@ -16,6 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
 @RunWith(RobolectricTestRunner::class)
 class DetailScreenTest {
@@ -39,18 +41,19 @@ class DetailScreenTest {
     )
 
     @Test fun retryVisibleOnlyOnError() {
+        val retry = RuntimeEnvironment.getApplication().getString(R.string.detail_retry)
         var state by mutableStateOf(DetailUiState(sms(SmsStatus.ERROR), emptyList()))
         compose.setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {
                 DetailScreen(state = state, onRetry = {}, onBack = {})
             }
         }
-        compose.onNodeWithText("Reintentar").assertExists()
+        compose.onNodeWithText(retry).assertExists()
 
         compose.runOnIdle { state = DetailUiState(sms(SmsStatus.QUEUED), emptyList()) }
-        compose.onNodeWithText("Reintentar").assertDoesNotExist()
+        compose.onNodeWithText(retry).assertDoesNotExist()
 
         compose.runOnIdle { state = DetailUiState(sms(SmsStatus.SENT), emptyList()) }
-        compose.onNodeWithText("Reintentar").assertDoesNotExist()
+        compose.onNodeWithText(retry).assertDoesNotExist()
     }
 }

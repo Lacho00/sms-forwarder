@@ -1,8 +1,10 @@
 package dev.smsforwarder.ui.settings
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dev.smsforwarder.R
 import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.core.UrlValidator
 import dev.smsforwarder.data.Credentials
@@ -21,8 +23,8 @@ import kotlinx.coroutines.launch
 data class SettingsForm(
     val url: String = "",
     val token: String = "",
-    val urlError: String? = null,
-    val message: String? = null,
+    @StringRes val urlError: Int? = null,
+    @StringRes val message: Int? = null,
     val busy: Boolean = false,
 ) {
     // The token must never end up in a log line.
@@ -59,22 +61,22 @@ class SettingsViewModel(
     fun save() {
         val current = _form.value
         if (!UrlValidator.isValid(current.url)) {
-            _form.update { it.copy(urlError = "La URL debe empezar por https://") }
+            _form.update { it.copy(urlError = R.string.error_url_https) }
             return
         }
         if (current.token.isBlank()) {
-            _form.update { it.copy(message = "Escribe el token") }
+            _form.update { it.copy(message = R.string.error_token_required) }
             return
         }
         launch {
             _form.update { it.copy(busy = true, message = null) }
             try {
                 saveCredentials(Credentials(current.url.trim(), current.token))
-                _form.value = SettingsForm(message = "Credenciales guardadas")
+                _form.value = SettingsForm(message = R.string.settings_msg_saved)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _form.update { it.copy(busy = false, message = "No se pudieron guardar las credenciales") }
+                _form.update { it.copy(busy = false, message = R.string.settings_msg_save_failed) }
             }
         }
     }
@@ -85,11 +87,11 @@ class SettingsViewModel(
         val typed = current.url.isNotBlank() || current.token.isNotBlank()
         if (typed) {
             if (current.url.isBlank() || current.token.isBlank()) {
-                _form.update { it.copy(message = "Escribe la URL y el token para probarlos") }
+                _form.update { it.copy(message = R.string.settings_msg_need_both) }
                 return
             }
             if (!UrlValidator.isValid(current.url)) {
-                _form.update { it.copy(urlError = "La URL debe empezar por https://") }
+                _form.update { it.copy(urlError = R.string.error_url_https) }
                 return
             }
         }
@@ -102,19 +104,19 @@ class SettingsViewModel(
                     loadSaved()
                 }
                 val message = if (credentials == null) {
-                    "Escribe la URL y el token para probarlos, o guarda unas credenciales antes"
+                    R.string.settings_msg_need_credentials
                 } else {
                     when (testConnection(credentials)) {
-                        ConnectionTestResult.OK -> "Conexión correcta: URL y token válidos"
-                        ConnectionTestResult.BAD_TOKEN -> "Token rechazado (401)"
-                        ConnectionTestResult.UNREACHABLE -> "No se pudo conectar: revisa la URL y la red"
+                        ConnectionTestResult.OK -> R.string.settings_msg_conn_ok
+                        ConnectionTestResult.BAD_TOKEN -> R.string.settings_msg_bad_token
+                        ConnectionTestResult.UNREACHABLE -> R.string.settings_msg_unreachable
                     }
                 }
                 _form.update { it.copy(message = message) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _form.update { it.copy(message = "No se pudo conectar: revisa la URL y la red") }
+                _form.update { it.copy(message = R.string.settings_msg_unreachable) }
             } finally {
                 _form.update { it.copy(busy = false) }
             }

@@ -3,6 +3,7 @@ package dev.smsforwarder.notify
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import dev.smsforwarder.R
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.data.SmsEntity
@@ -58,14 +59,13 @@ class NotifierTest {
         val all = shadowOf(manager).allNotifications
         assertEquals(1, all.size)
         assertNotNull(shadowOf(manager).getNotification(Notifier.ID_TOKEN_REJECTED))
-        assertTrue(text(all.single()).contains("Token rechazado: 3 SMS esperando"))
+        assertTrue(text(all.single()).contains(context.getString(R.string.notif_token_rejected_text, 3)))
     }
 
     @Test fun recoveredTextNamesSenderAndTime() {
         val at = LocalDateTime.of(2026, 10, 29, 11, 42).toInstant(ZoneOffset.UTC).toEpochMilli()
         Notifier(context, utc).recovered(listOf(entity(1, at)))
         val shown = text(shadowOf(manager).getNotification(Notifier.ID_RECOVERED))
-        assertTrue(shown, shown.contains("Recuperado 1 SMS de OPERADOR de las 11:42"))
-        assertTrue(shown, shown.contains("revisa Inicio automático"))
+        assertTrue(shown, shown.contains(context.getString(R.string.notif_recovered_one, "OPERADOR", "11:42")))
     }
 }

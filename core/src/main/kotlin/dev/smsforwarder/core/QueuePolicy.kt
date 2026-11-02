@@ -29,20 +29,6 @@ object QueuePolicy {
     fun sweepFrom(cursor: Long, floor: Long): Long = max(cursor - SWEEP_OVERLAP_MS, floor)
 }
 
-fun statusLabel(status: SmsStatus, origin: SmsOrigin, attempts: Int, lastHttpCode: Int?): String {
-    val code = lastHttpCode?.let { " $it" }.orEmpty()
-    val dotCode = lastHttpCode?.let { " · $it" }.orEmpty()
-    return when (status) {
-        SmsStatus.QUEUED -> "En cola · $attempts ${if (attempts == 1) "intento" else "intentos"}"
-        SmsStatus.ERROR -> "Error$code"
-        SmsStatus.SENT -> when (origin) {
-            SmsOrigin.RECEIVER -> "Enviado$code"
-            SmsOrigin.SWEEP -> "Recuperado$dotCode"
-            SmsOrigin.MANUAL -> "Manual$dotCode"
-        }
-    }
-}
-
 enum class StatusKind { QUEUED, ERROR, SENT, RECOVERED, MANUAL }
 
 data class StatusLabel(val kind: StatusKind, val attempts: Int, val httpCode: Int?)

@@ -4,7 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import dev.smsforwarder.core.SmsStatus
-import dev.smsforwarder.core.statusLabel
+import dev.smsforwarder.core.StatusLabel
+import dev.smsforwarder.core.statusLabelOf
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
@@ -24,7 +25,7 @@ data class RowUi(
     val subId: Int?,
     val receivedAt: Long,
     val preview: String,
-    val label: String,
+    val label: StatusLabel,
 )
 
 data class MainUiState(
@@ -44,7 +45,7 @@ internal fun SmsEntity.toRowUi() = RowUi(
     subId = subId,
     receivedAt = receivedAt,
     preview = body.replace(Regex("\\s+"), " ").trim().take(PREVIEW_LENGTH),
-    label = statusLabel(status, origin, attempts, lastHttpCode),
+    label = statusLabelOf(status, origin, attempts, lastHttpCode),
 )
 
 class MainViewModel(

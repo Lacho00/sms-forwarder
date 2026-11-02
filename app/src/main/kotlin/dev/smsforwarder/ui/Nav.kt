@@ -13,7 +13,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import dev.smsforwarder.R
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.ui.detail.DetailScreen
 import dev.smsforwarder.ui.detail.DetailViewModel
@@ -117,18 +120,17 @@ fun AppNavHost(
         current == Routes.RECOVERY -> {
             val items by recoveryViewModel.candidates.collectAsState()
             val unreadable by recoveryViewModel.unreadable.collectAsState()
-            var result by remember { mutableStateOf<String?>(null) }
+            var sentCount by remember { mutableStateOf<Int?>(null) }
             val scope = rememberCoroutineScope()
             LaunchedEffect(Unit) { recoveryViewModel.load() }
             RecoveryScreen(
                 items = items,
                 unreadable = unreadable,
-                resultMessage = result,
+                resultMessage = sentCount?.let { pluralStringResource(R.plurals.recovery_queued_result, it, it) },
                 onToggle = recoveryViewModel::toggle,
                 onSend = {
                     scope.launch {
-                        val sent = recoveryViewModel.sendSelected()
-                        result = "$sent SMS puestos en cola para enviar"
+                        sentCount = recoveryViewModel.sendSelected()
                     }
                 },
                 onBack = back,
@@ -145,5 +147,5 @@ fun AppNavHost(
 /** Shown while the stored "onboarding done" flag is still being read. */
 @Composable
 fun LoadingScreen() {
-    Text("SMS Forwarder", modifier = Modifier.padding(16.dp))
+    Text(stringResource(R.string.app_name), modifier = Modifier.padding(16.dp))
 }

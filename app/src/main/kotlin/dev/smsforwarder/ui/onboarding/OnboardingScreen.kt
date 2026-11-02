@@ -45,8 +45,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.smsforwarder.R
 import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.health.MiuiIntents
 import dev.smsforwarder.ui.recovery.RecoveryList
@@ -74,16 +76,19 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 private fun isGranted(context: Context, permission: String): Boolean =
     context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
-private fun stepTitle(step: OnboardingStep): String = when (step) {
-    OnboardingStep.CUTOVER -> "App anterior"
-    OnboardingStep.PERMISSIONS -> "Permisos"
-    OnboardingStep.BATTERY -> "Batería"
-    OnboardingStep.MIUI -> "Xiaomi / MIUI"
-    OnboardingStep.SENDERS -> "Remitentes"
-    OnboardingStep.CONNECTION -> "URL y token"
-    OnboardingStep.REMINDER -> "Antes de recuperar"
-    OnboardingStep.RECOVERY -> "Recuperar SMS"
-}
+@Composable
+private fun stepTitle(step: OnboardingStep): String = stringResource(
+    when (step) {
+        OnboardingStep.CUTOVER -> R.string.onboarding_step_cutover
+        OnboardingStep.PERMISSIONS -> R.string.onboarding_step_permissions
+        OnboardingStep.BATTERY -> R.string.onboarding_step_battery
+        OnboardingStep.MIUI -> R.string.onboarding_step_miui
+        OnboardingStep.SENDERS -> R.string.onboarding_step_senders
+        OnboardingStep.CONNECTION -> R.string.onboarding_step_connection
+        OnboardingStep.REMINDER -> R.string.onboarding_step_reminder
+        OnboardingStep.RECOVERY -> R.string.onboarding_step_recovery
+    },
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,14 +102,19 @@ fun OnboardingScreen(
     LaunchedEffect(Unit) { vm.load() }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("SMS Forwarder") }) },
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Paso ${state.step.ordinal + 1} de ${OnboardingStep.entries.size} · ${stepTitle(state.step)}",
+                stringResource(
+                    R.string.onboarding_progress,
+                    state.step.ordinal + 1,
+                    OnboardingStep.entries.size,
+                    stepTitle(state.step),
+                ),
                 style = MaterialTheme.typography.titleMedium,
             )
             if (state.step == OnboardingStep.RECOVERY) {
@@ -118,11 +128,11 @@ fun OnboardingScreen(
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            vm.setFinishError(OnboardingTexts.FINISH_ERROR)
+                            vm.setFinishError(R.string.onboarding_finish_error)
                         }
                     }
                 }
-                state.finishError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                state.finishError?.let { Text(stringResource(it), color = MaterialTheme.colorScheme.error) }
             } else {
                 Column(
                     modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
@@ -139,7 +149,7 @@ fun OnboardingScreen(
                             onRemove = { scope.launch { vm.removeSender(it) } },
                         )
                         OnboardingStep.CONNECTION -> ConnectionStep(state, vm) { scope.launch { vm.testConnection() } }
-                        OnboardingStep.REMINDER -> Text(OnboardingTexts.REMINDER)
+                        OnboardingStep.REMINDER -> Text(stringResource(R.string.onboarding_reminder))
                         OnboardingStep.RECOVERY -> Unit
                     }
                 }
@@ -147,7 +157,7 @@ fun OnboardingScreen(
                     onClick = { scope.launch { vm.next() } },
                     enabled = state.canContinue,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Continuar") }
+                ) { Text(stringResource(R.string.onboarding_continue)) }
             }
         }
     }
@@ -155,13 +165,13 @@ fun OnboardingScreen(
 
 @Composable
 private fun CutoverStep(confirmed: Boolean, onConfirm: (Boolean) -> Unit) {
-    Text(OnboardingTexts.CUTOVER)
+    Text(stringResource(R.string.onboarding_cutover))
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onConfirm(!confirmed) },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = confirmed, onCheckedChange = onConfirm)
-        Text("Ya lo he hecho", modifier = Modifier.padding(start = 8.dp))
+        Text(stringResource(R.string.onboarding_cutover_done), modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -185,28 +195,28 @@ private fun PermissionsStep(state: OnboardingUiState, vm: OnboardingViewModel) {
         vm.onPermissionResult(smsGranted = smsPermissions.all { isGranted(context, it) }, restrictedHint = false)
     }
 
+    Text(stringResource(R.string.onboarding_permissions_intro))
     Text(
-        "La app necesita leer y recibir tus SMS para reenviarlos, y mostrar avisos si algo falla " +
-            "(notificaciones en Android 13 o superior).",
-    )
-    Text(
-        if (state.smsPermissionGranted) "Permisos de SMS: concedidos" else "Permisos de SMS: pendientes",
+        stringResource(
+            if (state.smsPermissionGranted) {
+                R.string.onboarding_permissions_granted
+            } else {
+                R.string.onboarding_permissions_pending
+            },
+        ),
         style = MaterialTheme.typography.titleSmall,
     )
-    Button(onClick = { launcher.launch(toRequest) }) { Text("Conceder permisos") }
+    Button(onClick = { launcher.launch(toRequest) }) { Text(stringResource(R.string.onboarding_grant_permissions)) }
     OutlinedButton(
         onClick = {
             vm.onPermissionResult(smsGranted = smsPermissions.all { isGranted(context, it) }, restrictedHint = false)
         },
-    ) { Text("Comprobar de nuevo") }
+    ) { Text(stringResource(R.string.onboarding_check_again)) }
     if (state.restrictedHint) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Android ha bloqueado el permiso (ajustes restringidos)", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Abre Información de la app, toca ⋮ (arriba a la derecha) y elige " +
-                        "\"Permitir ajustes restringidos\". Después vuelve aquí y pulsa Comprobar de nuevo.",
-                )
+                Text(stringResource(R.string.onboarding_restricted_title), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.onboarding_restricted_body))
                 Button(
                     onClick = {
                         startSafely(
@@ -214,7 +224,7 @@ private fun PermissionsStep(state: OnboardingUiState, vm: OnboardingViewModel) {
                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
                         )
                     },
-                ) { Text("Abrir información de la app") }
+                ) { Text(stringResource(R.string.onboarding_open_app_info)) }
             }
         }
     }
@@ -223,10 +233,7 @@ private fun PermissionsStep(state: OnboardingUiState, vm: OnboardingViewModel) {
 @Composable
 private fun BatteryStep() {
     val context = LocalContext.current
-    Text(
-        "Para que Android no detenga la app en segundo plano, desactiva su optimización de batería. " +
-            "Es opcional, pero recomendable.",
-    )
+    Text(stringResource(R.string.onboarding_battery_body))
     Button(
         onClick = {
             startSafely(
@@ -235,29 +242,26 @@ private fun BatteryStep() {
                     .setData(Uri.parse("package:${context.packageName}")),
             )
         },
-    ) { Text("Quitar optimización de batería") }
+    ) { Text(stringResource(R.string.onboarding_battery_button)) }
 }
 
 @Composable
 private fun MiuiStep() {
     val context = LocalContext.current
-    Text(
-        "En Xiaomi (MIUI) revisa dos cosas: que la app tenga Inicio automático y que, en Seguridad, " +
-            "los permisos de SMS no estén bloqueados. En otros móviles puedes continuar.",
-    )
-    Button(onClick = { startSafely(context, MiuiIntents.autostart(context)) }) { Text("Abrir Inicio automático") }
+    Text(stringResource(R.string.onboarding_miui_body))
+    Button(onClick = { startSafely(context, MiuiIntents.autostart(context)) }) { Text(stringResource(R.string.onboarding_miui_autostart)) }
     OutlinedButton(onClick = { startSafely(context, MiuiIntents.permissions(context)) }) {
-        Text("Abrir permisos de SMS en Seguridad")
+        Text(stringResource(R.string.onboarding_miui_permissions))
     }
     OutlinedButton(onClick = { startSafely(context, MiuiIntents.battery(context)) }) {
-        Text("Abrir ahorro de batería de MIUI")
+        Text(stringResource(R.string.onboarding_miui_battery))
     }
 }
 
 @Composable
 private fun SendersStep(senders: List<String>, onAdd: (String) -> Unit, onRemove: (String) -> Unit) {
     var draft by rememberSaveable { mutableStateOf("") }
-    Text("Escribe el remitente tal como aparece en el SMS. Añade al menos uno para continuar.")
+    Text(stringResource(R.string.onboarding_senders_body))
     senders.forEach { sender ->
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -265,14 +269,14 @@ private fun SendersStep(senders: List<String>, onAdd: (String) -> Unit, onRemove
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(sender)
-            TextButton(onClick = { onRemove(sender) }) { Text("Quitar") }
+            TextButton(onClick = { onRemove(sender) }) { Text(stringResource(R.string.action_remove)) }
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = draft,
             onValueChange = { draft = it },
-            label = { Text("Remitente") },
+            label = { Text(stringResource(R.string.field_sender)) },
             singleLine = true,
             modifier = Modifier.weight(1f).testTag("field_sender"),
         )
@@ -282,37 +286,37 @@ private fun SendersStep(senders: List<String>, onAdd: (String) -> Unit, onRemove
                 draft = ""
             },
             enabled = draft.isNotBlank(),
-        ) { Text("Añadir") }
+        ) { Text(stringResource(R.string.action_add)) }
     }
 }
 
 @Composable
 private fun ConnectionStep(state: OnboardingUiState, vm: OnboardingViewModel, onTest: () -> Unit) {
-    Text("Introduce la URL del Worker (solo https) y el token. Después prueba la conexión.")
+    Text(stringResource(R.string.onboarding_connection_body))
     OutlinedTextField(
         value = state.url,
         onValueChange = vm::setUrl,
-        label = { Text("URL del Worker") },
+        label = { Text(stringResource(R.string.field_worker_url)) },
         singleLine = true,
         isError = state.urlError != null,
-        supportingText = state.urlError?.let { error -> { Text(error) } },
+        supportingText = state.urlError?.let { error -> { Text(stringResource(error)) } },
         modifier = Modifier.fillMaxWidth().testTag("field_url"),
     )
     OutlinedTextField(
         value = state.token,
         onValueChange = vm::setToken,
-        label = { Text("Token") },
+        label = { Text(stringResource(R.string.field_token)) },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
         isError = state.tokenError != null,
-        supportingText = state.tokenError?.let { error -> { Text(error) } },
+        supportingText = state.tokenError?.let { error -> { Text(stringResource(error)) } },
         modifier = Modifier.fillMaxWidth().testTag("field_token"),
     )
-    Button(onClick = onTest, enabled = !state.testing) { Text("Probar conexión") }
+    Button(onClick = onTest, enabled = !state.testing) { Text(stringResource(R.string.action_test_connection)) }
     when (state.testResult) {
-        ConnectionTestResult.OK -> Text("Conexión correcta: URL y token válidos.")
-        ConnectionTestResult.BAD_TOKEN -> Text("Token rechazado (401). Revísalo.")
-        ConnectionTestResult.UNREACHABLE -> Text("No se pudo conectar: revisa la URL y la red.")
+        ConnectionTestResult.OK -> Text(stringResource(R.string.onboarding_conn_ok))
+        ConnectionTestResult.BAD_TOKEN -> Text(stringResource(R.string.onboarding_conn_bad_token))
+        ConnectionTestResult.UNREACHABLE -> Text(stringResource(R.string.onboarding_conn_unreachable))
         null -> Unit
     }
 }
@@ -333,6 +337,12 @@ private fun ColumnScope.RecoveryStep(
     )
     val count = items.count { it.selected }
     Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-        Text(if (count > 0) "Enviar $count y terminar" else "Terminar sin recuperar nada")
+        Text(
+            if (count > 0) {
+                stringResource(R.string.onboarding_send_and_finish, count)
+            } else {
+                stringResource(R.string.onboarding_finish_without)
+            },
+        )
     }
 }
