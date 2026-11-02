@@ -91,8 +91,9 @@ class MainViewModelTest {
         vm.setFilter(StatusFilter.QUEUED)
         val s = await { it.query == "SENDERONE" && it.filter == StatusFilter.QUEUED && it.rows.size == 1 }
         assertEquals(listOf(queuedId), s.rows.map { it.id })
+        vm.setFilter(StatusFilter.ERROR)
         vm.setQuery("SENDERTWO")
-        val none = await { it.query == "SENDERTWO" }
+        val none = await { it.query == "SENDERTWO" && it.filter == StatusFilter.ERROR }
         assertEquals(emptyList<Long>(), none.rows.map { it.id })
     }
 

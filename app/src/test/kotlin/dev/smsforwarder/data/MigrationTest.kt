@@ -17,6 +17,11 @@ class MigrationTest {
     private val name = "migration-test"
 
     @Test fun migrating1To2KeepsRowsAndLeavesDeletedAtNull() {
+        val assets = org.robolectric.RuntimeEnvironment.getApplication().assets
+        val listing = runCatching { assets.list("")?.toList() }.toString() +
+            runCatching { assets.list("dev.smsforwarder.data.AppDatabase")?.toList() }.toString() +
+            InstrumentationRegistry.getInstrumentation().context.javaClass
+        try { helper.createDatabase(name, 1).close() } catch (e: Exception) { throw AssertionError(listing + " / " + e, e) }
         helper.createDatabase(name, 1).use { db ->
             for ((i, key) in listOf("key-a", "key-b").withIndex()) {
                 db.execSQL(

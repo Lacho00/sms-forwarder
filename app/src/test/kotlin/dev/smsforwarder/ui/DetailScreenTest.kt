@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.assertEquals
 import dev.smsforwarder.R
 import dev.smsforwarder.core.SmsOrigin
@@ -76,7 +77,7 @@ class DetailScreenTest {
                 )
             }
         }
-        compose.onNodeWithText(str(R.string.detail_delete)).performClick()
+        compose.onNodeWithText(str(R.string.detail_delete)).performScrollTo().performClick()
         compose.onNodeWithText(str(R.string.detail_delete_title)).assertExists()
         compose.runOnIdle { assertEquals(0, deleted) }
 
@@ -84,7 +85,7 @@ class DetailScreenTest {
         compose.onNodeWithText(str(R.string.detail_delete_title)).assertDoesNotExist()
         compose.runOnIdle { assertEquals(0, deleted) }
 
-        compose.onNodeWithText(str(R.string.detail_delete)).performClick()
+        compose.onNodeWithText(str(R.string.detail_delete)).performScrollTo().performClick()
         compose.onNode(hasText(str(R.string.detail_delete_confirm)) and hasAnyAncestor(isDialog())).performClick()
         compose.runOnIdle { assertEquals(1, deleted) }
     }
@@ -101,7 +102,7 @@ class DetailScreenTest {
             }
         }
         compose.onNodeWithText("OPERADOR: Se ha comprado", substring = true).assertDoesNotExist()
-        compose.onNodeWithText(str(R.string.detail_show_text)).performClick()
+        compose.onNodeWithText(str(R.string.detail_show_text)).performScrollTo().performClick()
         compose.onNodeWithText("OPERADOR: Se ha comprado", substring = true).assertExists()
     }
 }
