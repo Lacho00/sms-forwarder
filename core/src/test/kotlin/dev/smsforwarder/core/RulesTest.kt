@@ -82,4 +82,12 @@ class RulesTest {
         val r = rule(mode = SenderMode.REGEX, pattern = "(")
         assertEquals(emptySet(), dests(sms(), r))
     }
+
+    @Test fun stackOverflowInRegexIsContained() {
+        val overflow = rule(id = 9, bodyMode = BodyMode.REGEX, bodyPattern = "(?:a|b)*x")
+        val ok = rule(id = 10, dest = setOf(5L))
+        val m = RuleEngine.destinationsFor(sms("abc", "a".repeat(100_000)), listOf(overflow, ok))
+        assertEquals(setOf(5L), m.destinationIds)
+        assertEquals(setOf(9L), m.timedOutRuleIds)
+    }
 }

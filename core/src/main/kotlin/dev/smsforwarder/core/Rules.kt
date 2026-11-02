@@ -57,6 +57,9 @@ object RuleEngine {
                 if (matches(rule, sms, regexBudgetMs)) destinations += rule.destinationIds
             } catch (_: RegexTimeout) {
                 timedOut += rule.id
+            } catch (_: StackOverflowError) {
+                // java.util.regex recurses per group iteration; treat like a timeout.
+                timedOut += rule.id
             }
         }
         return RuleMatch(destinations, timedOut)
