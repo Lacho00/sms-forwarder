@@ -18,3 +18,19 @@ Se recorre en el teléfono real con la APK de la Release. Apunta los casos que f
 - [ ] Un SMS que llega durante el primer arranque no se reenvía.
 - [ ] El primer arranque no deja continuar sin al menos un remitente.
 - [ ] Vaciar la lista de remitentes en Ajustes muestra la tarjeta y la notificación de `NO_SENDERS`.
+
+## v1.1.0
+
+- [ ] Icono en el cajón de apps: se ve bien en modo claro, oscuro y con icono temático (monocromo).
+- [ ] Cambiar el idioma (español/inglés) en Ajustes no pierde la pantalla en la que estás.
+- [ ] Pausar el reenvío: los SMS nuevos no se envían; al reanudar se envían.
+- [ ] Borrar de la app un SMS que sigue en la bandeja y esperar un barrido: no se reenvía.
+- [ ] Intervalo de barrido: tras cambiarlo, `adb shell dumpsys jobscheduler | grep dev.smsforwarder`
+      muestra el periodo nuevo.
+- [ ] Apagar el color dinámico: la interfaz usa la paleta fija y se ve bien en claro y oscuro.
+- [ ] Ocultar texto: Inicio y Detalle no muestran el contenido de los SMS.
+- [ ] Inicio: la búsqueda y los filtros (todos, en cola, error) acotan la lista.
+- [ ] Acerca de: muestra la versión correcta, el enlace al repositorio se abre y aparece la licencia MIT.
+- [ ] Notificaciones por tipo (recuperado, atascado, permisos): al apagar cada una, ese aviso no sale.
+- [ ] Un rechazo 400 sigue notificando aunque estén apagados los avisos opcionales.
+- [ ] Retención: con un plazo corto, el historial enviado se purga; los SMS en cola o con error no se borran.
