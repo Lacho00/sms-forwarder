@@ -12,7 +12,8 @@
         <activity
             android:name=".diag.DiagActivity"
             android:exported="true"
-            android:label="SMS Diag">
+            android:label="SMS Diag"
+            android:taskAffinity="dev.smsforwarder.diag">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
