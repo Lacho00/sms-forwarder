@@ -74,6 +74,10 @@ class MainActivity : ComponentActivity() {
                 graph.settings,
                 testConnection = { graph.ingestClient.testConnection(it) },
                 loadSaved = { graph.secretStore.get() },
+                onSweepIntervalChanged = { interval ->
+                    WorkScheduler.schedulePeriodicSweep(applicationContext, interval, update = true)
+                },
+                onLanguageChanged = { recreate() },
             ),
         )[SettingsViewModel::class.java]
 
@@ -81,7 +85,8 @@ class MainActivity : ComponentActivity() {
             val themeMode by graph.settings.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
             // null while the flag is being read from DataStore.
             val onboardingDone by graph.settings.onboardingDone.collectAsState(initial = null)
-            SmsForwarderTheme(themeMode) {
+            val dynamicColor by graph.settings.dynamicColor.collectAsState(initial = true)
+            SmsForwarderTheme(themeMode, dynamicColor) {
                 val done = onboardingDone
                 if (done == null) {
                     LoadingScreen()

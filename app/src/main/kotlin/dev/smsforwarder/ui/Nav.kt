@@ -26,9 +26,9 @@ import dev.smsforwarder.ui.onboarding.OnboardingScreen
 import dev.smsforwarder.ui.onboarding.OnboardingViewModel
 import dev.smsforwarder.ui.recovery.RecoveryScreen
 import dev.smsforwarder.ui.recovery.RecoveryViewModel
+import dev.smsforwarder.ui.settings.SettingsActions
 import dev.smsforwarder.ui.settings.SettingsScreen
 import dev.smsforwarder.ui.settings.SettingsViewModel
-import dev.smsforwarder.ui.theme.ThemeMode
 import kotlinx.coroutines.launch
 
 object Routes {
@@ -118,27 +118,41 @@ fun AppNavHost(
         current == Routes.SETTINGS -> {
             val form by settingsViewModel.form.collectAsState()
             val senders by settingsViewModel.senders.collectAsState(initial = emptyList())
-            val themeMode by settingsViewModel.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+            val prefs by settingsViewModel.prefs.collectAsState()
+            val actions = remember(settingsViewModel) {
+                SettingsActions(
+                    setForwarding = settingsViewModel::setForwarding,
+                    setSweepInterval = settingsViewModel::setSweepInterval,
+                    setStuckAfter = settingsViewModel::setStuckAfter,
+                    setRetention = settingsViewModel::setRetention,
+                    setHideText = settingsViewModel::setHideText,
+                    setNotify = settingsViewModel::setNotify,
+                    setTheme = settingsViewModel::setTheme,
+                    setDynamicColor = settingsViewModel::setDynamicColor,
+                    setLanguage = settingsViewModel::setLanguage,
+                )
+            }
             AppShell(
                 current = current,
                 title = stringResource(R.string.settings_title),
                 onTab = onTab,
                 onAbout = { navigate(Routes.ABOUT) },
             ) { padding ->
-            SettingsScreen(
-                form = form,
-                senders = senders,
-                themeMode = themeMode,
-                onUrlChange = settingsViewModel::setUrl,
-                onTokenChange = settingsViewModel::setToken,
-                onSave = settingsViewModel::save,
-                onTest = settingsViewModel::test,
-                onAddSender = settingsViewModel::addSender,
-                onRemoveSender = settingsViewModel::removeSender,
-                onThemeChange = settingsViewModel::setTheme,
-                onOpenRecovery = { navigate(Routes.RECOVERY) },
-                padding = padding,
-            )
+                SettingsScreen(
+                    form = form,
+                    senders = senders,
+                    prefs = prefs,
+                    actions = actions,
+                    onUrlChange = settingsViewModel::setUrl,
+                    onTokenChange = settingsViewModel::setToken,
+                    onSave = settingsViewModel::save,
+                    onTest = settingsViewModel::test,
+                    onAddSender = settingsViewModel::addSender,
+                    onRemoveSender = settingsViewModel::removeSender,
+                    onOpenRecovery = { navigate(Routes.RECOVERY) },
+                    onOpenSystemIssue = onOpenSystemIssue,
+                    padding = padding,
+                )
             }
         }
         // Placeholder until the real About screen arrives.

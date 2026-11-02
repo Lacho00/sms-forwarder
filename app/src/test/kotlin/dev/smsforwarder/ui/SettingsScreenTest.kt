@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import dev.smsforwarder.R
@@ -18,6 +20,18 @@ import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.SecretStore
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import dev.smsforwarder.core.Language
+import dev.smsforwarder.core.NotifyKind
+import dev.smsforwarder.core.Retention
+import dev.smsforwarder.core.StuckAfter
+import dev.smsforwarder.core.SweepInterval
+import dev.smsforwarder.health.HealthIssue
+import dev.smsforwarder.ui.settings.SettingsActions
+import dev.smsforwarder.ui.settings.SettingsPrefs
 import dev.smsforwarder.ui.settings.SettingsScreen
 import dev.smsforwarder.ui.settings.SettingsViewModel
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
@@ -48,6 +62,7 @@ class SettingsScreenTest {
     private lateinit var db: AppDatabase
     private lateinit var settings: SettingsRepository
     private val saved = mutableListOf<Credentials>()
+    private val actions = SettingsActions()
 
     @Before fun setUp() {
         val context = RuntimeEnvironment.getApplication()
@@ -76,15 +91,16 @@ class SettingsScreenTest {
                 SettingsScreen(
                     form = form,
                     senders = emptyList(),
-                    themeMode = ThemeMode.SYSTEM,
+                    prefs = SettingsPrefs(),
+                    actions = actions,
                     onUrlChange = vm::setUrl,
                     onTokenChange = vm::setToken,
                     onSave = vm::save,
                     onTest = vm::test,
                     onAddSender = {},
                     onRemoveSender = {},
-                    onThemeChange = {},
                     onOpenRecovery = {},
+                    onOpenSystemIssue = {},
                 )
             }
         }
@@ -131,5 +147,112 @@ class SettingsScreenTest {
         vm.test()
 
         assertEquals(listOf(saved), tested)
+    }
+
+    private fun str(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
+
+    private fun showGroups(prefs: SettingsPrefs = SettingsPrefs(), onSystem: (HealthIssue) -> Unit = {}, onRecovery: () -> Unit = {}) {
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                SettingsScreen(
+                    form = dev.smsforwarder.ui.settings.SettingsForm(),
+                    senders = emptyList(),
+                    prefs = prefs,
+                    actions = actions,
+                    onUrlChange = {},
+                    onTokenChange = {},
+                    onSave = {},
+                    onTest = {},
+                    onAddSender = {},
+                    onRemoveSender = {},
+                    onOpenRecovery = onRecovery,
+                    onOpenSystemIssue = onSystem,
+                )
+            }
+        }
+    }
+
+    @Test fun showsSevenGroupHeadersInSpecOrder() {
+        showGroups()
+        val ids = listOf(
+            R.string.settings_worker_connection,
+            R.string.settings_senders,
+            R.string.settings_group_forwarding,
+            R.string.settings_group_history,
+            R.string.settings_group_notifications,
+            R.string.settings_group_appearance,
+            R.string.settings_group_maintenance,
+        )
+        val ys = ids.map { compose.onNodeWithText(str(it)).fetchSemanticsNode().positionInRoot.y }
+        assertEquals(ys.sorted(), ys)
+        assertEquals(7, ys.toSet().size)
+    }
+
+    @Test fun maintenanceButtonsCallTheirCallbacks() {
+        var recovery = 0
+        val issues = mutableListOf<HealthIssue>()
+        showGroups(onSystem = { issues += it }, onRecovery = { recovery++ })
+
+        compose.onNodeWithText(str(R.string.recover_sms)).performScrollTo().performClick()
+        compose.onNodeWithText(str(R.string.settings_permissions_button)).performScrollTo().performClick()
+
+        assertEquals(1, recovery)
+        assertEquals(listOf(HealthIssue.SMS_PERMISSION), issues)
+    }
+
+    @Test fun turningOffForwardingReportsFalse() {
+        val seen = mutableListOf<Boolean>()
+        actions.setForwarding = { seen += it }
+        showGroups()
+        compose.onNodeWithText(str(R.string.settings_forward_sms)).performScrollTo().performClick()
+        assertEquals(listOf(false), seen)
+    }
+
+    @Test fun choosingThirtyMinutesReportsM30() {
+        val seen = mutableListOf<SweepInterval>()
+        actions.setSweepInterval = { seen += it }
+        showGroups()
+        compose.onNodeWithText(str(R.string.settings_sweep_option, 30)).performScrollTo().performClick()
+        assertEquals(listOf(SweepInterval.M30), seen)
+    }
+
+    @Test fun choosingStuckRetentionAndLanguageReportTheirValues() {
+        val stuck = mutableListOf<StuckAfter>()
+        val retention = mutableListOf<Retention>()
+        val language = mutableListOf<Language>()
+        actions.setStuckAfter = { stuck += it }
+        actions.setRetention = { retention += it }
+        actions.setLanguage = { language += it }
+        showGroups()
+        compose.onNodeWithText(str(R.string.settings_stuck_option, 24)).performScrollTo().performClick()
+        compose.onNodeWithText(str(R.string.settings_retention_forever)).performScrollTo().performClick()
+        compose.onNodeWithText(str(R.string.language_es)).performScrollTo().performClick()
+        assertEquals(listOf(StuckAfter.H24), stuck)
+        assertEquals(listOf(Retention.FOREVER), retention)
+        assertEquals(listOf(Language.ES), language)
+    }
+
+    @Test fun togglesReportTheirKind() {
+        val notify = mutableListOf<Pair<NotifyKind, Boolean>>()
+        val hide = mutableListOf<Boolean>()
+        val dynamic = mutableListOf<Boolean>()
+        actions.setNotify = { k, v -> notify += k to v }
+        actions.setHideText = { hide += it }
+        actions.setDynamicColor = { dynamic += it }
+        showGroups()
+        compose.onNodeWithText(str(R.string.settings_notify_stuck)).performScrollTo().performClick()
+        compose.onNodeWithText(str(R.string.settings_hide_text)).performScrollTo().performClick()
+        compose.onNodeWithText(str(R.string.settings_dynamic_color)).performScrollTo().performClick()
+        assertEquals(listOf(NotifyKind.STUCK to false), notify)
+        assertEquals(listOf(true), hide)
+        assertEquals(listOf(false), dynamic)
+    }
+
+    @Test fun tokenRejectedAlertIsNotASetting() {
+        showGroups()
+        // Forwarding, hide text, three notification kinds and dynamic color: nothing for the rejected-token alert.
+        val switches = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch)
+        compose.onAllNodes(switches).assertCountEquals(6)
+        compose.onAllNodesWithText(str(R.string.notif_token_rejected_title)).assertCountEquals(0)
     }
 }
