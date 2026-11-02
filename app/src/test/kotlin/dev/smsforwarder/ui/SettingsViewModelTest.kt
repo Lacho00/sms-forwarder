@@ -39,9 +39,9 @@ class SettingsViewModelTest {
 
     private lateinit var db: AppDatabase
     private lateinit var settings: SettingsRepository
-    private val sweeps = mutableListOf<SweepInterval>()
+    private val sweeps = java.util.concurrent.CopyOnWriteArrayList<SweepInterval>()
     private var languageCalls = 0
-    private val events = mutableListOf<String>()
+    private val events = java.util.concurrent.CopyOnWriteArrayList<String>()
 
     @Before fun setUp() {
         val context = RuntimeEnvironment.getApplication()
@@ -67,6 +67,12 @@ class SettingsViewModelTest {
 
     private fun SettingsViewModel.await(cond: (SettingsPrefs) -> Boolean): SettingsPrefs =
         runBlocking { withTimeout(5_000) { prefs.first(cond) } }
+
+    // The callback runs right after the save, on another thread, so the flow can update first.
+    private fun waitUntil(cond: () -> Boolean) {
+        val end = System.currentTimeMillis() + 5_000
+        while (!cond() && System.currentTimeMillis() < end) Thread.sleep(10)
+    }
 
     @Test fun prefsStartWithDefaults() {
         val p = vm().await { true }
@@ -95,6 +101,7 @@ class SettingsViewModelTest {
         val vm = vm()
         vm.setSweepInterval(SweepInterval.M30)
         vm.await { it.sweepInterval == SweepInterval.M30 }
+        waitUntil { sweeps.isNotEmpty() }
         assertEquals(listOf(SweepInterval.M30), sweeps)
     }
 
@@ -109,6 +116,7 @@ class SettingsViewModelTest {
         )
         vm.setLanguage(Language.ES)
         vm.await { it.language == Language.ES }
+        waitUntil { events.isNotEmpty() }
         assertEquals(listOf("recreate:" + Language.ES), events)
     }
 }
