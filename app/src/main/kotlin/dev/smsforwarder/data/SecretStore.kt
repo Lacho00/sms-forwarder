@@ -8,6 +8,13 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -96,4 +103,124 @@ class KeystoreSecretStore(context: Context) : SecretStore {
         val IV_KEY = stringPreferencesKey("iv")
         val BLOB_KEY = stringPreferencesKey("blob")
     }
+}
+
+data class DestinationSecrets(val url: String, val headers: List<Pair<String, String>>) {
+    override fun toString(): String = "DestinationSecrets(***)"
+
+    companion object
+}
+
+interface DestinationSecretStore {
+    suspend fun get(destinationId: Long): DestinationSecrets?
+    suspend fun set(destinationId: Long, s: DestinationSecrets)
+    suspend fun remove(destinationId: Long)
+}
+
+fun DestinationSecrets.Companion.encode(s: DestinationSecrets): String =
+    JsonObject(
+        mapOf(
+            "url" to JsonPrimitive(s.url),
+            "headers" to JsonArray(
+                s.headers.map { (k, v) -> JsonArray(listOf(JsonPrimitive(k), JsonPrimitive(v))) },
+            ),
+        ),
+    ).toString()
+
+/** Throws on a malformed blob; callers treat that as corruption. */
+fun DestinationSecrets.Companion.decode(text: String): DestinationSecrets {
+    val obj = Json.parseToJsonElement(text).jsonObject
+    val headers = obj.getValue("headers").jsonArray.map { pair ->
+        val p = pair.jsonArray
+        require(p.size == 2) { "bad header" }
+        p[0].jsonPrimitive.content to p[1].jsonPrimitive.content
+    }
+    return DestinationSecrets(obj.getValue("url").jsonPrimitive.content, headers)
+}
+
+private const val BEARER_PREFIX = "Bearer "
+
+fun Credentials.toDestinationSecrets(): DestinationSecrets =
+    DestinationSecrets(url, listOf("Authorization" to "$BEARER_PREFIX$token"))
+
+fun DestinationSecrets.toCredentialsOrNull(): Credentials? {
+    val auth = headers.firstOrNull { it.first.equals("Authorization", ignoreCase = true) }?.second ?: return null
+    if (!auth.startsWith(BEARER_PREFIX)) return null
+    return Credentials(url, auth.removePrefix(BEARER_PREFIX))
+}
+
+/** Same Keystore key as [KeystoreSecretStore]; one IV and blob entry pair per destination in the `secrets` DataStore. */
+class KeystoreDestinationSecretStore(context: Context) : DestinationSecretStore {
+    private val store = context.applicationContext.secretsDataStore
+
+    override suspend fun get(destinationId: Long): DestinationSecrets? {
+        val prefs = store.data.first()
+        val iv = prefs[ivKey(destinationId)]
+        val blob = prefs[blobKey(destinationId)]
+        if (iv == null || blob == null) return null
+        return try {
+            val key = existingSecretKey() ?: throw java.security.KeyException("missing key")
+            val cipher = Cipher.getInstance(SECRET_TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(SECRET_TAG_BITS, Base64.decode(iv, Base64.NO_WRAP)))
+            val plain = String(cipher.doFinal(Base64.decode(blob, Base64.NO_WRAP)), Charsets.UTF_8)
+            DestinationSecrets.decode(plain)
+        } catch (e: GeneralSecurityException) {
+            remove(destinationId)
+            null
+        } catch (e: IllegalArgumentException) {
+            remove(destinationId)
+            null
+        } catch (e: kotlinx.serialization.SerializationException) {
+            remove(destinationId)
+            null
+        } catch (e: NoSuchElementException) {
+            remove(destinationId)
+            null
+        } catch (e: IllegalStateException) {
+            remove(destinationId)
+            null
+        }
+    }
+
+    override suspend fun set(destinationId: Long, s: DestinationSecrets) {
+        val cipher = Cipher.getInstance(SECRET_TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, existingSecretKey() ?: createSecretKey())
+        val encrypted = cipher.doFinal(DestinationSecrets.encode(s).toByteArray(Charsets.UTF_8))
+        store.edit {
+            it[ivKey(destinationId)] = Base64.encodeToString(cipher.iv, Base64.NO_WRAP)
+            it[blobKey(destinationId)] = Base64.encodeToString(encrypted, Base64.NO_WRAP)
+        }
+    }
+
+    override suspend fun remove(destinationId: Long) {
+        store.edit {
+            it.remove(ivKey(destinationId))
+            it.remove(blobKey(destinationId))
+        }
+    }
+
+    private fun ivKey(id: Long) = stringPreferencesKey("dest_${id}_iv")
+    private fun blobKey(id: Long) = stringPreferencesKey("dest_${id}_blob")
+}
+
+private const val SECRET_PROVIDER = "AndroidKeyStore"
+private const val SECRET_ALIAS = "smsfwd-secrets"
+private const val SECRET_TRANSFORMATION = "AES/GCM/NoPadding"
+private const val SECRET_TAG_BITS = 128
+
+private fun existingSecretKey(): SecretKey? {
+    val ks = KeyStore.getInstance(SECRET_PROVIDER).apply { load(null) }
+    return ks.getKey(SECRET_ALIAS, null) as? SecretKey
+}
+
+private fun createSecretKey(): SecretKey {
+    val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, SECRET_PROVIDER)
+    generator.init(
+        KeyGenParameterSpec.Builder(SECRET_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .build(),
+    )
+    return generator.generateKey()
 }

@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     ksp(libs.room.compiler)
     implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.work.runtime.ktx)
     implementation(libs.datastore.preferences)
     implementation(platform(libs.compose.bom))
