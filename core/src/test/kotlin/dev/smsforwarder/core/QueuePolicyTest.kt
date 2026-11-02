@@ -39,4 +39,17 @@ class QueuePolicyTest {
         assertEquals("Recuperado", statusLabel(SmsStatus.SENT, SmsOrigin.SWEEP, 1, null))
         assertEquals("Manual", statusLabel(SmsStatus.SENT, SmsOrigin.MANUAL, 1, null))
     }
+
+    @Test fun stuckWindowIsConfigurable() {
+        assertTrue(QueuePolicy.isStuck(SmsStatus.QUEUED, null, 0, 2 * 3_600_000, StuckAfter.H1.millis))
+        assertFalse(QueuePolicy.isStuck(SmsStatus.QUEUED, null, 0, 2 * 3_600_000))
+    }
+
+    @Test fun structuredStatusLabel() {
+        assertEquals(StatusLabel(StatusKind.QUEUED, 2, null), statusLabelOf(SmsStatus.QUEUED, SmsOrigin.RECEIVER, 2, null))
+        assertEquals(StatusKind.RECOVERED, statusLabelOf(SmsStatus.SENT, SmsOrigin.SWEEP, 1, 200).kind)
+        assertEquals(StatusKind.MANUAL, statusLabelOf(SmsStatus.SENT, SmsOrigin.MANUAL, 1, 200).kind)
+        assertEquals(StatusKind.SENT, statusLabelOf(SmsStatus.SENT, SmsOrigin.RECEIVER, 1, 200).kind)
+        assertEquals(StatusLabel(StatusKind.ERROR, 3, 401), statusLabelOf(SmsStatus.ERROR, SmsOrigin.RECEIVER, 3, 401))
+    }
 }
