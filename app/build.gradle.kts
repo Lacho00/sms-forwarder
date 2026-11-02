@@ -54,6 +54,11 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            // A hung test shows up as the last STARTED line instead of a silent six-hour job.
+            it.testLogging { events("started", "failed") }
+            it.timeout.set(java.time.Duration.ofMinutes(15))
+        }
     }
 }
 
