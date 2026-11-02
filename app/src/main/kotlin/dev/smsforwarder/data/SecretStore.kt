@@ -160,8 +160,8 @@ class KeystoreDestinationSecretStore(context: Context) : DestinationSecretStore 
         if (iv == null || blob == null) return null
         return try {
             val key = existingSecretKey() ?: throw java.security.KeyException("missing key")
-            val cipher = Cipher.getInstance(SECRET_TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(SECRET_TAG_BITS, Base64.decode(iv, Base64.NO_WRAP)))
+            val cipher = Cipher.getInstance(CIPHER_MODE)
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(CIPHER_TAG_BITS, Base64.decode(iv, Base64.NO_WRAP)))
             val plain = String(cipher.doFinal(Base64.decode(blob, Base64.NO_WRAP)), Charsets.UTF_8)
             DestinationSecrets.decode(plain)
         } catch (e: GeneralSecurityException) {
@@ -183,7 +183,7 @@ class KeystoreDestinationSecretStore(context: Context) : DestinationSecretStore 
     }
 
     override suspend fun set(destinationId: Long, s: DestinationSecrets) {
-        val cipher = Cipher.getInstance(SECRET_TRANSFORMATION)
+        val cipher = Cipher.getInstance(CIPHER_MODE)
         cipher.init(Cipher.ENCRYPT_MODE, existingSecretKey() ?: createSecretKey())
         val encrypted = cipher.doFinal(DestinationSecrets.encode(s).toByteArray(Charsets.UTF_8))
         store.edit {
@@ -203,20 +203,20 @@ class KeystoreDestinationSecretStore(context: Context) : DestinationSecretStore 
     private fun blobKey(id: Long) = stringPreferencesKey("dest_${id}_blob")
 }
 
-private const val SECRET_PROVIDER = "AndroidKeyStore"
-private const val SECRET_ALIAS = "smsfwd-secrets"
-private const val SECRET_TRANSFORMATION = "AES/GCM/NoPadding"
-private const val SECRET_TAG_BITS = 128
+private const val KS_PROVIDER = "AndroidKeyStore"
+private const val KS_ALIAS = "smsfwd-secrets"
+private const val CIPHER_MODE = "AES/GCM/NoPadding"
+private const val CIPHER_TAG_BITS = 128
 
 private fun existingSecretKey(): SecretKey? {
-    val ks = KeyStore.getInstance(SECRET_PROVIDER).apply { load(null) }
-    return ks.getKey(SECRET_ALIAS, null) as? SecretKey
+    val ks = KeyStore.getInstance(KS_PROVIDER).apply { load(null) }
+    return ks.getKey(KS_ALIAS, null) as? SecretKey
 }
 
 private fun createSecretKey(): SecretKey {
-    val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, SECRET_PROVIDER)
+    val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KS_PROVIDER)
     generator.init(
-        KeyGenParameterSpec.Builder(SECRET_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+        KeyGenParameterSpec.Builder(KS_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setKeySize(256)
