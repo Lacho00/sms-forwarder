@@ -80,7 +80,7 @@ Entradas o condiciones que la spec implica y ningún test de v1 cubre; cada una 
 - [ ] **Step 1: Tests que fallan**, con estas aserciones:
   - `Retention.D30.cutoff(now) == now - 30 * 86_400_000L`, `Retention.FOREVER.cutoff(now) == null`, `Retention.D90.cutoff(now) == now - QueuePolicy.RETENTION_MS`.
   - `StuckAfter.H6.millis == QueuePolicy.STUCK_AFTER_MS`; `isStuck(QUEUED, null, 0, 2 * 3_600_000, StuckAfter.H1.millis) == true`.
-  - `SmsSearch.matches("ETECSA", "Saldo 10", "etec")`, `matches("A B", "x", "ab")` es true (ignora mayúsculas y espacios en remitente), `matches("A", "Saldo (10)", "(10)")` es true, `matches("A", "x", "(")` es false sin lanzar, `matches("A", "x", "")` es true.
+  - `SmsSearch.matches("OPERADOR", "Saldo 10", "opera")`, `matches("A B", "x", "ab")` es true (ignora mayúsculas y espacios en remitente), `matches("A", "Saldo (10)", "(10)")` es true, `matches("A", "x", "(")` es false sin lanzar, `matches("A", "x", "")` es true.
   - `statusLabel(QUEUED, RECEIVER, 2, null) == StatusLabel(StatusKind.QUEUED, 2, null)`; `SENT` con `SWEEP` da `RECOVERED`; con `MANUAL` da `MANUAL`; `ERROR` con 401 conserva `httpCode = 401`.
 - [ ] **Step 2: Ejecutar** `JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :core:test`; esperado: FAIL de compilación.
 - [ ] **Step 3: Implementar.** `SmsSearch` busca con `contains(ignoreCase = true)` sobre el cuerpo y sobre el remitente normalizado con `SenderFilter.normalize` contra la consulta normalizada; nada de regex.
