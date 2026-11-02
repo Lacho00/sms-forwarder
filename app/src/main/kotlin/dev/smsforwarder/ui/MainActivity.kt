@@ -7,6 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import dev.smsforwarder.core.SweepInterval
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import dev.smsforwarder.AppGraph
 import dev.smsforwarder.SmsForwarderApp
 import dev.smsforwarder.health.HealthIssue
@@ -31,7 +35,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         graph = (application as SmsForwarderApp).graph
-        WorkScheduler.schedulePeriodicSweep(applicationContext)
+        // The saved period is read off the main thread; if it cannot be read, keep the default so the job survives.
+        lifecycleScope.launch {
+            val interval = try {
+                graph.settings.sweepIntervalNow()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                SweepInterval.M15
+            }
+            WorkScheduler.schedulePeriodicSweep(applicationContext, interval)
+        }
         mainViewModel = ViewModelProvider(
             this,
             MainViewModel.Factory(graph.smsRepository, graph.settings, graph.healthChecker),

@@ -2,6 +2,11 @@ package dev.smsforwarder.data
 
 import androidx.room.Room
 import dev.smsforwarder.core.Clock
+import dev.smsforwarder.core.Language
+import dev.smsforwarder.core.NotifyKind
+import dev.smsforwarder.core.Retention
+import dev.smsforwarder.core.StuckAfter
+import dev.smsforwarder.core.SweepInterval
 import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
@@ -104,5 +109,53 @@ class SettingsRepositoryTest {
         settings.setLastSweepAt(1_800_000_000_000L)
         assertEquals(1_800_000_000_000L, settings.lastSweepAt())
         assertEquals(1_800_000_000_000L, settings.lastSweepAtFlow.first())
+    }
+
+    @Test fun defaultsMatchV1() = runBlocking {
+        assertEquals(true, settings.forwardingEnabled.first())
+        assertEquals(true, settings.isForwardingEnabled())
+        assertEquals(SweepInterval.M15, settings.sweepInterval.first())
+        assertEquals(SweepInterval.M15, settings.sweepIntervalNow())
+        assertEquals(StuckAfter.H6, settings.stuckAfter.first())
+        assertEquals(StuckAfter.H6, settings.stuckAfterNow())
+        assertEquals(Retention.D90, settings.retention.first())
+        assertEquals(Retention.D90, settings.retentionNow())
+        assertEquals(false, settings.hideText.first())
+        assertEquals(true, settings.dynamicColor.first())
+        assertEquals(Language.SYSTEM, settings.language.first())
+        assertEquals(true, settings.notifyEnabled(NotifyKind.STUCK).first())
+        assertEquals(true, settings.isNotifyEnabled(NotifyKind.STUCK))
+    }
+
+    @Test fun newSettingsRoundTrip() = runBlocking {
+        settings.setSweepInterval(SweepInterval.M60)
+        settings.setStuckAfter(StuckAfter.H24)
+        settings.setRetention(Retention.FOREVER)
+        settings.setHideText(true)
+        settings.setDynamicColor(false)
+        settings.setLanguage(Language.EN)
+        settings.setNotifyEnabled(NotifyKind.RECOVERED, false)
+        assertEquals(SweepInterval.M60, settings.sweepIntervalNow())
+        assertEquals(StuckAfter.H24, settings.stuckAfterNow())
+        assertEquals(Retention.FOREVER, settings.retentionNow())
+        assertEquals(true, settings.hideText.first())
+        assertEquals(false, settings.dynamicColor.first())
+        assertEquals(Language.EN, settings.language.first())
+        assertEquals(false, settings.isNotifyEnabled(NotifyKind.RECOVERED))
+        assertEquals(true, settings.isNotifyEnabled(NotifyKind.PERMISSIONS))
+    }
+
+    @Test fun resumingForwardingKicksQueuedIds() = runBlocking {
+        val a = (sms.ingest(record("uno"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val b = (sms.ingest(record("dos"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        settings.setForwardingEnabled(false)
+        assertEquals(false, settings.isForwardingEnabled())
+        assertTrue(kicked.isEmpty())
+
+        settings.setForwardingEnabled(true)
+
+        assertEquals(true, settings.isForwardingEnabled())
+        assertEquals(setOf(a, b), kicked.toSet())
+        assertEquals(2, kicked.size)
     }
 }

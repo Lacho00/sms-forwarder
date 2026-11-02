@@ -124,4 +124,14 @@ class SendWorkerTest {
         assertEquals(SmsStatus.QUEUED, graph.smsRepository.get(id)!!.status)
         assertEquals(0, server.requestCount)
     }
+
+    @Test fun pausedForwardingKeepsSmsQueued() = runBlocking {
+        val id = insertSms()
+        graph.settings.setForwardingEnabled(false)
+        assertEquals(ListenableWorker.Result.success(), run(id))
+        val sms = graph.smsRepository.get(id)!!
+        assertEquals(SmsStatus.QUEUED, sms.status)
+        assertEquals(0, sms.attempts)
+        assertEquals(0, server.requestCount)
+    }
 }

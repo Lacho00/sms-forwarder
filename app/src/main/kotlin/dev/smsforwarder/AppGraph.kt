@@ -47,9 +47,12 @@ class AppGraph(context: Context) {
 
     /** Runs after every sweep: stuck SMS first, then the health check (notified only when it changes). */
     private suspend fun runSweepAlerts(result: SweepResult) {
-        for (item in smsRepository.stuckToNotify()) {
-            notifier.stuck(item)
-            smsRepository.markStuckNotified(item.id)
+        // A paused SMS is not a stuck SMS.
+        if (settings.isForwardingEnabled()) {
+            for (item in smsRepository.stuckToNotify(settings.stuckAfterNow().millis)) {
+                notifier.stuck(item)
+                smsRepository.markStuckNotified(item.id)
+            }
         }
         val issues = healthChecker.check(result.inboxUnreadable)
         val names = issues.map { it.name }.toSet()

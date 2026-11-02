@@ -11,6 +11,7 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import dev.smsforwarder.core.SweepInterval
 import java.util.concurrent.TimeUnit
 
 object WorkScheduler {
@@ -35,11 +36,12 @@ object WorkScheduler {
         ids.forEach { enqueueSend(context, it, replace = true) }
     }
 
-    fun schedulePeriodicSweep(context: Context) {
-        val request = PeriodicWorkRequestBuilder<SweepWorker>(15, TimeUnit.MINUTES).build()
+    /** [update] swaps the period of the existing job (a live change); otherwise an existing job is kept. */
+    fun schedulePeriodicSweep(context: Context, interval: SweepInterval = SweepInterval.M15, update: Boolean = false) {
+        val request = PeriodicWorkRequestBuilder<SweepWorker>(interval.minutes, TimeUnit.MINUTES).build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             "sweep-periodic",
-            ExistingPeriodicWorkPolicy.KEEP,
+            if (update) ExistingPeriodicWorkPolicy.UPDATE else ExistingPeriodicWorkPolicy.KEEP,
             request,
         )
     }

@@ -3,6 +3,7 @@ package dev.smsforwarder.data
 import androidx.room.Room
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.QueuePolicy
+import dev.smsforwarder.core.Retention
 import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
@@ -87,6 +88,39 @@ class SmsRepositoryTest {
         repo.recordAttempt(id, SendOutcome.Rejected(401, null))
         assertEquals(SmsStatus.ERROR, repo.get(id)!!.status)
         assertEquals(listOf(id), repo.idsWithError401())
+    }
+
+    private suspend fun oldRows(): Triple<Long, Long, Long> {
+        val old = now - 40 * 86_400_000L
+        val queued = (repo.ingest(record(old, "queued $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val error = (repo.ingest(record(old, "error $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val sent = (repo.ingest(record(old, "sent $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        repo.recordAttempt(error, SendOutcome.Rejected(400, null))
+        repo.recordAttempt(sent, SendOutcome.Accepted)
+        return Triple(queued, error, sent)
+    }
+
+    @Test fun purgeOldForeverKeepsEverything() = runBlocking {
+        val (queued, error, sent) = oldRows()
+        repo.purgeOld(Retention.FOREVER)
+        assertNotNull(repo.get(queued))
+        assertNotNull(repo.get(error))
+        assertNotNull(repo.get(sent))
+    }
+
+    @Test fun purgeOld30DaysDeletesOnlySentOlder() = runBlocking {
+        val (queued, error, sent) = oldRows()
+        repo.purgeOld(Retention.D30)
+        assertNotNull(repo.get(queued))
+        assertNotNull(repo.get(error))
+        assertEquals(null, repo.get(sent))
+    }
+
+    @Test fun stuckToNotifyHonoursWindow() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        now += 2 * 3_600_000L
+        assertTrue(repo.stuckToNotify(3_600_000L).any { it.id == id })
+        assertTrue(repo.stuckToNotify(6 * 3_600_000L).isEmpty())
     }
 
     @Test fun purgeOldKeepsQueuedAndErrorEvenIfOld() = runBlocking {

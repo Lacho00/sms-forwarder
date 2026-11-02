@@ -3,6 +3,7 @@ package dev.smsforwarder.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import dev.smsforwarder.R
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.ui.main.MainScreen
 import dev.smsforwarder.ui.main.MainUiState
@@ -13,6 +14,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
 @RunWith(RobolectricTestRunner::class)
 class MainScreenTest {
@@ -41,6 +43,12 @@ class MainScreenTest {
         show(state(issues = setOf(HealthIssue.AUTOSTART_OFF)))
         compose.onNodeWithText("Inicio automático desactivado").assertIsDisplayed()
         compose.onNodeWithText("Abrir ajustes").assertIsDisplayed()
+    }
+
+    @Test fun showsPausedLineOnlyWhenPaused() {
+        val label = RuntimeEnvironment.getApplication().getString(R.string.forwarding_paused)
+        show(state().copy(paused = true))
+        compose.onNodeWithText(label).assertIsDisplayed()
     }
 
     @Test fun showsStatusLineAndSweepButton() {

@@ -22,6 +22,8 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
         // Transient failures (Keystore provider, DataStore read) keep the SMS queued and back off.
         val outcome = try {
+            // Paused: leave the SMS untouched; resuming and every sweep queue it again.
+            if (!graph.settings.isForwardingEnabled()) return Result.success()
             // No credentials yet: keep the SMS queued and try again later.
             val credentials = graph.secretStore.get() ?: return Result.retry()
             graph.ingestClient.send(credentials, sms.sender, sms.body, sms.receivedAt)

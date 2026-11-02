@@ -5,7 +5,16 @@ import android.content.Intent
 import android.provider.Telephony
 import dev.smsforwarder.AppGraph
 import dev.smsforwarder.SmsForwarderApp
+import androidx.work.Configuration
+import androidx.work.ListenableWorker
+import androidx.work.testing.WorkManagerTestInitHelper
+import androidx.work.testing.TestListenableWorkerBuilder
+import androidx.work.workDataOf
 import dev.smsforwarder.core.SmsOrigin
+import dev.smsforwarder.core.SmsStatus
+import dev.smsforwarder.work.SendWorker
+import mockwebserver3.MockResponse
+import mockwebserver3.MockWebServer
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.SecretStore
 import kotlinx.coroutines.flow.first
@@ -38,6 +47,7 @@ class SmsReceiverTest {
 
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context, Configuration.Builder().build())
         graph = (context as SmsForwarderApp).graph
         graph.secretStore = NoSecrets()
     }
@@ -77,6 +87,39 @@ class SmsReceiverTest {
 
         assertTrue(graph.smsRepository.observeAll().first().isEmpty())
         assertTrue(enqueued.isEmpty())
+    }
+
+    @Test fun pausedForwardingStoresQueuedThenSendsOnResume() = runBlocking {
+        val server = MockWebServer()
+        server.start()
+        try {
+            graph.secretStore = object : SecretStore {
+                override suspend fun get() = Credentials(server.url("/ingest").toString(), "test-token")
+                override suspend fun set(c: Credentials) = Unit
+            }
+            graph.settings.setOnboardingDone()
+            graph.settings.addSender("OPERADOR")
+            graph.settings.setForwardingEnabled(false)
+
+            receiver.process(context, smsIntent("OPERADOR", part1, part2))
+            val id = graph.smsRepository.observeAll().first().single().id
+            val worker = {
+                TestListenableWorkerBuilder<SendWorker>(context)
+                    .setInputData(workDataOf(SendWorker.KEY_SMS_ID to id))
+                    .build()
+            }
+            assertEquals(ListenableWorker.Result.success(), worker().doWork())
+            assertEquals(SmsStatus.QUEUED, graph.smsRepository.get(id)!!.status)
+            assertEquals(0, server.requestCount)
+
+            graph.settings.setForwardingEnabled(true)
+            server.enqueue(MockResponse.Builder().code(200).build())
+            assertEquals(ListenableWorker.Result.success(), worker().doWork())
+            assertEquals(1, server.requestCount)
+            assertEquals(SmsStatus.SENT, graph.smsRepository.get(id)!!.status)
+        } finally {
+            server.close()
+        }
     }
 
     // --- Test PDU helpers: GSM 7-bit SMS-DELIVER with an alphanumeric sender, parts joined by UDH. ---

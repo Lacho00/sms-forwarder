@@ -3,6 +3,7 @@ package dev.smsforwarder.data
 import androidx.room.withTransaction
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.QueuePolicy
+import dev.smsforwarder.core.Retention
 import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SenderFilter
 import dev.smsforwarder.core.SmsIdentity
@@ -109,16 +110,17 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
 
     suspend fun idsWithError401(): List<Long> = dao.idsWithStatusAndCode(SmsStatus.ERROR, 401)
 
-    suspend fun purgeOld() {
-        dao.deleteOlderThan(SmsStatus.SENT, QueuePolicy.retentionCutoff(clock.now()))
+    suspend fun purgeOld(retention: Retention = Retention.D90) {
+        val cutoff = retention.cutoff(clock.now()) ?: return
+        dao.deleteOlderThan(SmsStatus.SENT, cutoff)
     }
 
     // 401 rows are covered by the token notification, so they are left out here.
-    suspend fun stuckToNotify(): List<SmsEntity> {
+    suspend fun stuckToNotify(stuckAfterMs: Long = QueuePolicy.STUCK_AFTER_MS): List<SmsEntity> {
         val now = clock.now()
         return dao.unsentNotNotified().filter {
             !(it.status == SmsStatus.ERROR && it.lastHttpCode == 401) &&
-                QueuePolicy.isStuck(it.status, it.lastHttpCode, it.firstSeenAt, now)
+                QueuePolicy.isStuck(it.status, it.lastHttpCode, it.firstSeenAt, now, stuckAfterMs)
         }
     }
 

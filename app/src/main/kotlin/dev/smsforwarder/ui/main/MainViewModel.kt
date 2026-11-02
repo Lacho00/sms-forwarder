@@ -33,6 +33,7 @@ data class MainUiState(
     val queued: Int,
     val errors: Int,
     val rows: List<RowUi>,
+    val paused: Boolean = false,
 )
 
 private const val PREVIEW_LENGTH = 80
@@ -58,13 +59,15 @@ class MainViewModel(
         smsRepository.observeAll(),
         settings.lastSweepAtFlow,
         issues,
-    ) { all, lastSweepAt, currentIssues ->
+        settings.forwardingEnabled,
+    ) { all, lastSweepAt, currentIssues, forwarding ->
         MainUiState(
             issues = currentIssues,
             lastSweepAt = lastSweepAt,
             queued = all.count { it.status == SmsStatus.QUEUED },
             errors = all.count { it.status == SmsStatus.ERROR },
             rows = all.map { it.toRowUi() },
+            paused = !forwarding,
         )
     }.stateIn(
         scope = viewModelScope,

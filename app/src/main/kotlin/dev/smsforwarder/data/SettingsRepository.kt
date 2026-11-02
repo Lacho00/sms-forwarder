@@ -9,7 +9,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import dev.smsforwarder.core.Language
+import dev.smsforwarder.core.NotifyKind
+import dev.smsforwarder.core.Retention
 import dev.smsforwarder.core.SenderFilter
+import dev.smsforwarder.core.StuckAfter
+import dev.smsforwarder.core.SweepInterval
 import dev.smsforwarder.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -105,6 +110,66 @@ class SettingsRepository(
         (unauthorized + smsRepository.queuedIds()).distinct().forEach(scheduler)
     }
 
+    val forwardingEnabled: Flow<Boolean> = store.data.map { it[FORWARDING_KEY] ?: true }
+
+    suspend fun isForwardingEnabled(): Boolean = store.data.first()[FORWARDING_KEY] ?: true
+
+    /** Resuming sends every queued SMS again right away; pausing only stops the sending. */
+    suspend fun setForwardingEnabled(v: Boolean) {
+        store.edit { it[FORWARDING_KEY] = v }
+        if (v) smsRepository.queuedIds().forEach(scheduler)
+    }
+
+    val sweepInterval: Flow<SweepInterval> = store.data.map { readEnum(it[SWEEP_INTERVAL_KEY], SweepInterval.M15) }
+
+    suspend fun sweepIntervalNow(): SweepInterval = sweepInterval.first()
+
+    suspend fun setSweepInterval(v: SweepInterval) {
+        store.edit { it[SWEEP_INTERVAL_KEY] = v.name }
+    }
+
+    val stuckAfter: Flow<StuckAfter> = store.data.map { readEnum(it[STUCK_AFTER_KEY], StuckAfter.H6) }
+
+    suspend fun stuckAfterNow(): StuckAfter = stuckAfter.first()
+
+    suspend fun setStuckAfter(v: StuckAfter) {
+        store.edit { it[STUCK_AFTER_KEY] = v.name }
+    }
+
+    val retention: Flow<Retention> = store.data.map { readEnum(it[RETENTION_KEY], Retention.D90) }
+
+    suspend fun retentionNow(): Retention = retention.first()
+
+    suspend fun setRetention(v: Retention) {
+        store.edit { it[RETENTION_KEY] = v.name }
+    }
+
+    val hideText: Flow<Boolean> = store.data.map { it[HIDE_TEXT_KEY] ?: false }
+
+    suspend fun setHideText(v: Boolean) {
+        store.edit { it[HIDE_TEXT_KEY] = v }
+    }
+
+    val dynamicColor: Flow<Boolean> = store.data.map { it[DYNAMIC_COLOR_KEY] ?: true }
+
+    suspend fun setDynamicColor(v: Boolean) {
+        store.edit { it[DYNAMIC_COLOR_KEY] = v }
+    }
+
+    val language: Flow<Language> = store.data.map { readEnum(it[LANGUAGE_KEY], Language.SYSTEM) }
+
+    suspend fun setLanguage(v: Language) {
+        store.edit { it[LANGUAGE_KEY] = v.name }
+    }
+
+    fun notifyEnabled(kind: NotifyKind): Flow<Boolean> = store.data.map { it[notifyKey(kind)] ?: true }
+
+    suspend fun isNotifyEnabled(kind: NotifyKind): Boolean = notifyEnabled(kind).first()
+
+    suspend fun setNotifyEnabled(kind: NotifyKind, v: Boolean) {
+        store.edit { it[notifyKey(kind)] = v }
+    }
+
     suspend fun lastNotifiedIssues(): Set<String> = store.data.first()[NOTIFIED_ISSUES_KEY] ?: emptySet()
 
     suspend fun setLastNotifiedIssues(s: Set<String>) {
@@ -113,6 +178,11 @@ class SettingsRepository(
 
     private fun decodeSenders(raw: String?): List<String> =
         raw?.split(SEPARATOR)?.filter { it.isNotBlank() } ?: emptyList()
+
+    private inline fun <reified E : Enum<E>> readEnum(raw: String?, default: E): E =
+        enumValues<E>().firstOrNull { it.name == raw } ?: default
+
+    private fun notifyKey(kind: NotifyKind) = booleanPreferencesKey("notify_${kind.name.lowercase()}")
 
     private companion object {
         const val SEPARATOR = "\n"
@@ -123,6 +193,13 @@ class SettingsRepository(
         val LAST_SWEEP_AT_KEY = longPreferencesKey("last_sweep_at")
         val ONBOARDING_KEY = booleanPreferencesKey("onboarding_done")
         val INBOX_UNREADABLE_KEY = booleanPreferencesKey("inbox_unreadable")
+        val FORWARDING_KEY = booleanPreferencesKey("forwarding_enabled")
+        val SWEEP_INTERVAL_KEY = stringPreferencesKey("sweep_interval")
+        val STUCK_AFTER_KEY = stringPreferencesKey("stuck_after")
+        val RETENTION_KEY = stringPreferencesKey("retention")
+        val HIDE_TEXT_KEY = booleanPreferencesKey("hide_text")
+        val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color")
+        val LANGUAGE_KEY = stringPreferencesKey("language")
         val NOTIFIED_ISSUES_KEY = stringSetPreferencesKey("last_notified_issues")
     }
 }
