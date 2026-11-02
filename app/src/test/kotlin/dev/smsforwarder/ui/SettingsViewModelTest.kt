@@ -15,6 +15,7 @@ import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.ui.settings.SettingsPrefs
 import dev.smsforwarder.ui.settings.SettingsViewModel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -41,7 +42,6 @@ class SettingsViewModelTest {
     private lateinit var settings: SettingsRepository
     private val sweeps = java.util.concurrent.CopyOnWriteArrayList<SweepInterval>()
     private var languageCalls = 0
-    private val events = java.util.concurrent.CopyOnWriteArrayList<String>()
 
     @Before fun setUp() {
         val context = RuntimeEnvironment.getApplication()
@@ -105,18 +105,21 @@ class SettingsViewModelTest {
         assertEquals(listOf(SweepInterval.M30), sweeps)
     }
 
+    // The callback runs on the DataStore thread. It must not block on the same DataStore (the
+    // old runBlocking read inside it could wait for the thread it was running on), so it only
+    // signals; the saved value is read afterwards, on the test thread.
     @Test fun changingLanguageSavesThenAsksForRecreate() {
+        val recreate = CompletableDeferred<Unit>()
         val vm = SettingsViewModel(
             settings = settings,
             testConnection = { ConnectionTestResult.OK },
             loadSaved = { null },
             saveCredentials = {},
             scope = CoroutineScope(Dispatchers.Unconfined),
-            onLanguageChanged = { events += "recreate:" + runBlocking { settings.language.first() } },
+            onLanguageChanged = { recreate.complete(Unit) },
         )
         vm.setLanguage(Language.ES)
-        vm.await { it.language == Language.ES }
-        waitUntil { events.isNotEmpty() }
-        assertEquals(listOf("recreate:" + Language.ES), events)
+        runBlocking { withTimeout(10_000) { recreate.await() } }
+        assertEquals(Language.ES, runBlocking { withTimeout(5_000) { settings.language.first() } })
     }
 }
