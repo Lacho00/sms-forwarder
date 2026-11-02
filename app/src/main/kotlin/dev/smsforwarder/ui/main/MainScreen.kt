@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
@@ -46,8 +47,12 @@ internal fun issueTitle(issue: HealthIssue): String = stringResource(
     },
 )
 
-internal fun formatDateTime(millis: Long): String =
-    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(millis))
+/** Uses the app's configuration locale, which can differ from the JVM default when the language is set in the app. */
+@Composable
+internal fun formatDateTime(millis: Long): String {
+    val locale = LocalConfiguration.current.locales[0]
+    return DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, locale).format(Date(millis))
+}
 
 /** "N min ago" style text for the status line; [now] is a parameter so it can be tested. */
 @Composable
