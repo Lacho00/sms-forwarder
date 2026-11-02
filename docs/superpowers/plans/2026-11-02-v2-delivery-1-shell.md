@@ -16,6 +16,8 @@
 - `minSdk = 31`. Tests con `robolectric.properties` `sdk=35`. JDK 17 local: `JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :core:test`. `:app` solo se verifica en CI (`gh run watch`).
 - Comportamiento que NO cambia: recepción, barrido, cola, reintentos, `localKey`, formato `received_at` (`date_sent`), avisos de MIUI.
 - Cambios visuales (colores, tipografía, espaciado, tamaños): el color dinámico sigue siendo el valor por defecto. Cualquier valor visual nuevo que no esté en la spec se consulta al usuario. Todo cambio de etiqueta o clases se mide antes y después (`getComputedStyle` no aplica a Compose: se comparan capturas del mismo estado en el teléfono antes y después, en claro y oscuro).
+- Tests de `:app` que comparan texto de interfaz: usar `context.getString(R.string.x)` (Robolectric corre en inglés, `values/`); nunca literales en español ni inglés.
+- Cada tarea deja `:core:test` y la compilación y tests de `:app` en verde (CI) al terminar: ninguna tarea cambia un tipo y deja a sus usuarios para otra.
 - Revisión de código: solo OCR (`ocr delegate rule`), nunca los revisores genéricos. Sin líneas de atribución a Claude en commits ni PR.
 - Push y secretos: los pide el usuario o los autoriza por tarea.
 
@@ -75,16 +77,16 @@ Entradas o condiciones que la spec implica y ningún test de v1 cubre; cada una 
   - `enum class StatusFilter { ALL, QUEUED, ERROR }`
   - `object SmsSearch { fun matches(sender: String, body: String, query: String): Boolean }`
   - `QueuePolicy.isStuck(status, lastHttpCode, firstSeenAt, now, stuckAfterMs: Long = STUCK_AFTER_MS)`
-  - `data class StatusLabel(val kind: StatusKind, val attempts: Int, val httpCode: Int?)`, `enum class StatusKind { QUEUED, ERROR, SENT, RECOVERED, MANUAL }`, `fun statusLabel(status, origin, attempts, lastHttpCode): StatusLabel` (sustituye al `String` actual)
+  - `data class StatusLabel(val kind: StatusKind, val attempts: Int, val httpCode: Int?)`, `enum class StatusKind { QUEUED, ERROR, SENT, RECOVERED, MANUAL }`, `fun statusLabelOf(status, origin, attempts, lastHttpCode): StatusLabel`. La función `statusLabel(...): String` actual se conserva sin tocar hasta T5, que migra a sus usuarios (`MainViewModel`, `MainScreen`, `DetailScreen`) y la borra
 
 - [ ] **Step 1: Tests que fallan**, con estas aserciones:
   - `Retention.D30.cutoff(now) == now - 30 * 86_400_000L`, `Retention.FOREVER.cutoff(now) == null`, `Retention.D90.cutoff(now) == now - QueuePolicy.RETENTION_MS`.
   - `StuckAfter.H6.millis == QueuePolicy.STUCK_AFTER_MS`; `isStuck(QUEUED, null, 0, 2 * 3_600_000, StuckAfter.H1.millis) == true`.
   - `SmsSearch.matches("OPERADOR", "Saldo 10", "opera")`, `matches("A B", "x", "ab")` es true (ignora mayúsculas y espacios en remitente), `matches("A", "Saldo (10)", "(10)")` es true, `matches("A", "x", "(")` es false sin lanzar, `matches("A", "x", "")` es true.
-  - `statusLabel(QUEUED, RECEIVER, 2, null) == StatusLabel(StatusKind.QUEUED, 2, null)`; `SENT` con `SWEEP` da `RECOVERED`; con `MANUAL` da `MANUAL`; `ERROR` con 401 conserva `httpCode = 401`.
+  - `statusLabelOf(QUEUED, RECEIVER, 2, null) == StatusLabel(StatusKind.QUEUED, 2, null)`; `SENT` con `SWEEP` da `RECOVERED`; con `MANUAL` da `MANUAL`; `ERROR` con 401 conserva `httpCode = 401`.
 - [ ] **Step 2: Ejecutar** `JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :core:test`; esperado: FAIL de compilación.
 - [ ] **Step 3: Implementar.** `SmsSearch` busca con `contains(ignoreCase = true)` sobre el cuerpo y sobre el remitente normalizado con `SenderFilter.normalize` contra la consulta normalizada; nada de regex.
-- [ ] **Step 4: Ejecutar** `:core:test`; esperado: PASS, incluidos los tests de `statusLabel` ya existentes adaptados al nuevo tipo.
+- [ ] **Step 4: Ejecutar** `:core:test`; esperado: PASS, y los tests de `statusLabel` (String) siguen pasando sin cambios.
 - [ ] **Step 5: Commit** `feat(core): add settings policies, search and structured status label`.
 
 ### Task 3: Ajustes nuevos, pausa, intervalo y retención
@@ -105,15 +107,20 @@ Entradas o condiciones que la spec implica y ningún test de v1 cubre; cada una 
   - `val language: Flow<Language>` (SYSTEM), `setLanguage`
   - `fun notifyEnabled(kind: NotifyKind): Flow<Boolean>` (true), `suspend fun isNotifyEnabled(kind: NotifyKind): Boolean`, `suspend fun setNotifyEnabled(kind: NotifyKind, v: Boolean)`
 - `WorkScheduler.schedulePeriodicSweep(context: Context, interval: SweepInterval = SweepInterval.M15, update: Boolean = false)`; con `update = true` usa `ExistingPeriodicWorkPolicy.UPDATE`.
-- `SmsRepository.purgeOld(retention: Retention)`; con `FOREVER` no hace nada; con otro plazo borra `SENT` anteriores al corte (también las filas con `deletedAt`, T8).
+- `SmsRepository.purgeOld(retention: Retention = Retention.D90)` (el valor por defecto mantiene el `SmsRepositoryTest` de v1); con `FOREVER` no hace nada; con otro plazo borra `SENT` anteriores al corte (T8 añade las filas con `deletedAt`).
+- `SmsRepository.stuckToNotify(stuckAfterMs: Long = QueuePolicy.STUCK_AFTER_MS)`; `AppGraph.runSweepAlerts` (`AppGraph.kt:50`) lo llama con `settings.stuckAfterNow().millis`.
+- Mientras `forwardingEnabled` es false, `runSweepAlerts` no consulta `stuckToNotify`: un SMS en pausa no es un SMS atascado.
+- `MainUiState` añade `paused: Boolean`; la línea de estado de Inicio muestra "Reenvío en pausa" (recurso de T5) cuando es true.
+- `suspend fun sweepIntervalNow(): SweepInterval`.
 
 - [ ] **Step 1: Tests que fallan:**
   - `SettingsRepositoryTest.defaultsMatchV1`: `forwardingEnabled` true, `sweepInterval` M15, `stuckAfter` H6, `retention` D90, `notifyEnabled(STUCK)` true.
   - `setForwardingEnabled(true)` tras `false` llama al `scheduler` con los ids en cola (lista registrada, como el test de `saveCredentials`).
   - `SendWorkerTest.pausedForwardingKeepsSmsQueued`: con `forwardingEnabled=false` y un SMS `QUEUED`, el worker devuelve `Result.success()`, el servidor simulado recibe 0 peticiones, `attempts` sigue en 0 y el estado en `QUEUED`.
+  - Pausa de extremo a extremo: con `forwardingEnabled=false` llega un SMS por el receptor (queda `QUEUED`, 0 peticiones); `setForwardingEnabled(true)` lo reencola y el worker lo envía: 1 petición.
   - `SmsRepositoryTest.purgeOldForeverKeepsEverything`, `purgeOld30DaysDeletesOnlySentOlder`: con filas `SENT` de 40 días, `QUEUED` de 40 días y `ERROR` de 40 días, solo se borra la primera.
 - [ ] **Step 2: Ejecutar** los tests en CI; esperado: FAIL.
-- [ ] **Step 3: Implementar** las claves de DataStore y las funciones; `SendWorker.doWork` consulta `isForwardingEnabled()` antes de tocar la red y devuelve `Result.success()` si está pausado. `SweepWorker` pasa `retentionNow()` a `purgeOld` y `stuckAfterNow().millis` a `stuckToNotify`. `MainActivity` (T6) reprograma el barrido al cambiar el intervalo.
+- [ ] **Step 3: Implementar** las claves de DataStore y las funciones; `SendWorker.doWork` lee `isForwardingEnabled()` dentro del `try` existente (un fallo de DataStore reintenta, no cae) y devuelve `Result.success()` si está pausado: no pierde nada porque reanudar y cada barrido reencolan los `QUEUED`. `SweepWorker` pasa `retentionNow()` a `purgeOld`. Quien programa el barrido (`MainActivity.onCreate`, `BootReceiver`) pasa el intervalo guardado (`sweepIntervalNow()`), para que un trabajo perdido no vuelva a 15 min en silencio; el cambio en vivo (T7) usa `update = true`.
 - [ ] **Step 4: Ejecutar** los tests; esperado: PASS.
 - [ ] **Step 5: Commit** `feat(settings): pause, sweep interval, stuck window, retention and toggles`.
 
@@ -121,7 +128,7 @@ Entradas o condiciones que la spec implica y ningún test de v1 cubre; cada una 
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/ui/Localized.kt`, `app/src/main/res/values-es/strings.xml`
-- Modify: `app/src/main/res/values/strings.xml`, `app/.../ui/MainActivity.kt`, `app/.../notify/Notifier.kt`, `app/.../data/SettingsRepository.kt`
+- Modify: `app/src/main/res/values/strings.xml`, `app/.../ui/MainActivity.kt`, `app/.../notify/Notifier.kt`, `app/.../data/SettingsRepository.kt`, `docs/superpowers/specs/2026-11-02-v2-redesign.md` (§15)
 - Test: `app/src/test/kotlin/dev/smsforwarder/ui/LocalizedTest.kt`
 
 **Interfaces:**
@@ -130,9 +137,10 @@ Entradas o condiciones que la spec implica y ningún test de v1 cubre; cada una 
   - `savedTag`/`saveTag` usan SharedPreferences `ui_prefs`, clave `lang`: espejo síncrono del ajuste, necesario porque `attachBaseContext` no puede esperar a DataStore.
   - `SettingsRepository.setLanguage` llama a `Localized.saveTag`.
 - `MainActivity.attachBaseContext(newBase)` aplica `Localized.wrap(newBase, Localized.savedTag(newBase))`. Al cambiar el idioma, la actividad se recrea (`recreate()`); la pila de navegación sobrevive porque `AppNavHost` ya la guarda con `rememberSaveable`.
-- `Notifier` resuelve sus textos con `Localized.wrap(context, Localized.savedTag(context))` en cada `post`.
+- `Notifier` resuelve sus textos con `Localized.wrap(context, Localized.savedTag(context))` en cada `post`, y `Notifier.refreshChannel()` vuelve a llamar a `ensureChannel` con el nombre localizado del canal al cambiar el idioma.
+- Desviación de la spec §15 (decisión razonada): no se usa `LocaleManager`/`AppCompatDelegate`, porque con `minSdk 31` obligarían a `AppCompatActivity` y a su tema en Android 12. Esta tarea actualiza §15.
 
-- [ ] **Step 1: Test que falla:** `wrap(ctx, "en").getString(R.string.app_name)` es "SMS Forwarder"; con `"es"` devuelve la cadena en español de una clave de prueba (`about_title`); `wrap(ctx, null)` devuelve el mismo contexto.
+- [ ] **Step 1: Tests que fallan:** `wrap(ctx, "en")` y `wrap(ctx, "es")` devuelven textos distintos para `R.string.about_title`; `wrap(ctx, null)` devuelve el mismo contexto. Review Focus 5: con `ActivityScenario.launch(MainActivity)`, tras `setLanguage(ES)` y `recreate()` la pila de navegación es la misma, y `Notifier.stuck` publica el título en español.
 - [ ] **Step 2: Ejecutar** en CI; esperado: FAIL.
 - [ ] **Step 3: Implementar** lo anterior. `values/strings.xml` es el inglés; `values-es/` el español. Añadir `android:localeConfig` no hace falta (el selector es propio).
 - [ ] **Step 4: Ejecutar**; esperado: PASS.
@@ -143,12 +151,12 @@ Entradas o condiciones que la spec implica y ningún test de v1 cubre; cada una 
 Mecánica; delegable a sonnet con la lista de ficheros.
 
 **Files:**
-- Modify: `app/.../ui/main/MainScreen.kt`, `ui/detail/DetailScreen.kt`, `ui/onboarding/OnboardingScreen.kt` y su `ViewModel`, `ui/recovery/RecoveryScreen.kt` y su `ViewModel`, `ui/settings/SettingsScreen.kt` y su `ViewModel`, `ui/Nav.kt`, `notify/Notifier.kt`, `res/values/strings.xml`, `res/values-es/strings.xml`
+- Modify: `app/.../ui/main/MainScreen.kt`, `ui/detail/DetailScreen.kt`, `ui/onboarding/OnboardingScreen.kt` y su `ViewModel`, `ui/recovery/RecoveryScreen.kt` y su `ViewModel`, `ui/settings/SettingsScreen.kt` y su `ViewModel`, `ui/Nav.kt`, `notify/Notifier.kt`, `ui/main/MainViewModel.kt`, `res/values/strings.xml`, `res/values-es/strings.xml`
 - Test: `MainScreenTest`, `DetailScreenTest`, `SettingsScreenTest`, `NotifierTest`, `OnboardingViewModelTest`, `RecoveryViewModelTest` (ajustar)
 
 **Interfaces:**
-- Consumes: `StatusLabel`/`StatusKind` de T2.
-- Produces: `@Composable fun statusText(label: StatusLabel): String` (en `ui/main/Strings.kt`; usa `pluralStringResource` para "intentos") y `fun issueTitle(issue: HealthIssue)` pasa a `@Composable` leyendo `stringResource`.
+- Consumes: `StatusLabel`/`StatusKind`/`statusLabelOf` de T2.
+- Produces: `RowUi.label` y el estado del detalle pasan a `StatusLabel`; `@Composable fun statusText(label: StatusLabel): String` (en `ui/main/Strings.kt`; `pluralStringResource` para "intentos"); `issueTitle(issue: HealthIssue)` pasa a `@Composable` con `stringResource`. Al final de la tarea se borra `statusLabel(...): String` de `core` y su test viejo.
 
 - [ ] **Step 1: Cambiar primero los tests** para que comparen contra `context.getString(R.string.x)` o `stringResource`, no contra literales en español; y que `formatDateTime`/`agoLabel` usen recursos (`ago_*`). Verlos fallar en CI.
 - [ ] **Step 2: Extraer** cada literal de usuario a `strings.xml` (inglés por defecto) y su traducción al español, con las cadenas actuales del código como texto en español, sin reescribirlas. Los plurales ("intento/intentos", "SMS recuperados") usan `<plurals>`.
@@ -160,16 +168,16 @@ Mecánica; delegable a sonnet con la lista de ficheros.
 
 **Files:**
 - Create: `app/.../ui/AppShell.kt`
-- Modify: `app/.../ui/Nav.kt`, `app/.../ui/MainActivity.kt`, `app/build.gradle.kts` (añadir `androidx.compose.material:material-icons-core`, versión de la BOM)
+- Modify: `app/.../ui/Nav.kt`, `app/.../ui/MainActivity.kt`, `gradle/libs.versions.toml` y `app/build.gradle.kts` (añadir `androidx.compose.material:material-icons-core`; comprobar que la BOM instalada lo gestiona y, si no, fijar versión)
 - Test: `app/src/test/kotlin/dev/smsforwarder/ui/AppShellTest.kt`
 
 **Interfaces:**
 - Produces:
   - `object Routes` añade `ABOUT = "about"`; `Routes.MAIN` y `Routes.SETTINGS` pasan a ser pestañas de primer nivel.
-  - `@Composable fun AppShell(current: String, onTab: (String) -> Unit, onAbout: () -> Unit, content: @Composable (PaddingValues) -> Unit)`: `Scaffold` con `NavigationBar` de dos destinos (Inicio, Ajustes) y `TopAppBar` con menú ⋮ (solo "Acerca de"). Solo envuelve `MAIN` y `SETTINGS`; detalle, recuperación, onboarding y Acerca de van a pantalla completa.
-  - Cambiar de pestaña sustituye la pestaña actual en la pila (no apila); atrás desde una pestaña secundaria vuelve a Inicio.
+  - `@Composable fun AppShell(current: String, title: String, onTab: (String) -> Unit, onAbout: () -> Unit, actions: @Composable RowScope.() -> Unit = {}, content: @Composable (PaddingValues) -> Unit)`: `Scaffold` con `NavigationBar` de dos destinos (Inicio, Ajustes) y `TopAppBar` con `actions` (T8 pone ahí la búsqueda) y el menú ⋮ (solo "Acerca de"). Solo envuelve `MAIN` y `SETTINGS`; detalle, recuperación, onboarding y Acerca de van a pantalla completa.
+  - La pila de `AppNavHost` en una pestaña es exactamente `main` o `main|settings`. Tocar una pestaña fija la pila a esa forma (no apila). `Nav.kt:86` y `:90` (`navigate(Routes.SETTINGS)` desde un aviso) pasan a la misma operación. `SettingsScreen.onBack` deja de existir: atrás desde `main|settings` lo resuelve el `BackHandler` existente.
 
-- [ ] **Step 1: Tests que fallan:** `AppShellTest` con Robolectric y Compose: en `MAIN` existen los nodos con descripción "Inicio" y "Ajustes"; tocar "Ajustes" llama a `onTab(Routes.SETTINGS)`; el menú ⋮ muestra "Acerca de" y no "Exportar" (llega en la entrega 4); en onboarding no hay barra.
+- [ ] **Step 1: Tests que fallan:** `AppShellTest` con Robolectric y Compose: en `MAIN` existen los nodos con las descripciones `R.string.tab_home` y `R.string.tab_settings`; tocar la segunda llama a `onTab(Routes.SETTINGS)`; el menú ⋮ muestra `R.string.about_title` y no tiene entrada de exportar (llega en la entrega 4); en onboarding no hay barra. Test de pila: desde `main`, un aviso interno y luego la pestaña Inicio dejan la pila en `main`, no en `main|settings|main`.
 - [ ] **Step 2: Ejecutar** en CI; esperado: FAIL.
 - [ ] **Step 3: Implementar** `AppShell` y enrutar `Nav.kt`. `MainScreen` y `SettingsScreen` pierden su propio `Scaffold` de barra superior de v1 (el engranaje de texto desaparece). Título de barra: nombre de la app en Inicio, "Ajustes" en Ajustes.
 - [ ] **Step 4: Ejecutar**; esperado: PASS.
@@ -178,19 +186,20 @@ Mecánica; delegable a sonnet con la lista de ficheros.
 ### Task 7: Ajustes por grupos
 
 **Files:**
-- Modify: `app/.../ui/settings/SettingsScreen.kt`, `SettingsViewModel.kt`, `ui/Nav.kt`, `ui/MainActivity.kt`
+- Modify: `app/.../ui/settings/SettingsScreen.kt`, `SettingsViewModel.kt`, `ui/Nav.kt`, `ui/MainActivity.kt`, `ui/theme/Theme.kt`
 - Test: `SettingsScreenTest.kt`, nuevo `SettingsViewModelTest.kt`
 
 **Interfaces:**
 - Consumes: ajustes y enums de T3; `AppShell` de T6.
-- Produces en `SettingsViewModel`: `val prefs: StateFlow<SettingsPrefs>` donde `data class SettingsPrefs(val forwarding: Boolean, val sweepInterval: SweepInterval, val stuckAfter: StuckAfter, val retention: Retention, val hideText: Boolean, val notify: Map<NotifyKind, Boolean>, val themeMode: ThemeMode, val dynamicColor: Boolean, val language: Language)`; y `setForwarding`, `setSweepInterval`, `setStuckAfter`, `setRetention`, `setHideText`, `setNotify(kind, v)`, `setDynamicColor`, `setLanguage`.
+- Produces en `SettingsViewModel`: `val prefs: StateFlow<SettingsPrefs>` donde `data class SettingsPrefs(val forwarding: Boolean, val sweepInterval: SweepInterval, val stuckAfter: StuckAfter, val retention: Retention, val hideText: Boolean, val notify: Map<NotifyKind, Boolean>, val themeMode: ThemeMode, val dynamicColor: Boolean, val language: Language)`; y `setForwarding`, `setSweepInterval`, `setStuckAfter`, `setRetention`, `setHideText`, `setNotify(kind, v)`, `setDynamicColor`, `setLanguage`. El `ViewModel` no llama a `recreate()` ni a `WorkManager`: su `Factory` recibe `onSweepIntervalChanged: (SweepInterval) -> Unit` y `onLanguageChanged: () -> Unit`, que `MainActivity` cablea a `schedulePeriodicSweep(..., update = true)` y a `recreate()`.
 
 Orden de grupos (spec §7): Conexión, Remitentes, Reenvío, Historial, Notificaciones, Apariencia, Mantenimiento.
 
 - [ ] **Step 1: Tests que fallan:**
-  - Se muestran las siete cabeceras de grupo, en ese orden.
-  - Apagar el interruptor "Reenviar SMS" llama a `setForwarding(false)`.
-  - Elegir "30 min" en barrido llama a `setSweepInterval(M30)`.
+  - Se muestran las siete cabeceras de grupo, en ese orden (por `R.string`).
+  - El grupo Mantenimiento tiene los botones de recuperación y de permisos/MIUI; tocar cada uno llama a su callback (`onOpenRecovery`, `onOpenSystemIssue`).
+  - Apagar el interruptor de reenvío llama a `setForwarding(false)`.
+  - Elegir 30 min en barrido llama a `setSweepInterval(M30)`.
   - El interruptor del aviso de token rechazado no existe como ajuste.
   - El token sigue sin mostrarse nunca (test de v1 conservado).
 - [ ] **Step 2: Ejecutar** en CI; esperado: FAIL.
@@ -201,8 +210,8 @@ Orden de grupos (spec §7): Conexión, Remitentes, Reenvío, Historial, Notifica
 ### Task 8: Inicio con búsqueda, filtros, ocultar texto y borrado
 
 **Files:**
-- Modify: `app/.../data/SmsEntity.kt` (`val deletedAt: Long? = null`), `data/AppDatabase.kt` (versión 2 + `MIGRATION_1_2`), `data/SmsDao.kt`, `data/SmsRepository.kt`, `ui/main/MainViewModel.kt`, `MainScreen.kt`, `ui/detail/DetailScreen.kt`, `DetailViewModel.kt`, `ui/MainActivity.kt`, `AppGraph.kt`; esquema `app/schemas/.../2.json`
-- Test: `SmsRepositoryTest.kt`, `MainScreenTest.kt`, `DetailScreenTest.kt`, nuevo `MigrationTest.kt`
+- Modify: `app/.../data/SmsEntity.kt` (`val deletedAt: Long? = null`), `data/AppDatabase.kt` (versión 2 + `MIGRATION_1_2`), `data/SmsDao.kt`, `data/SmsRepository.kt`, `ui/main/MainViewModel.kt`, `MainScreen.kt`, `ui/detail/DetailScreen.kt`, `DetailViewModel.kt`, `ui/MainActivity.kt`, `AppGraph.kt`, `work/SendWorker.kt`, `app/build.gradle.kts`; esquemas `app/schemas/dev.smsforwarder.data.AppDatabase/1.json` y `2.json`
+- Test: `SmsRepositoryTest.kt`, `SendWorkerTest.kt`, `MainScreenTest.kt`, `DetailScreenTest.kt`, nuevos `MigrationTest.kt` y `MainViewModelTest.kt`
 
 **Interfaces:**
 - Consumes: `SmsSearch`, `StatusFilter` (T2); `hideText` (T3).
@@ -213,15 +222,17 @@ Orden de grupos (spec §7): Conexión, Remitentes, Reenvío, Historial, Notifica
   - `MainViewModel`: `fun setQuery(q: String)`, `fun setFilter(f: StatusFilter)`; `MainUiState` añade `query: String`, `filter: StatusFilter`, `hideText: Boolean`; `RowUi.label: StatusLabel`.
   - `DetailViewModel.delete()`: llama a `softDelete` y cancela el trabajo único `send-$id` en WorkManager (lambda `cancelSend: (Long) -> Unit`).
 
+- [ ] **Step 0: Fijar el esquema 1.** `app/schemas/` está vacío. Antes de tocar la entidad, hacer que CI genere `1.json` desde el código actual (subirlo como artefacto, bajarlo con `gh run download`) y commitearlo. Añadir `testImplementation(libs.room.testing)` y `android.sourceSets["test"].assets.srcDir("$projectDir/schemas")` a `app/build.gradle.kts`.
 - [ ] **Step 1: Tests que fallan:**
   - `MigrationTest`: una base v1 con 2 SMS migra a v2 con los datos intactos y `deletedAt` nulo (usar `MigrationTestHelper` con el esquema 1 ya commiteado).
   - Review Focus 1: `SmsRepositoryTest.deletedSmsIsNotReinsertedBySweep`: tras `softDelete`, `Sweeper` con el mismo SMS en la bandeja no crea fila nueva ni encola envío (la fila sigue existiendo con su `localKey`).
+  - Review Focus 1 completo: tras `softDelete` de un `QUEUED`: `queuedIds()` no lo incluye; `SweepWorker` corre y hace 0 peticiones; `SendWorker` sobre su id devuelve `Result.success()` sin petición; `idsWithError401()` no incluye una fila `ERROR 401` borrada; `stuckToNotify()` no la incluye; los contadores `queued` y `errors` de Inicio no la cuentan.
   - `MainViewModelTest`: con tres SMS, `setQuery("etec")` deja solo los de ese remitente; `setFilter(ERROR)` deja solo los `ERROR`; las dos a la vez se combinan (Y).
   - `MainScreenTest`: con `hideText = true` el cuerpo no aparece en la fila.
   - `DetailScreenTest`: el botón "Borrar" pide confirmación y, al confirmar, llama a `onDelete`.
 - [ ] **Step 2: Ejecutar** en CI; esperado: FAIL.
-- [ ] **Step 3: Implementar.** Filtrado en memoria sobre el flujo de `observeAll()` (la lista está acotada por la retención). Búsqueda con un icono en la barra superior que abre un campo; chips de filtro bajo la línea de estado (Todos, En cola, Error). "Mostrar" en el detalle revela el cuerpo aunque `hideText` esté activo.
-- [ ] **Step 4: Ejecutar**; esperado: PASS (el esquema `2.json` commiteado; sin esquema nuevo el build de CI falla).
+- [ ] **Step 3: Implementar.** `AND deletedAt IS NULL` en `observeAll`, `idsWithStatus`, `idsWithStatusAndCode` y `unsentNotNotified`; **no** en `findByLocalKey` ni `candidates`, para que la deduplicación siga viendo la fila borrada. `SendWorker` devuelve `Result.success()` si `deletedAt != null`. Filtrado en memoria sobre el flujo de `observeAll()` (la lista está acotada por la retención). Búsqueda con un icono en el slot `actions` de `AppShell` (T6) que abre un campo; chips de filtro bajo la línea de estado (Todos, En cola, Error). "Mostrar" en el detalle revela el cuerpo aunque `hideText` esté activo.
+- [ ] **Step 4: Ejecutar**; esperado: PASS. Añadir a CI `git diff --exit-code app/schemas` tras compilar: un esquema sin commitear rompe el build.
 - [ ] **Step 5: Commit** `feat(home): search, filters, hide text and soft delete`.
 
 ### Task 9: Acerca de
@@ -232,7 +243,7 @@ Orden de grupos (spec §7): Conexión, Remitentes, Reenvío, Historial, Notifica
 - Test: `app/src/test/kotlin/dev/smsforwarder/ui/AboutScreenTest.kt`
 
 **Interfaces:**
-- Produces: `@Composable fun AboutScreen(versionName: String, onOpenLink: (String) -> Unit, onBack: () -> Unit)`. Muestra icono (T1), nombre, versión, enlace al código (`https://github.com/Lacho00/sms-forwarder`), licencia (la del repo; si no hay `LICENSE`, la tarea lo avisa y el usuario decide cuál) y lista de bibliotecas (AndroidX, Compose, Room, WorkManager, OkHttp, kotlinx.serialization) con su licencia, escrita a mano en recursos.
+- Produces: `@Composable fun AboutScreen(versionName: String, onOpenLink: (String) -> Unit, onBack: () -> Unit)`. Muestra icono (T1), nombre, versión, enlace al código (`https://github.com/Lacho00/sms-forwarder`), licencia (el repo no tiene `LICENSE`: el usuario elige la licencia antes de empezar esta tarea, y la tarea la añade como fichero) y lista de bibliotecas (AndroidX, Compose, Room, WorkManager, OkHttp, kotlinx.serialization) con su licencia, escrita a mano en recursos.
 
 - [ ] **Step 1: Test que falla:** se ve la versión recibida y el enlace; tocar el enlace llama a `onOpenLink` con la URL del repo.
 - [ ] **Step 2: Ejecutar** en CI; esperado: FAIL.
@@ -243,16 +254,19 @@ Orden de grupos (spec §7): Conexión, Remitentes, Reenvío, Historial, Notifica
 ### Task 10: Avisos que se pueden apagar
 
 **Files:**
-- Modify: `app/.../notify/Notifier.kt`, `app/.../AppGraph.kt`
-- Test: `NotifierTest.kt`
+- Modify: `app/.../notify/Notifier.kt`, `app/.../AppGraph.kt`, `app/.../work/SendWorker.kt`
+- Test: `NotifierTest.kt`, `SendWorkerTest.kt`, nuevo `AppGraphAlertsTest.kt`
 
 **Interfaces:**
-- Consumes: `NotifyKind`, `isNotifyEnabled` (T2, T3).
-- `Notifier` recibe `isEnabled: suspend (NotifyKind) -> Boolean` y la consulta antes de `notifyRecovered` (RECOVERED), `notifyStuck` (STUCK) y `notifyHealth` (PERMISSIONS). `notifyTokenRejected` y los `400/401` inmediatos no se filtran.
+- Consumes: `NotifyKind`, `isNotifyEnabled` (T2, T3). Métodos reales de `Notifier`: `recovered`, `stuck`, `health`, `tokenRejected`; ninguno es `suspend`.
+- Produces: el filtrado ocurre en los puntos de llamada, no dentro de `Notifier`, para no cambiar su constructor (`Notifier(context, zone)` de los tests sigue compilando):
+  - `AppGraph.onRecovered` consulta `isNotifyEnabled(RECOVERED)` antes de `notifier.recovered`.
+  - `AppGraph.runSweepAlerts`: `STUCK` apagado salta el bucle de `stuckToNotify`; `PERMISSIONS` apagado quita de `issues` solo `SMS_PERMISSION`, `NOTIFICATION_PERMISSION`, `BATTERY_OPTIMIZED`, `BACKGROUND_RESTRICTED`, `AUTOSTART_OFF` y `MIUI_SMS_BLOCKED`; `TOKEN_REJECTED`, `NOT_CONFIGURED` y `NO_SENDERS` se notifican siempre. `setLastNotifiedIssues` guarda el conjunto sin filtrar, para que no reaparezca al volver a encender el aviso.
+  - El aviso inmediato de `400` (hoy `SendWorker.kt:51` llama a `notifier.stuck`) pasa a `Notifier.rejected(item: SmsEntity)` con el mismo texto y no se puede apagar.
 
-- [ ] **Step 1: Tests que fallan:** con `RECOVERED` apagado no se publica la notificación de recuperados; con `STUCK` apagado tampoco la de atascado, pero `notifyTokenRejected` sí se publica.
+- [ ] **Step 1: Tests que fallan:** con `RECOVERED` apagado, `onRecovered` no publica; con `STUCK` apagado un SMS atascado de 7 h no publica pero un `ERROR 400` sí (por `rejected`); con `PERMISSIONS` apagado `SMS_PERMISSION` no publica pero `TOKEN_REJECTED` sí; volver a encender el aviso de permisos no repite lo ya avisado.
 - [ ] **Step 2: Ejecutar** en CI; esperado: FAIL.
-- [ ] **Step 3: Implementar** con la lambda inyectada; `AppGraph` la cablea a `settings.isNotifyEnabled`.
+- [ ] **Step 3: Implementar** según las interfaces.
 - [ ] **Step 4: Ejecutar**; esperado: PASS.
 - [ ] **Step 5: Commit** `feat(notify): per-kind notification toggles`.
 
