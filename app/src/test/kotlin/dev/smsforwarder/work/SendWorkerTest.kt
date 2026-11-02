@@ -88,7 +88,7 @@ class SendWorkerTest {
         )
         val failing = dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }
         graph.legacyImport = dev.smsforwarder.data.LegacyImport(
-            graph.db, graph.secretStore, failing, graph.settings,
+            graph.db, graph.secretStore, failing, freshSettings(),
         )
         val id = insertSms()
         assertEquals(ListenableWorker.Result.retry(), run(id))
@@ -173,4 +173,10 @@ class SendWorkerTest {
         assertEquals(SmsStatus.QUEUED, sms.status)
         assertEquals(0, sms.attempts)
     }
+
+    // The app's own import may already have marked the shared settings done; use an unmarked store.
+    private fun freshSettings() = dev.smsforwarder.data.SettingsRepository(
+        context, graph.secretStore, graph.smsRepository, { },
+        java.io.File(context.cacheDir, "settings-${java.util.UUID.randomUUID()}.preferences_pb"),
+    )
 }

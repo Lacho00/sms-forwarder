@@ -76,7 +76,7 @@ class SweepWorkerTest {
         )
         graph.legacyImport = dev.smsforwarder.data.LegacyImport(
             graph.db, graph.secretStore,
-            dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }, graph.settings,
+            dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }, freshSettings(),
         )
         val cursor = graph.settings.sweepCursor()
         val floor = graph.settings.sweepFloor()
@@ -90,4 +90,10 @@ class SweepWorkerTest {
         assertEquals(floor, graph.settings.sweepFloor())
         assertEquals(1, alerts)
     }
+
+    // The app's own import may already have marked the shared settings done; use an unmarked store.
+    private fun freshSettings() = dev.smsforwarder.data.SettingsRepository(
+        context, graph.secretStore, graph.smsRepository, { },
+        java.io.File(context.cacheDir, "settings-${java.util.UUID.randomUUID()}.preferences_pb"),
+    )
 }
