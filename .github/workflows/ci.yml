@@ -19,6 +19,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Test, lint and assemble
         run: ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease
+      - name: Room schemas are committed
+        run: |
+          git diff --exit-code app/schemas
+          test -z "$(git status --porcelain app/schemas)"
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug

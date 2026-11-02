@@ -55,6 +55,9 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+
+    // Exported Room schemas feed MigrationTestHelper.
+    sourceSets["test"].assets.srcDir("$projectDir/schemas")
 }
 
 ksp {
@@ -81,6 +84,7 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
+    testImplementation(libs.room.testing)
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
