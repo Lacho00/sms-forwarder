@@ -17,12 +17,14 @@ import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.ui.theme.ThemeMode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -63,11 +65,14 @@ class SettingsViewModel(
     private val saveCredentials: suspend (Credentials) -> Unit,
     private val scope: CoroutineScope? = null,
     private val onSweepIntervalChanged: (SweepInterval) -> Unit = {},
-    private val onLanguageChanged: () -> Unit = {},
 ) : ViewModel() {
 
     private val _form = MutableStateFlow(SettingsForm())
     val form: StateFlow<SettingsForm> = _form.asStateFlow()
+
+    // One-shot, and not tied to any activity: the ViewModel outlives them, so the current one collects it.
+    private val languageChangedChannel = Channel<Unit>(Channel.CONFLATED)
+    val languageChanged: Flow<Unit> = languageChangedChannel.receiveAsFlow()
 
     val senders: Flow<List<String>> = settings.senders
     val themeMode: Flow<ThemeMode> = settings.themeMode
@@ -200,10 +205,10 @@ class SettingsViewModel(
 
     fun setDynamicColor(v: Boolean) = launch { settings.setDynamicColor(v) }
 
-    /** Saves first, then asks the activity to recreate itself so the new language is applied. */
+    /** Saves first, then emits [languageChanged] so the current activity recreates itself and applies the new language. */
     fun setLanguage(v: Language) = launch {
         settings.setLanguage(v)
-        onLanguageChanged()
+        languageChangedChannel.trySend(Unit)
     }
 
     class Factory(
@@ -211,7 +216,6 @@ class SettingsViewModel(
         private val testConnection: suspend (Credentials) -> ConnectionTestResult,
         private val loadSaved: suspend () -> Credentials?,
         private val onSweepIntervalChanged: (SweepInterval) -> Unit = {},
-        private val onLanguageChanged: () -> Unit = {},
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -221,7 +225,6 @@ class SettingsViewModel(
                 loadSaved,
                 { settings.saveCredentials(it) },
                 onSweepIntervalChanged = onSweepIntervalChanged,
-                onLanguageChanged = onLanguageChanged,
             ) as T
     }
 }

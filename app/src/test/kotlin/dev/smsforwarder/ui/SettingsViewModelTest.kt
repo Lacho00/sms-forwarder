@@ -15,7 +15,6 @@ import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.ui.settings.SettingsPrefs
 import dev.smsforwarder.ui.settings.SettingsViewModel
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -41,7 +40,6 @@ class SettingsViewModelTest {
     private lateinit var db: AppDatabase
     private lateinit var settings: SettingsRepository
     private val sweeps = java.util.concurrent.CopyOnWriteArrayList<SweepInterval>()
-    private var languageCalls = 0
 
     @Before fun setUp() {
         val context = RuntimeEnvironment.getApplication()
@@ -62,7 +60,6 @@ class SettingsViewModelTest {
         saveCredentials = {},
         scope = CoroutineScope(Dispatchers.Unconfined),
         onSweepIntervalChanged = { sweeps += it },
-        onLanguageChanged = { languageCalls++ },
     )
 
     private fun SettingsViewModel.await(cond: (SettingsPrefs) -> Boolean): SettingsPrefs =
@@ -105,21 +102,21 @@ class SettingsViewModelTest {
         assertEquals(listOf(SweepInterval.M30), sweeps)
     }
 
-    // The callback runs on the DataStore thread. It must not block on the same DataStore (the
-    // old runBlocking read inside it could wait for the thread it was running on), so it only
-    // signals; the saved value is read afterwards, on the test thread.
-    @Test fun changingLanguageSavesThenAsksForRecreate() {
-        val recreate = CompletableDeferred<Unit>()
-        val vm = SettingsViewModel(
-            settings = settings,
-            testConnection = { ConnectionTestResult.OK },
-            loadSaved = { null },
-            saveCredentials = {},
-            scope = CoroutineScope(Dispatchers.Unconfined),
-            onLanguageChanged = { recreate.complete(Unit) },
-        )
+    // The event is buffered (conflated channel), so it is not lost if it is emitted before the
+    // collector starts; the saved value is read afterwards, on the test thread.
+    @Test fun changingLanguageSavesThenEmitsLanguageChanged() {
+        val vm = vm()
         vm.setLanguage(Language.ES)
-        runBlocking { withTimeout(10_000) { recreate.await() } }
+        runBlocking { withTimeout(10_000) { vm.languageChanged.first() } }
         assertEquals(Language.ES, runBlocking { withTimeout(5_000) { settings.language.first() } })
+    }
+
+    @Test fun everyLanguageChangeEmitsAnEvent() {
+        val vm = vm()
+        vm.setLanguage(Language.ES)
+        runBlocking { withTimeout(10_000) { vm.languageChanged.first() } }
+        vm.setLanguage(Language.EN)
+        runBlocking { withTimeout(10_000) { vm.languageChanged.first() } }
+        assertEquals(Language.EN, runBlocking { withTimeout(5_000) { settings.language.first() } })
     }
 }

@@ -7,7 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import dev.smsforwarder.core.SweepInterval
 import kotlinx.coroutines.CancellationException
@@ -40,46 +42,60 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         graph = (application as SmsForwarderApp).graph
+        // The ViewModels outlive this activity, so their factory lambdas capture only these locals
+        // and never `this` (applicationContext and graph would both be read through it).
+        val app = applicationContext
+        val g = graph
+        val settings = g.settings
+        val repository = g.smsRepository
+        val clock = g.clock
+        val ingestClient = g.ingestClient
+        val secretStore = g.secretStore
         // The saved period is read off the main thread; if it cannot be read, keep the default so the job survives.
         lifecycleScope.launch {
             val interval = try {
-                graph.settings.sweepIntervalNow()
+                settings.sweepIntervalNow()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 SweepInterval.M15
             }
-            WorkScheduler.schedulePeriodicSweep(applicationContext, interval)
+            WorkScheduler.schedulePeriodicSweep(app, interval)
         }
         mainViewModel = ViewModelProvider(
             this,
-            MainViewModel.Factory(graph.smsRepository, graph.settings, graph.healthChecker),
+            MainViewModel.Factory(repository, settings, g.healthChecker),
         )[MainViewModel::class.java]
         onboardingViewModel = ViewModelProvider(
             this,
-            OnboardingViewModel.Factory(graph.settings, graph.clock) { graph.ingestClient.testConnection(it) },
+            OnboardingViewModel.Factory(settings, clock) { ingestClient.testConnection(it) },
         )[OnboardingViewModel::class.java]
         recoveryViewModel = ViewModelProvider(
             this,
             RecoveryViewModel.Factory(
-                ContentInboxReader(applicationContext),
-                graph.smsRepository,
-                graph.settings,
-                graph.clock,
-            ) { id -> WorkScheduler.enqueueSend(applicationContext, id, replace = true) },
+                ContentInboxReader(app),
+                repository,
+                settings,
+                clock,
+            ) { id -> WorkScheduler.enqueueSend(app, id, replace = true) },
         )[RecoveryViewModel::class.java]
         settingsViewModel = ViewModelProvider(
             this,
             SettingsViewModel.Factory(
-                graph.settings,
-                testConnection = { graph.ingestClient.testConnection(it) },
-                loadSaved = { graph.secretStore.get() },
+                settings,
+                testConnection = { ingestClient.testConnection(it) },
+                loadSaved = { secretStore.get() },
                 onSweepIntervalChanged = { interval ->
-                    WorkScheduler.schedulePeriodicSweep(applicationContext, interval, update = true)
+                    WorkScheduler.schedulePeriodicSweep(app, interval, update = true)
                 },
-                onLanguageChanged = { recreate() },
             ),
         )[SettingsViewModel::class.java]
+        // Collected here, not in the ViewModel: after a recreation this is the activity that is alive.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                settingsViewModel.languageChanged.collect { recreate() }
+            }
+        }
 
         setContent {
             val themeMode by graph.settings.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
@@ -113,17 +129,21 @@ class MainActivity : ComponentActivity() {
         mainViewModel.refreshIssues()
     }
 
-    private fun detailViewModel(id: Long): DetailViewModel =
-        ViewModelProvider(
+    private fun detailViewModel(id: Long): DetailViewModel {
+        // Locals only: the factory lambdas must not capture this activity.
+        val app = applicationContext
+        val g = graph
+        return ViewModelProvider(
             this,
             DetailViewModel.Factory(
                 id,
-                graph.smsRepository,
-                enqueueSend = { smsId -> WorkScheduler.enqueueSend(applicationContext, smsId, replace = true) },
-                hideText = graph.settings.hideText,
-                cancelSend = { smsId -> WorkScheduler.cancelSend(applicationContext, smsId) },
+                g.smsRepository,
+                enqueueSend = { smsId -> WorkScheduler.enqueueSend(app, smsId, replace = true) },
+                hideText = g.settings.hideText,
+                cancelSend = { smsId -> WorkScheduler.cancelSend(app, smsId) },
             ),
         ).get("detail-$id", DetailViewModel::class.java)
+    }
 
     private fun openSystemIssue(issue: HealthIssue) {
         try {
