@@ -6,6 +6,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.ViewModelProvider
+import dev.smsforwarder.ui.settings.SettingsViewModel
 import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
 import dev.smsforwarder.R
@@ -18,6 +20,7 @@ import dev.smsforwarder.notify.Notifier
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Rule
 import org.junit.Test
@@ -92,6 +95,23 @@ class LocalizedTest {
                 activity.getString(R.string.about_title),
             )
         }
+    }
+
+    // The ViewModel outlives the activity, so a second change must recreate the activity that is
+    // current then, not the one that existed when the ViewModel was built.
+    @Test fun secondLanguageChangeRecreatesTheCurrentActivity() {
+        val graph = (context as SmsForwarderApp).graph
+        runBlocking { graph.settings.setOnboardingDone() }
+        val es = Localized.wrap(context, "es").getString(R.string.about_title)
+        val en = Localized.wrap(context, "en").getString(R.string.about_title)
+
+        val first = compose.activity
+        ViewModelProvider(first)[SettingsViewModel::class.java].setLanguage(Language.ES)
+        compose.waitUntil(10_000) { compose.activity.getString(R.string.about_title) == es }
+        assertNotSame(first, compose.activity)
+
+        ViewModelProvider(compose.activity)[SettingsViewModel::class.java].setLanguage(Language.EN)
+        compose.waitUntil(10_000) { compose.activity.getString(R.string.about_title) == en }
     }
 
     @Test fun stuckNotificationUsesChosenLanguage() {

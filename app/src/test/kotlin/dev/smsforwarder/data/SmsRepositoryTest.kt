@@ -90,14 +90,25 @@ class SmsRepositoryTest {
         assertEquals(listOf(id), repo.idsWithError401())
     }
 
-    private suspend fun oldRows(): Triple<Long, Long, Long> {
-        val old = now - 40 * 86_400_000L
+    // Runs [block] with the clock moved back, so firstSeenAt/deletedAt are old too, then restores it.
+    private suspend fun <T> inThePast(days: Long, block: suspend () -> T): T {
+        val real = now
+        now = real - days * 86_400_000L
+        try {
+            return block()
+        } finally {
+            now = real
+        }
+    }
+
+    private suspend fun oldRows(): Triple<Long, Long, Long> = inThePast(40) {
+        val old = now
         val queued = (repo.ingest(record(old, "queued $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
         val error = (repo.ingest(record(old, "error $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
         val sent = (repo.ingest(record(old, "sent $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
         repo.recordAttempt(error, SendOutcome.Rejected(400, null))
         repo.recordAttempt(sent, SendOutcome.Accepted)
-        return Triple(queued, error, sent)
+        Triple(queued, error, sent)
     }
 
     @Test fun purgeOldForeverKeepsEverything() = runBlocking {
@@ -124,12 +135,15 @@ class SmsRepositoryTest {
     }
 
     @Test fun purgeOldKeepsQueuedAndErrorEvenIfOld() = runBlocking {
-        val old = now - QueuePolicy.RETENTION_MS - 86_400_000L
-        val queued = (repo.ingest(record(old, "queued $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
-        val error = (repo.ingest(record(old, "error $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
-        val sent = (repo.ingest(record(old, "sent $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
-        repo.recordAttempt(error, SendOutcome.Rejected(400, null))
-        repo.recordAttempt(sent, SendOutcome.Accepted)
+        val (queued, error, sent) = inThePast(QueuePolicy.RETENTION_MS / 86_400_000L + 1) {
+            val old = now
+            val q = (repo.ingest(record(old, "queued $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+            val e = (repo.ingest(record(old, "error $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+            val s = (repo.ingest(record(old, "sent $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+            repo.recordAttempt(e, SendOutcome.Rejected(400, null))
+            repo.recordAttempt(s, SendOutcome.Accepted)
+            Triple(q, e, s)
+        }
 
         repo.purgeOld()
 
@@ -213,8 +227,10 @@ class SmsRepositoryTest {
     @Test fun purgeOldRemovesDeletedRowsOlderThanCutoffWhateverTheirStatus() = runBlocking {
         val (queued, error, _) = oldRows()
         val recentQueued = (repo.ingest(record(now - 1_000, "recent $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
-        repo.softDelete(queued)
-        repo.softDelete(error)
+        inThePast(40) {
+            repo.softDelete(queued)
+            repo.softDelete(error)
+        }
         repo.softDelete(recentQueued)
 
         repo.purgeOld(Retention.D30)
@@ -226,8 +242,36 @@ class SmsRepositoryTest {
 
     @Test fun purgeOldForeverKeepsDeletedRows() = runBlocking {
         val (queued, _, _) = oldRows()
-        repo.softDelete(queued)
+        inThePast(40) { repo.softDelete(queued) }
         repo.purgeOld(Retention.FOREVER)
         assertNotNull(repo.get(queued))
+    }
+
+    // receivedAt is the carrier time; the sweep window uses the phone date. A row the app saw
+    // recently must survive the purge however old the carrier stamp is, or the next sweep
+    // would ingest the SMS again and forward it twice.
+    @Test fun purgeOldKeepsDeletedRowSeenRecentlyEvenWithOldCarrierTime() = runBlocking {
+        val old = now - 40 * 86_400_000L
+        val id = (repo.ingest(record(old, "deleted $body"), SmsOrigin.SWEEP) as IngestResult.Inserted).id
+        repo.softDelete(id)
+        repo.purgeOld(Retention.D30)
+        assertNotNull(repo.get(id))
+    }
+
+    @Test fun purgeOldKeepsSentRowSeenRecentlyEvenWithOldCarrierTime() = runBlocking {
+        val old = now - 40 * 86_400_000L
+        val id = (repo.ingest(record(old, "sent $body"), SmsOrigin.SWEEP) as IngestResult.Inserted).id
+        repo.recordAttempt(id, SendOutcome.Accepted)
+        repo.purgeOld(Retention.D30)
+        assertNotNull(repo.get(id))
+    }
+
+    @Test fun purgeOldKeepsRowDeletedRecentlyEvenIfSeenLongAgo() = runBlocking {
+        val id = inThePast(40) {
+            (repo.ingest(record(now, "deleted $body"), SmsOrigin.SWEEP) as IngestResult.Inserted).id
+        }
+        repo.softDelete(id)
+        repo.purgeOld(Retention.D30)
+        assertNotNull(repo.get(id))
     }
 }
