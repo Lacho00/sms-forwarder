@@ -39,7 +39,10 @@ class AppGraphAlertsTest {
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
         graph = (context as SmsForwarderApp).graph
-        graph.secretStore = Configured
+        graph.destinationSecretStore = dev.smsforwarder.data.FakeDestinationSecretStore()
+        runBlocking {
+            graph.destinationRepository.savePrimaryCredentials(Credentials("https://example.invalid/ingest", "test-token"))
+        }
         manager = context.getSystemService(NotificationManager::class.java)
     }
 
@@ -63,7 +66,7 @@ class AppGraphAlertsTest {
 
     private suspend fun stuckSms(): Long {
         val record = SmsRecord("OPERADOR", "cuerpo de prueba", 1_800_000_000_000L, null, null)
-        val id = (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val id = (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         val dao = graph.db.smsDao()
         dao.update(dao.get(id)!!.copy(firstSeenAt = System.currentTimeMillis() - 7 * 3_600_000L))
         return id

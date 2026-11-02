@@ -49,7 +49,11 @@ class SendWorkerTest {
         server.start()
         context = RuntimeEnvironment.getApplication()
         graph = (context as SmsForwarderApp).graph
-        graph.secretStore = FakeSecretStore(Credentials(server.url("/ingest").toString(), "test-token"))
+        graph.secretStore = FakeSecretStore(null)
+        graph.destinationSecretStore = dev.smsforwarder.data.FakeDestinationSecretStore()
+        runBlocking {
+            graph.destinationRepository.savePrimaryCredentials(Credentials(server.url("/ingest").toString(), "test-token"))
+        }
     }
 
     @After fun tearDown() {
@@ -59,7 +63,7 @@ class SendWorkerTest {
 
     private suspend fun insertSms(receivedAt: Long = 1_800_000_000_000L): Long {
         val record = SmsRecord("OPERADOR", body, receivedAt, null, null)
-        return (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        return (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
     }
 
     private suspend fun run(id: Long): ListenableWorker.Result =
@@ -78,14 +82,6 @@ class SendWorkerTest {
     }
 
     @Test fun failedImportKeepsSmsQueuedAndSendsNothing() = runBlocking {
-        graph.db.destinationDao().insert(
-            dev.smsforwarder.data.DestinationEntity(
-                id = dev.smsforwarder.data.PRIMARY_DESTINATION_ID, name = "Primary", enabled = true,
-                template = dev.smsforwarder.core.TemplateKind.STANDARD_JSON,
-                method = dev.smsforwarder.core.HttpMethod.POST, bodyTemplate = null, bodyIsJson = true,
-                publicHeaders = "[]", successPolicy = dev.smsforwarder.core.SuccessPolicy.ANY_2XX, createdAt = 1L,
-            ),
-        )
         val failing = dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }
         graph.legacyImport = dev.smsforwarder.data.LegacyImport(
             graph.db, graph.secretStore, failing, freshSettings(),
@@ -137,9 +133,11 @@ class SendWorkerTest {
 
     @Test fun secretStoreFailureReturnsRetryAndStaysQueued() = runBlocking {
         val id = insertSms()
-        graph.secretStore = object : SecretStore {
-            override suspend fun get(): Credentials? = throw java.security.ProviderException("keystore")
-            override suspend fun set(c: Credentials) = Unit
+        graph.destinationSecretStore = object : dev.smsforwarder.data.DestinationSecretStore {
+            override suspend fun get(destinationId: Long): dev.smsforwarder.data.DestinationSecrets? =
+                throw java.security.ProviderException("keystore")
+            override suspend fun set(destinationId: Long, s: dev.smsforwarder.data.DestinationSecrets) = Unit
+            override suspend fun remove(destinationId: Long) = Unit
         }
         assertEquals(ListenableWorker.Result.retry(), run(id))
         assertEquals(SmsStatus.QUEUED, graph.smsRepository.get(id)!!.status)
@@ -147,7 +145,7 @@ class SendWorkerTest {
 
     @Test fun missingCredentialsReturnsRetry() = runBlocking {
         val id = insertSms()
-        graph.secretStore = FakeSecretStore(null)
+        graph.destinationSecretStore = dev.smsforwarder.data.FakeDestinationSecretStore()
         assertEquals(ListenableWorker.Result.retry(), run(id))
         assertEquals(SmsStatus.QUEUED, graph.smsRepository.get(id)!!.status)
         assertEquals(0, server.requestCount)
@@ -176,7 +174,7 @@ class SendWorkerTest {
 
     // The app's own import may already have marked the shared settings done; use an unmarked store.
     private fun freshSettings() = dev.smsforwarder.data.SettingsRepository(
-        context, graph.secretStore, graph.smsRepository, { },
+        context, graph.destinationRepository, graph.ruleRepository, graph.smsRepository, { },
         java.io.File(context.cacheDir, "settings-${java.util.UUID.randomUUID()}.preferences_pb"),
     )
 }

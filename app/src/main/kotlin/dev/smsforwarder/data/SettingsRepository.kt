@@ -29,7 +29,8 @@ import java.io.File
  */
 class SettingsRepository(
     context: Context,
-    private val secretStore: SecretStore,
+    private val destinations: DestinationRepository,
+    private val rules: RuleRepository,
     private val smsRepository: SmsRepository,
     private val scheduler: (Long) -> Unit,
     storeFile: File = File(context.applicationContext.filesDir, "datastore/settings.preferences_pb"),
@@ -37,8 +38,8 @@ class SettingsRepository(
     private val appContext = context.applicationContext
     private val store: DataStore<Preferences> = PreferenceDataStoreFactory.create { storeFile }
 
-    // Stored as the user typed them, one per line; matching always goes through normalize.
-    val senders: Flow<List<String>> = store.data.map { decodeSenders(it[SENDERS_KEY]) }
+    // The senders are the exact-sender rules of the primary destination.
+    val senders: Flow<List<String>> = rules.senders
 
     /**
      * The 1.1.x sender list as stored, read straight from the raw key. [senders] may later be backed
@@ -62,25 +63,9 @@ class SettingsRepository(
         store.edit { it[IMPORT_FAILED_KEY] = true }
     }
 
-    suspend fun addSender(s: String) {
-        val clean = s.trim()
-        val normalized = SenderFilter.normalize(clean)
-        if (normalized.isEmpty()) return
-        store.edit { prefs ->
-            val current = decodeSenders(prefs[SENDERS_KEY])
-            if (current.none { SenderFilter.normalize(it) == normalized }) {
-                prefs[SENDERS_KEY] = (current + clean).joinToString(SEPARATOR)
-            }
-        }
-    }
+    suspend fun addSender(s: String) = rules.addSender(s)
 
-    suspend fun removeSender(s: String) {
-        val normalized = SenderFilter.normalize(s)
-        store.edit { prefs ->
-            val kept = decodeSenders(prefs[SENDERS_KEY]).filter { SenderFilter.normalize(it) != normalized }
-            prefs[SENDERS_KEY] = kept.joinToString(SEPARATOR)
-        }
-    }
+    suspend fun removeSender(s: String) = rules.removeSender(s)
 
     val themeMode: Flow<ThemeMode> = store.data.map { prefs ->
         prefs[THEME_KEY]?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } } ?: ThemeMode.SYSTEM
@@ -125,13 +110,14 @@ class SettingsRepository(
     }
 
     /**
-     * New credentials usually mean the old token failed (401) or none existed yet, so every
-     * 401 row goes back to QUEUED and every queued SMS gets a fresh send, skipping its backoff.
+     * New credentials usually mean the old token failed (401/403) or none existed yet, so every
+     * auth-rejected delivery of the primary destination goes back to QUEUED and every queued SMS
+     * gets a fresh send, skipping its backoff.
      */
     suspend fun saveCredentials(c: Credentials) {
-        secretStore.set(c)
-        val unauthorized = smsRepository.idsWithError401()
-        unauthorized.forEach { smsRepository.requeue(it) }
+        destinations.savePrimaryCredentials(c)
+        val primary = destinations.ensurePrimary()
+        val unauthorized = smsRepository.requeueAuthErrors(primary)
         (unauthorized + smsRepository.queuedIds()).distinct().forEach(scheduler)
     }
 

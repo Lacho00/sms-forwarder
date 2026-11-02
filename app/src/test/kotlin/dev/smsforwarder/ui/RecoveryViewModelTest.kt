@@ -8,6 +8,7 @@ import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.SecretStore
+import dev.smsforwarder.data.TestRepos
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.sms.InboxReader
@@ -53,6 +54,8 @@ class RecoveryViewModelTest {
     private lateinit var db: AppDatabase
     private lateinit var sms: SmsRepository
     private lateinit var settings: SettingsRepository
+    private lateinit var rules: dev.smsforwarder.data.RuleRepository
+    private lateinit var context0: android.content.Context
     private val reader = FakeReader()
     private val enqueued = mutableListOf<Long>()
     private lateinit var vm: RecoveryViewModel
@@ -62,8 +65,11 @@ class RecoveryViewModelTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
         sms = SmsRepository(db, clock)
         val file = File(context.cacheDir, "recovery-${UUID.randomUUID()}.preferences_pb")
-        settings = SettingsRepository(context, NoSecrets(), sms, scheduler = {}, storeFile = file)
-        vm = RecoveryViewModel(reader, sms, settings, clock) { enqueued += it }
+        val repos = TestRepos(db)
+        rules = repos.rules
+        settings = SettingsRepository(context, repos.destinations, repos.rules, sms, scheduler = {}, storeFile = file)
+        context0 = context
+        vm = RecoveryViewModel(reader, sms, rules, context, clock) { enqueued += it }
     }
 
     @After fun tearDown() {
@@ -93,7 +99,7 @@ class RecoveryViewModelTest {
     @Test fun recoveryMarksAlreadyKnownAndDisablesThem() = runBlocking {
         settings.addSender("OPERADOR")
         val t = now - 10_000
-        sms.ingest(SmsRecord("OPERADOR", body, t, null, null), SmsOrigin.RECEIVER)
+        sms.ingest(SmsRecord("OPERADOR", body, t, null, null), SmsOrigin.RECEIVER, setOf(1L))
         reader.rows = listOf(
             row(date = t + 400, dateSent = t + 1_500),
             row(date = now - 5_000, text = "$body otro"),
@@ -126,7 +132,7 @@ class RecoveryViewModelTest {
 
     @Test fun recoveryLoadedAtIsTheInstantOfTheInboxRead() = runBlocking {
         var t = now
-        val moving = RecoveryViewModel(reader, sms, settings, Clock { t }) { enqueued += it }
+        val moving = RecoveryViewModel(reader, sms, rules, context0, Clock { t }) { enqueued += it }
         assertEquals(now, moving.loadedAt) // never loaded: falls back to the clock
         moving.load()
         t = now + 60_000L

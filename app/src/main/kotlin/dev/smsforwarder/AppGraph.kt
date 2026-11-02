@@ -5,12 +5,15 @@ import androidx.room.Room
 import dev.smsforwarder.core.NotifyKind
 import dev.smsforwarder.core.SystemClock
 import dev.smsforwarder.data.AppDatabase
+import dev.smsforwarder.data.DestinationRepository
 import dev.smsforwarder.data.DestinationSecretStore
+import dev.smsforwarder.data.DestinationSecrets
 import dev.smsforwarder.data.KeystoreDestinationSecretStore
 import dev.smsforwarder.data.KeystoreSecretStore
 import dev.smsforwarder.data.LegacyImport
 import dev.smsforwarder.data.MIGRATION_1_2
 import dev.smsforwarder.data.migration2to3
+import dev.smsforwarder.data.RuleRepository
 import dev.smsforwarder.data.SecretStore
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsEntity
@@ -38,11 +41,25 @@ class AppGraph(context: Context) {
     var destinationSecretStore: DestinationSecretStore = KeystoreDestinationSecretStore(context)
     val ingestClient = IngestClient(defaultHttpClient())
 
-    /** Lazy so it picks up the secretStore a test may have swapped in. */
+    /** Lazy so it picks up the destinationSecretStore a test may have swapped in. */
+    /** Forwards to whichever store is current, so a test swap after the first use still takes effect. */
+    private val secretsProxy = object : DestinationSecretStore {
+        override suspend fun get(destinationId: Long) = destinationSecretStore.get(destinationId)
+        override suspend fun set(destinationId: Long, s: DestinationSecrets) =
+            destinationSecretStore.set(destinationId, s)
+        override suspend fun remove(destinationId: Long) = destinationSecretStore.remove(destinationId)
+    }
+    val destinationRepository by lazy {
+        DestinationRepository(db, secretsProxy, clock, context.getString(R.string.destination_primary_name))
+    }
+    val ruleRepository by lazy { RuleRepository(db, destinationRepository, clock) }
+
+    /** Lazy so it picks up the stores a test may have swapped in. */
     val settings by lazy {
         SettingsRepository(
             context.applicationContext,
-            secretStore,
+            destinationRepository,
+            ruleRepository,
             smsRepository,
             scheduler = { id -> WorkScheduler.enqueueSend(context.applicationContext, id, replace = true) },
         )
@@ -60,7 +77,7 @@ class AppGraph(context: Context) {
 
     val notifier by lazy { Notifier(context.applicationContext) }
     val healthChecker by lazy {
-        HealthChecker(context.applicationContext, smsRepository, secretStore, settings)
+        HealthChecker(context.applicationContext, smsRepository, destinationRepository, ruleRepository, settings)
     }
 
     // Seams so tests can replace the notifications; by default they use the real Notifier.

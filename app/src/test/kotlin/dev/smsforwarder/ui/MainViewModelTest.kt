@@ -10,6 +10,7 @@ import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.IngestResult
 import dev.smsforwarder.data.SecretStore
+import dev.smsforwarder.data.TestRepos
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.health.HealthChecker
@@ -43,6 +44,7 @@ class MainViewModelTest {
     private val now = 1_800_000_000_000L
     private lateinit var db: AppDatabase
     private lateinit var sms: SmsRepository
+    private lateinit var repos: TestRepos
     private lateinit var settings: SettingsRepository
     private lateinit var vm: MainViewModel
     private var queuedId = 0L
@@ -50,7 +52,7 @@ class MainViewModelTest {
     private var otherSenderId = 0L
 
     private suspend fun add(sender: String, text: String, at: Long): Long =
-        (sms.ingest(SmsRecord(sender, text, at, null, null), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        (sms.ingest(SmsRecord(sender, text, at, null, null), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
 
     @Before fun setUp() = runBlocking {
         Dispatchers.setMain(Dispatchers.Unconfined)
@@ -58,12 +60,13 @@ class MainViewModelTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
         sms = SmsRepository(db, Clock { now })
         val file = File(context.cacheDir, "main-vm-${UUID.randomUUID()}.preferences_pb")
-        settings = SettingsRepository(context, NoSecrets(), sms, scheduler = {}, storeFile = file)
+        repos = TestRepos(db)
+        settings = SettingsRepository(context, repos.destinations, repos.rules, sms, scheduler = {}, storeFile = file)
         queuedId = add("SENDERONE", "Code 1111", now - 3_000)
         errorId = add("SENDERONE", "Code 2222", now - 2_000)
         otherSenderId = add("SENDERTWO", "Code 3333", now - 1_000)
         sms.recordAttempt(errorId, SendOutcome.Rejected(400, null))
-        vm = MainViewModel(sms, settings, HealthChecker(context, sms, NoSecrets(), settings))
+        vm = MainViewModel(sms, settings, HealthChecker(context, sms, repos.destinations, repos.rules, settings))
     }
 
     @After fun tearDown() {

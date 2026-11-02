@@ -43,7 +43,7 @@ internal fun issueTitle(issue: HealthIssue): String = stringResource(
         HealthIssue.MIUI_SMS_BLOCKED -> R.string.issue_miui_sms_blocked
         HealthIssue.TOKEN_REJECTED -> R.string.issue_token_rejected
         HealthIssue.NOT_CONFIGURED -> R.string.issue_not_configured
-        HealthIssue.NO_SENDERS -> R.string.issue_no_senders
+        HealthIssue.NO_RULES -> R.string.issue_no_senders
         HealthIssue.MIGRATION_FAILED -> R.string.issue_migration_failed
     },
 )

@@ -7,11 +7,11 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.PowerManager
-import dev.smsforwarder.data.SecretStore
+import dev.smsforwarder.data.DestinationRepository
+import dev.smsforwarder.data.RuleRepository
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.first
 
 enum class HealthIssue {
     SMS_PERMISSION,
@@ -23,7 +23,7 @@ enum class HealthIssue {
     MIUI_SMS_BLOCKED,
     TOKEN_REJECTED,
     NOT_CONFIGURED,
-    NO_SENDERS,
+    NO_RULES,
     MIGRATION_FAILED,
 }
 
@@ -31,7 +31,8 @@ enum class HealthIssue {
 class HealthChecker(
     context: Context,
     private val smsRepository: SmsRepository,
-    private val secretStore: SecretStore,
+    private val destinations: DestinationRepository,
+    private val rules: RuleRepository,
     private val settings: SettingsRepository,
 ) {
     private val context = context.applicationContext
@@ -63,14 +64,14 @@ class HealthChecker(
             true -> Unit
         }
 
-        if (smsRepository.idsWithError401().isNotEmpty()) issues += HealthIssue.TOKEN_REJECTED
-        if (settings.senders.first().isEmpty()) issues += HealthIssue.NO_SENDERS
+        if (smsRepository.idsWithAuthError().isNotEmpty()) issues += HealthIssue.TOKEN_REJECTED
+        if (!rules.hasActiveRules()) issues += HealthIssue.NO_RULES
 
         if (settings.isImportFailed()) issues += HealthIssue.MIGRATION_FAILED
 
         // A Keystore hiccup is not "not configured": skip the check instead of raising a false alarm.
         try {
-            if (secretStore.get() == null) issues += HealthIssue.NOT_CONFIGURED
+            if (destinations.primaryCredentials() == null) issues += HealthIssue.NOT_CONFIGURED
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

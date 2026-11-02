@@ -27,7 +27,7 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             // Paused: leave the SMS untouched; resuming and every sweep queue it again.
             if (!graph.settings.isForwardingEnabled()) return Result.success()
             // No credentials yet: keep the SMS queued and try again later.
-            val credentials = graph.secretStore.get() ?: return Result.retry()
+            val credentials = graph.destinationRepository.primaryCredentials() ?: return Result.retry()
             graph.ingestClient.send(credentials, sms.sender, sms.body, sms.receivedAt)
         } catch (e: CancellationException) {
             throw e
@@ -46,8 +46,8 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     private suspend fun notifyRejected(graph: AppGraph, id: Long, outcome: SendOutcome.Rejected) {
         try {
             when (outcome.httpCode) {
-                401 -> {
-                    val waiting = graph.smsRepository.idsWithError401().size
+                401, 403 -> {
+                    val waiting = graph.smsRepository.idsWithAuthError().size
                     if (waiting > 0) graph.notifier.tokenRejected(waiting)
                 }
                 // A late result on an already-sent row was ignored by recordAttempt: stay silent.

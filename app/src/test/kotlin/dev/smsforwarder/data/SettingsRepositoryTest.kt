@@ -8,6 +8,7 @@ import dev.smsforwarder.core.Retention
 import dev.smsforwarder.core.StuckAfter
 import dev.smsforwarder.core.SweepInterval
 import dev.smsforwarder.core.SendOutcome
+import dev.smsforwarder.core.DeliveryStatus
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.core.SmsStatus
@@ -38,7 +39,7 @@ class SettingsRepositoryTest {
     private val clock = Clock { 1_800_000_000_000L }
     private lateinit var db: AppDatabase
     private lateinit var sms: SmsRepository
-    private lateinit var secrets: FakeSecretStore
+    private lateinit var repos: TestRepos
     private lateinit var settings: SettingsRepository
     private val kicked = mutableListOf<Long>()
 
@@ -50,10 +51,11 @@ class SettingsRepositoryTest {
             .allowMainThreadQueries()
             .build()
         sms = SmsRepository(db, clock)
-        secrets = FakeSecretStore()
+        repos = TestRepos(db, clock)
+        runBlocking { repos.destinations.ensurePrimary() }
         // A unique file per test keeps DataStore state from leaking between tests.
         val file = File(context.cacheDir, "settings-${UUID.randomUUID()}.preferences_pb")
-        settings = SettingsRepository(context, secrets, sms, { kicked.add(it) }, file)
+        settings = SettingsRepository(context, repos.destinations, repos.rules, sms, { kicked.add(it) }, file)
     }
 
     @After fun tearDown() {
@@ -71,18 +73,31 @@ class SettingsRepositoryTest {
     }
 
     @Test fun saveCredentialsRequeues401AndKicksQueued() = runBlocking {
-        val rejected = (sms.ingest(record("uno"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
-        val queued = (sms.ingest(record("dos"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val rejected = (sms.ingest(record("uno"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        val queued = (sms.ingest(record("dos"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         sms.recordAttempt(rejected, SendOutcome.Rejected(401, null))
         assertEquals(SmsStatus.ERROR, sms.get(rejected)!!.status)
 
         val credentials = Credentials("https://example.invalid/ingest", "test-token")
         settings.saveCredentials(credentials)
 
-        assertEquals(credentials, secrets.saved)
+        assertEquals(credentials, repos.secrets.map[1L]?.toCredentialsOrNull())
         assertEquals(SmsStatus.QUEUED, sms.get(rejected)!!.status)
         assertEquals(setOf(rejected, queued), kicked.toSet())
         assertEquals(2, kicked.size)
+    }
+
+    @Test fun saveCredentialsRequeuesAuthErrors() = runBlocking {
+        val id = (sms.ingest(record("uno"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        val delivery = db.deliveryDao().forSms(id).single()
+        db.deliveryDao().update(delivery.copy(status = DeliveryStatus.ERROR, lastHttpCode = 403))
+        db.smsDao().update(db.smsDao().get(id)!!.copy(status = SmsStatus.ERROR, lastHttpCode = 403))
+
+        settings.saveCredentials(Credentials("https://example.invalid/ingest", "test-token"))
+
+        assertEquals(DeliveryStatus.QUEUED, db.deliveryDao().forSms(id).single().status)
+        assertEquals(SmsStatus.QUEUED, sms.get(id)!!.status)
+        assertTrue(id in kicked)
     }
 
     @Test fun removeSenderMatchesNormalized() = runBlocking {
@@ -146,8 +161,8 @@ class SettingsRepositoryTest {
     }
 
     @Test fun resumingForwardingKicksQueuedIds() = runBlocking {
-        val a = (sms.ingest(record("uno"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
-        val b = (sms.ingest(record("dos"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val a = (sms.ingest(record("uno"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        val b = (sms.ingest(record("dos"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         settings.setForwardingEnabled(false)
         assertEquals(false, settings.isForwardingEnabled())
         assertTrue(kicked.isEmpty())

@@ -9,7 +9,7 @@ import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.IngestResult
-import dev.smsforwarder.data.SecretStore
+import dev.smsforwarder.data.TestRepos
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.core.SendOutcome
@@ -26,20 +26,13 @@ import org.robolectric.Shadows.shadowOf
 import java.io.File
 import java.util.UUID
 
-private class FakeSecrets(var value: Credentials?) : SecretStore {
-    override suspend fun get(): Credentials? = value
-    override suspend fun set(c: Credentials) {
-        value = c
-    }
-}
-
 @RunWith(RobolectricTestRunner::class)
 class HealthCheckerTest {
     private val clock = Clock { 1_800_000_000_000L }
     private lateinit var context: Context
     private lateinit var db: AppDatabase
     private lateinit var sms: SmsRepository
-    private lateinit var secrets: FakeSecrets
+    private lateinit var repos: TestRepos
     private lateinit var settings: SettingsRepository
     private lateinit var checker: HealthChecker
 
@@ -49,20 +42,23 @@ class HealthCheckerTest {
             .allowMainThreadQueries()
             .build()
         sms = SmsRepository(db, clock)
-        secrets = FakeSecrets(Credentials("https://example.invalid/ingest", "test-token"))
+        repos = TestRepos(db, clock)
+        runBlocking {
+            repos.destinations.savePrimaryCredentials(Credentials("https://example.invalid/ingest", "test-token"))
+        }
         val file = File(context.cacheDir, "settings-${UUID.randomUUID()}.preferences_pb")
-        settings = SettingsRepository(context, secrets, sms, { }, file)
-        checker = HealthChecker(context, sms, secrets, settings)
+        settings = SettingsRepository(context, repos.destinations, repos.rules, sms, { }, file)
+        checker = HealthChecker(context, sms, repos.destinations, repos.rules, settings)
     }
 
     @After fun tearDown() {
         db.close()
     }
 
-    @Test fun emptySendersIsReportedAsNoSenders() = runBlocking {
-        assertTrue(HealthIssue.NO_SENDERS in checker.check())
+    @Test fun noRulesIsReportedAsNoRules() = runBlocking {
+        assertTrue(HealthIssue.NO_RULES in checker.check())
         settings.addSender("OPERADOR")
-        assertFalse(HealthIssue.NO_SENDERS in checker.check())
+        assertFalse(HealthIssue.NO_RULES in checker.check())
     }
 
     @Test fun failedImportIsReported() = runBlocking {
@@ -83,7 +79,7 @@ class HealthCheckerTest {
 
     @Test fun token401PresentIsReported() = runBlocking {
         val record = SmsRecord("OPERADOR", "uno", 1_799_999_999_000L, null, null)
-        val id = (sms.ingest(record, SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val id = (sms.ingest(record, SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         assertFalse(HealthIssue.TOKEN_REJECTED in checker.check())
         sms.recordAttempt(id, SendOutcome.Rejected(401, "unauthorized"))
         assertTrue(HealthIssue.TOKEN_REJECTED in checker.check())
@@ -105,7 +101,7 @@ class HealthCheckerTest {
     }
 
     @Test fun missingCredentialsIsNotConfigured() = runBlocking {
-        secrets.value = null
+        repos.secrets.map.clear()
         assertTrue(HealthIssue.NOT_CONFIGURED in checker.check())
     }
 }

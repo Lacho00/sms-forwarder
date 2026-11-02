@@ -18,6 +18,7 @@ import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.SecretStore
+import dev.smsforwarder.data.TestRepos
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
 import androidx.compose.ui.test.onAllNodesWithText
@@ -69,7 +70,7 @@ class SettingsScreenTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
         val sms = SmsRepository(db, Clock { 1_800_000_000_000L })
         val file = File(context.cacheDir, "settings-ui-${UUID.randomUUID()}.preferences_pb")
-        settings = SettingsRepository(context, NoSecrets(), sms, scheduler = {}, storeFile = file)
+        settings = TestRepos(db).let { SettingsRepository(context, it.destinations, it.rules, sms, scheduler = {}, storeFile = file) }
     }
 
     @After fun tearDown() {

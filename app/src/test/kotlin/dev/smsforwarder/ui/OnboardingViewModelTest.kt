@@ -7,7 +7,9 @@ import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.core.interpretConnectionTest
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.Credentials
-import dev.smsforwarder.data.SecretStore
+import dev.smsforwarder.data.FakeDestinationSecretStore
+import dev.smsforwarder.data.TestRepos
+import dev.smsforwarder.data.toCredentialsOrNull
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.ui.onboarding.OnboardingStep
@@ -30,14 +32,14 @@ import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
 class OnboardingViewModelTest {
-    private class FakeSecrets : SecretStore {
-        var saved: Credentials? = null
-        var failOnSet = false
-        override suspend fun get(): Credentials? = saved
-        override suspend fun set(c: Credentials) {
-            if (failOnSet) throw IllegalStateException("keystore unavailable")
-            saved = c
-        }
+    private class FakeSecrets {
+        val store = FakeDestinationSecretStore()
+        val saved: Credentials? get() = store.map[1L]?.toCredentialsOrNull()
+        var failOnSet: Boolean
+            get() = store.failOnSet
+            set(v) {
+                store.failOnSet = v
+            }
     }
 
     private val now = 1_800_000_000_000L
@@ -53,7 +55,8 @@ class OnboardingViewModelTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
         val sms = SmsRepository(db, Clock { now })
         val file = File(context.cacheDir, "onboarding-${UUID.randomUUID()}.preferences_pb")
-        settings = SettingsRepository(context, secrets, sms, scheduler = {}, storeFile = file)
+        val repos = TestRepos(db, Clock { now }, secrets.store)
+        settings = SettingsRepository(context, repos.destinations, repos.rules, sms, scheduler = {}, storeFile = file)
         vm = OnboardingViewModel(settings, Clock { now }) { credentials ->
             tested += credentials
             interpretConnectionTest(httpCode)

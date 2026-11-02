@@ -63,7 +63,7 @@ object Routes {
 private val IN_APP_ISSUES = setOf(
     HealthIssue.TOKEN_REJECTED,
     HealthIssue.NOT_CONFIGURED,
-    HealthIssue.NO_SENDERS,
+    HealthIssue.NO_RULES,
 )
 
 private const val STACK_SEPARATOR = "|"

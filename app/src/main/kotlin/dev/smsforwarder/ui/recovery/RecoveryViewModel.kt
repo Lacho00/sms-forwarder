@@ -1,22 +1,24 @@
 package dev.smsforwarder.ui.recovery
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.QueuePolicy
-import dev.smsforwarder.core.SenderFilter
+import dev.smsforwarder.core.IncomingSms
+import dev.smsforwarder.core.RuleEngine
 import dev.smsforwarder.core.SmsIdentity
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.data.IngestResult
-import dev.smsforwarder.data.SettingsRepository
+import dev.smsforwarder.data.RuleRepository
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.sms.InboxReader
+import dev.smsforwarder.sms.SimSlots
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 
@@ -39,7 +41,8 @@ private const val PREVIEW_LENGTH = 80
 class RecoveryViewModel(
     private val reader: InboxReader,
     private val smsRepository: SmsRepository,
-    private val settings: SettingsRepository,
+    private val ruleRepository: RuleRepository,
+    private val context: Context,
     private val clock: Clock,
     private val enqueue: (Long) -> Unit,
 ) : ViewModel() {
@@ -77,9 +80,12 @@ class RecoveryViewModel(
             return
         }
         _unreadable.value = false
-        val senders = settings.senders.first()
+        val rules = ruleRepository.activeRules()
         val found = LinkedHashMap<String, SmsRecord>()
-        rows.filter { SenderFilter.matches(it.address, senders) }
+        rows.filter { row ->
+            val slot = SimSlots.slotOf(context, row.subId)
+            RuleEngine.destinationsFor(IncomingSms(row.address, row.body, slot), rules).destinationIds.isNotEmpty()
+        }
             .map {
                 SmsRecord(
                     sender = it.address,
@@ -115,7 +121,12 @@ class RecoveryViewModel(
         var inserted = 0
         for (item in _candidates.value.filter { it.selected && !it.alreadyKnown }) {
             val record = records[item.key] ?: continue
-            val result = smsRepository.ingest(record, SmsOrigin.MANUAL)
+            val match = RuleEngine.destinationsFor(
+                IncomingSms(record.sender, record.body, SimSlots.slotOf(context, record.subId)),
+                ruleRepository.activeRules(),
+            )
+            if (match.destinationIds.isEmpty()) continue
+            val result = smsRepository.ingest(record, SmsOrigin.MANUAL, match.destinationIds)
             if (result is IngestResult.Inserted) {
                 enqueue(result.id)
                 inserted++
@@ -130,12 +141,13 @@ class RecoveryViewModel(
     class Factory(
         private val reader: InboxReader,
         private val smsRepository: SmsRepository,
-        private val settings: SettingsRepository,
+        private val ruleRepository: RuleRepository,
+        private val context: Context,
         private val clock: Clock,
         private val enqueue: (Long) -> Unit,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            RecoveryViewModel(reader, smsRepository, settings, clock, enqueue) as T
+            RecoveryViewModel(reader, smsRepository, ruleRepository, context, clock, enqueue) as T
     }
 }

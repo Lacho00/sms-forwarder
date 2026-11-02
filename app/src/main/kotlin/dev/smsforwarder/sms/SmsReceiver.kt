@@ -4,9 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import android.util.Log
 import android.telephony.SubscriptionManager
 import dev.smsforwarder.SmsForwarderApp
-import dev.smsforwarder.core.SenderFilter
+import dev.smsforwarder.core.IncomingSms
+import dev.smsforwarder.core.RuleEngine
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.core.joinParts
@@ -17,6 +19,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+private const val TAG = "SmsReceiver"
 
 class SmsReceiver : BroadcastReceiver() {
 
@@ -48,16 +52,24 @@ class SmsReceiver : BroadcastReceiver() {
         if (!graph.settings.onboardingDone.first()) return
 
         val sender = messages.first().displayOriginatingAddress.orEmpty()
-        if (!SenderFilter.matches(sender, graph.settings.senders.first())) return
+        val body = joinParts(messages.map { it.messageBody.orEmpty() })
+        val subId = intent.getIntExtra(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX, -1).takeIf { it >= 0 }
+
+        val match = RuleEngine.destinationsFor(
+            IncomingSms(sender, body, SimSlots.slotOf(context, subId)),
+            graph.ruleRepository.activeRules(),
+        )
+        match.timedOutRuleIds.forEach { Log.w(TAG, "rule $it timed out") }
+        if (match.destinationIds.isEmpty()) return
 
         val record = SmsRecord(
             sender = sender,
-            body = joinParts(messages.map { it.messageBody.orEmpty() }),
+            body = body,
             receivedAt = messages.first().timestampMillis,
             phoneDate = graph.clock.now(),
-            subId = intent.getIntExtra(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX, -1).takeIf { it >= 0 },
+            subId = subId,
         )
-        val result = graph.smsRepository.ingest(record, SmsOrigin.RECEIVER)
+        val result = graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, match.destinationIds)
         if (result is IngestResult.Inserted) enqueue(context.applicationContext, result.id)
     }
 }

@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
         val repository = g.smsRepository
         val clock = g.clock
         val ingestClient = g.ingestClient
-        val secretStore = g.secretStore
+        val destinations = g.destinationRepository
         // The saved period is read off the main thread; if it cannot be read, keep the default so the job survives.
         lifecycleScope.launch {
             val interval = try {
@@ -75,7 +75,8 @@ class MainActivity : ComponentActivity() {
             RecoveryViewModel.Factory(
                 ContentInboxReader(app),
                 repository,
-                settings,
+                g.ruleRepository,
+                app,
                 clock,
             ) { id -> WorkScheduler.enqueueSend(app, id, replace = true) },
         )[RecoveryViewModel::class.java]
@@ -84,7 +85,7 @@ class MainActivity : ComponentActivity() {
             SettingsViewModel.Factory(
                 settings,
                 testConnection = { ingestClient.testConnection(it) },
-                loadSaved = { secretStore.get() },
+                loadSaved = { destinations.primaryCredentials() },
                 onSweepIntervalChanged = { interval ->
                     WorkScheduler.schedulePeriodicSweep(app, interval, update = true)
                 },

@@ -71,7 +71,7 @@ object MiuiIntents {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         HealthIssue.BATTERY_OPTIMIZED, HealthIssue.BACKGROUND_RESTRICTED -> battery(context)
         HealthIssue.AUTOSTART_OFF, HealthIssue.AUTOSTART_UNKNOWN -> autostart(context)
-        HealthIssue.TOKEN_REJECTED, HealthIssue.NOT_CONFIGURED, HealthIssue.NO_SENDERS,
+        HealthIssue.TOKEN_REJECTED, HealthIssue.NOT_CONFIGURED, HealthIssue.NO_RULES,
         HealthIssue.MIGRATION_FAILED ->
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }

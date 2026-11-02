@@ -29,6 +29,8 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             reader = ContentInboxReader(applicationContext),
             smsRepository = repo,
             settings = graph.settings,
+            ruleRepository = graph.ruleRepository,
+            context = applicationContext,
             clock = graph.clock,
             enqueue = { id -> WorkScheduler.enqueueSend(applicationContext, id) },
             onRecovered = graph.onRecovered,

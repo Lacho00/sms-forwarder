@@ -50,6 +50,7 @@ class SmsReceiverTest {
         WorkManagerTestInitHelper.initializeTestWorkManager(context, Configuration.Builder().build())
         graph = (context as SmsForwarderApp).graph
         graph.secretStore = NoSecrets()
+        graph.destinationSecretStore = dev.smsforwarder.data.FakeDestinationSecretStore()
     }
 
     @After fun tearDown() {
@@ -93,10 +94,7 @@ class SmsReceiverTest {
         val server = MockWebServer()
         server.start()
         try {
-            graph.secretStore = object : SecretStore {
-                override suspend fun get() = Credentials(server.url("/ingest").toString(), "test-token")
-                override suspend fun set(c: Credentials) = Unit
-            }
+            graph.destinationRepository.savePrimaryCredentials(Credentials(server.url("/ingest").toString(), "test-token"))
             graph.settings.setOnboardingDone()
             graph.settings.addSender("OPERADOR")
             graph.settings.setForwardingEnabled(false)

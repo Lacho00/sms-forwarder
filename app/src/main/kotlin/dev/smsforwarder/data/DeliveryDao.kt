@@ -40,4 +40,12 @@ interface DeliveryDao {
             "AND s.deletedAt IS NULL ORDER BY s.receivedAt ASC",
     )
     suspend fun idsAuthRejected(destinationId: Long): List<Long>
+
+    /** SMS ids with an ERROR delivery to any destination that the endpoint rejected with 401 or 403. */
+    @Query(
+        "SELECT DISTINCT d.smsId FROM delivery d JOIN sms s ON s.id = d.smsId " +
+            "WHERE d.status = 'ERROR' AND d.lastHttpCode IN (401, 403) " +
+            "AND s.deletedAt IS NULL ORDER BY s.receivedAt ASC",
+    )
+    suspend fun idsAnyAuthRejected(): List<Long>
 }

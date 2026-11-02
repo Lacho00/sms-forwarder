@@ -10,6 +10,7 @@ import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.SecretStore
+import dev.smsforwarder.data.TestRepos
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
@@ -66,8 +67,10 @@ class SweeperTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
         sms = SmsRepository(db, clock)
         val file = File(context.cacheDir, "sweep-${UUID.randomUUID()}.preferences_pb")
-        settings = SettingsRepository(context, NoSecretStore(), sms, scheduler = {}, storeFile = file)
-        sweeper = Sweeper(reader, sms, settings, clock, { enqueued += it }, { recovered += it })
+        val repos = TestRepos(db)
+        settings = SettingsRepository(context, repos.destinations, repos.rules, sms, scheduler = {}, storeFile = file)
+        runBlocking { repos.destinations.ensurePrimary() }
+        sweeper = Sweeper(reader, sms, settings, repos.rules, context, clock, { enqueued += it }, { recovered += it })
     }
 
     @After fun tearDown() {
@@ -83,6 +86,22 @@ class SweeperTest {
 
     private fun row(date: Long, dateSent: Long = 0L, address: String = "OPERADOR") =
         InboxRow(address, body, date, dateSent, null)
+
+    @Test fun unmatchedSenderNotStored() = runBlocking {
+        configure()
+        reader.rows = listOf(row(now - 1_000, address = "OTRO"))
+        sweeper.sweep()
+        assertTrue(sms.observeAll().first().isEmpty())
+        assertTrue(enqueued.isEmpty())
+    }
+
+    @Test fun matchedGoesToRuleDestinations() = runBlocking {
+        configure()
+        reader.rows = listOf(row(now - 1_000))
+        sweeper.sweep()
+        val id = enqueued.single()
+        assertEquals(listOf(1L), db.deliveryDao().forSms(id).map { it.destinationId })
+    }
 
     @Test fun sweepBeforeOnboardingDoesNothing() = runBlocking {
         settings.addSender("OPERADOR")
@@ -120,7 +139,7 @@ class SweeperTest {
     @Test fun sweepSkipsSmsAlreadyFromReceiverAndDoesNotNotify() = runBlocking {
         configure()
         val t = now - 10_000
-        sms.ingest(SmsRecord("OPERADOR", body, t, null, null), SmsOrigin.RECEIVER)
+        sms.ingest(SmsRecord("OPERADOR", body, t, null, null), SmsOrigin.RECEIVER, setOf(1L))
         reader.rows = listOf(row(date = t + 1_500))
         val result = sweeper.sweep()
         assertEquals(0, result.recovered)
@@ -190,7 +209,7 @@ class SweeperTest {
     @Test fun deletedSmsIsNotReinsertedOrEnqueuedBySweep() = runBlocking {
         configure()
         val t = now - 10_000
-        val id = (sms.ingest(SmsRecord("OPERADOR", body, t, null, null), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val id = (sms.ingest(SmsRecord("OPERADOR", body, t, null, null), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         val key = sms.get(id)!!.localKey
         sms.softDelete(id)
         // Exact same row, and the same SMS with a timestamp 1.5 s apart (fallback window).

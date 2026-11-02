@@ -55,7 +55,7 @@ class SweepWorkerTest {
     // Review Focus 1: after a sweep, a deleted queued SMS has no send job and nothing reaches the server.
     @Test fun sweepAfterDeletingQueuedSmsMakesNoRequestAndSchedulesNoSend() = runBlocking {
         val record = SmsRecord("OPERADOR", "Code 1234", 1_800_000_000_000L, null, null)
-        val id = (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val id = (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         graph.smsRepository.softDelete(id)
 
         val result = TestListenableWorkerBuilder<SweepWorker>(context).build().doWork()
@@ -93,7 +93,7 @@ class SweepWorkerTest {
 
     // The app's own import may already have marked the shared settings done; use an unmarked store.
     private fun freshSettings() = dev.smsforwarder.data.SettingsRepository(
-        context, graph.secretStore, graph.smsRepository, { },
+        context, graph.destinationRepository, graph.ruleRepository, graph.smsRepository, { },
         java.io.File(context.cacheDir, "settings-${java.util.UUID.randomUUID()}.preferences_pb"),
     )
 }

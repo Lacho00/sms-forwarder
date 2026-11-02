@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RuleDao {
@@ -31,4 +32,16 @@ interface RuleDao {
             "AND id IN (SELECT ruleId FROM rule_destination WHERE destinationId = :destinationId)",
     )
     suspend fun deleteExactForDestination(pattern: String, destinationId: Long): Int
+
+    /** Sender-only exact patterns of the primary destination (lowest id not deleted), oldest rule first. */
+    @Query(PRIMARY_EXACT_SENDERS)
+    fun observePrimaryExactSenders(): Flow<List<String>>
+
+    @Query(PRIMARY_EXACT_SENDERS)
+    suspend fun primaryExactSenders(): List<String>
 }
+
+private const val PRIMARY_EXACT_SENDERS =
+    "SELECT senderPattern FROM rule WHERE senderMode = 'EXACT' AND bodyMode IS NULL AND id IN " +
+        "(SELECT ruleId FROM rule_destination WHERE destinationId = " +
+        "(SELECT id FROM destination WHERE deletedAt IS NULL ORDER BY id ASC LIMIT 1)) ORDER BY id ASC"
