@@ -188,4 +188,17 @@
     <string name="detail_delete_message">Desaparece de la app y, si seguía en cola, no se envía. No cambia nada en el servidor.</string>
     <string name="detail_delete_confirm">Borrar</string>
     <string name="detail_delete_cancel">Cancelar</string>
+    <string name="about_version">Versión %1$s</string>
+    <string name="about_source_code">Código fuente</string>
+    <string name="about_license">Licencia</string>
+    <string name="about_license_value">MIT</string>
+    <string name="about_libraries_title">Bibliotecas</string>
+    <string-array name="about_libraries">
+        <item>AndroidX (Apache-2.0)</item>
+        <item>Jetpack Compose (Apache-2.0)</item>
+        <item>Room (Apache-2.0)</item>
+        <item>WorkManager (Apache-2.0)</item>
+        <item>OkHttp (Apache-2.0)</item>
+        <item>kotlinx.serialization (Apache-2.0)</item>
+    </string-array>
 </resources>

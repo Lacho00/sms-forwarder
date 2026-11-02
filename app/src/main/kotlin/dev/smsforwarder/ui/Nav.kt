@@ -1,5 +1,8 @@
 package dev.smsforwarder.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -18,11 +21,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 import dev.smsforwarder.health.HealthIssue
+import dev.smsforwarder.ui.about.AboutScreen
 import dev.smsforwarder.ui.detail.DetailScreen
 import dev.smsforwarder.ui.detail.DetailViewModel
 import dev.smsforwarder.ui.main.MainScreen
@@ -187,8 +192,22 @@ fun AppNavHost(
                 )
             }
         }
-        // Placeholder until the real About screen arrives.
-        current == Routes.ABOUT -> Text(stringResource(R.string.about_title), modifier = Modifier.padding(16.dp))
+        current == Routes.ABOUT -> {
+            val context = LocalContext.current
+            val versionName = remember {
+                runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+            }
+            AboutScreen(
+                versionName = versionName,
+                onOpenLink = { url ->
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (_: ActivityNotFoundException) {
+                    }
+                },
+                onBack = back,
+            )
+        }
         current == Routes.RECOVERY -> {
             val items by recoveryViewModel.candidates.collectAsState()
             val unreadable by recoveryViewModel.unreadable.collectAsState()

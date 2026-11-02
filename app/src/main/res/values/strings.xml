@@ -188,4 +188,17 @@
     <string name="detail_delete_message">It disappears from the app and is not sent if it was still queued. Nothing changes on the server.</string>
     <string name="detail_delete_confirm">Delete</string>
     <string name="detail_delete_cancel">Cancel</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_source_code">Source code</string>
+    <string name="about_license">License</string>
+    <string name="about_license_value">MIT</string>
+    <string name="about_libraries_title">Libraries</string>
+    <string-array name="about_libraries">
+        <item>AndroidX (Apache-2.0)</item>
+        <item>Jetpack Compose (Apache-2.0)</item>
+        <item>Room (Apache-2.0)</item>
+        <item>WorkManager (Apache-2.0)</item>
+        <item>OkHttp (Apache-2.0)</item>
+        <item>kotlinx.serialization (Apache-2.0)</item>
+    </string-array>
 </resources>
