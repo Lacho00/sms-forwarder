@@ -14,12 +14,8 @@ sealed interface SendOutcome {
 enum class ConnectionTestResult { OK, BAD_TOKEN, UNREACHABLE }
 
 /** `httpCode == null` means a network error. A 2xx is accepted without reading the body. */
-fun classify(httpCode: Int?, responseBody: String?): SendOutcome = when {
-    httpCode == null -> SendOutcome.Retry(null, "network")
-    httpCode in 200..299 -> SendOutcome.Accepted
-    httpCode == 400 || httpCode == 401 -> SendOutcome.Rejected(httpCode, errorCodeOf(responseBody))
-    else -> SendOutcome.Retry(httpCode, "http_$httpCode")
-}
+fun classify(httpCode: Int?, responseBody: String?): SendOutcome =
+    classifyDelivery(httpCode, responseBody, SuccessPolicy.ANY_2XX)
 
 /** The test request is sent with an empty body: 400 proves url and token are good, 401 the token is not. */
 fun interpretConnectionTest(httpCode: Int?): ConnectionTestResult = when (httpCode) {
@@ -28,7 +24,7 @@ fun interpretConnectionTest(httpCode: Int?): ConnectionTestResult = when (httpCo
     else -> ConnectionTestResult.UNREACHABLE
 }
 
-private fun errorCodeOf(body: String?): String? {
+internal fun errorCodeOf(body: String?): String? {
     if (body.isNullOrBlank()) return null
     return runCatching {
         (Json.parseToJsonElement(body) as? JsonObject)?.get("error")?.jsonPrimitive?.contentOrNull
