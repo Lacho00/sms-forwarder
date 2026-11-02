@@ -28,6 +28,8 @@ data class SmsEntity(
     val firstSeenAt: Long,
     val sentAt: Long? = null,
     val stuckNotified: Boolean = false,
+    /** Set when the user deletes the row from the app; the row stays so the sweep still recognises the SMS. */
+    val deletedAt: Long? = null,
 ) {
     fun toRecord(): SmsRecord = SmsRecord(sender, body, receivedAt, phoneDate, subId)
 }

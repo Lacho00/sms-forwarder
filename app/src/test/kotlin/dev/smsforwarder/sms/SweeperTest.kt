@@ -1,5 +1,7 @@
 package dev.smsforwarder.sms
 
+import org.junit.Assert.assertNotNull
+import dev.smsforwarder.data.IngestResult
 import androidx.room.Room
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.QueuePolicy
@@ -181,5 +183,27 @@ class SweeperTest {
         reader.anyRow = true
         assertFalse(sweeper.sweep().inboxUnreadable)
         assertTrue(settings.senders.first().isNotEmpty())
+    }
+
+
+    // Review Focus 1: a deleted SMS that is still in the phone inbox must never be forwarded again.
+    @Test fun deletedSmsIsNotReinsertedOrEnqueuedBySweep() = runBlocking {
+        configure()
+        val t = now - 10_000
+        val id = (sms.ingest(SmsRecord("OPERADOR", body, t, null, null), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val key = sms.get(id)!!.localKey
+        sms.softDelete(id)
+        // Exact same row, and the same SMS with a timestamp 1.5 s apart (fallback window).
+        reader.rows = listOf(row(date = t), row(date = t + 1_500))
+
+        val result = sweeper.sweep()
+
+        assertEquals(0, result.recovered)
+        assertTrue(enqueued.isEmpty())
+        assertTrue(recovered.isEmpty())
+        assertTrue(sms.queuedIds().isEmpty())
+        assertEquals(1, db.query("SELECT COUNT(*) FROM sms", null).use { it.moveToFirst(); it.getInt(0) })
+        assertEquals(key, sms.get(id)!!.localKey)
+        assertNotNull(sms.get(id)!!.deletedAt)
     }
 }

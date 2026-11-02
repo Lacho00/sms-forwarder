@@ -5,6 +5,7 @@ import androidx.room.Room
 import dev.smsforwarder.core.SystemClock
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.KeystoreSecretStore
+import dev.smsforwarder.data.MIGRATION_1_2
 import dev.smsforwarder.data.SecretStore
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsEntity
@@ -18,7 +19,9 @@ import dev.smsforwarder.work.WorkScheduler
 
 class AppGraph(context: Context) {
     val db: AppDatabase =
-        Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "sms-forwarder.db").build()
+        Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "sms-forwarder.db")
+            .addMigrations(MIGRATION_1_2)
+            .build()
     val clock = SystemClock
     val smsRepository = SmsRepository(db, clock)
 

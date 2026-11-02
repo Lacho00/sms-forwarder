@@ -100,11 +100,14 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
     suspend fun requeue(id: Long) {
         db.withTransaction {
             val sms = dao.get(id) ?: return@withTransaction
-            if (sms.status == SmsStatus.SENT) return@withTransaction
+            if (sms.status == SmsStatus.SENT || sms.deletedAt != null) return@withTransaction
             // The stuck clock restarts: firstSeenAt only feeds the stuck check.
             dao.update(sms.copy(status = SmsStatus.QUEUED, stuckNotified = false, firstSeenAt = clock.now()))
         }
     }
+
+    /** Hides the row from the app. It is kept so ingest still finds it and the sweep does not re-forward the SMS. */
+    suspend fun softDelete(id: Long) = dao.softDelete(id, clock.now())
 
     suspend fun queuedIds(): List<Long> = dao.idsWithStatus(SmsStatus.QUEUED)
 

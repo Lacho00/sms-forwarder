@@ -158,4 +158,76 @@ class SmsRepositoryTest {
         assertEquals(SmsStatus.SENT, repo.get(id)!!.status)
         assertTrue(repo.queuedIds().isEmpty())
     }
+
+
+    @Test fun softDeleteHidesRowFromEveryListButKeepsItForDedup() = runBlocking {
+        val t = now - 10_000L
+        val queued = (repo.ingest(record(t, "queued $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        val rejected = (repo.ingest(record(t - 5_000, "rejected $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        repo.recordAttempt(rejected, SendOutcome.Rejected(401, null))
+        now += QueuePolicy.STUCK_AFTER_MS + 1L
+        assertEquals(listOf(queued), repo.queuedIds())
+        assertEquals(listOf(rejected), repo.idsWithError401())
+        // The 401 row is covered by the token notification, so only the queued one is stuck.
+        assertEquals(listOf(queued), repo.stuckToNotify().map { it.id })
+
+        repo.softDelete(queued)
+        repo.softDelete(rejected)
+
+        assertTrue(repo.queuedIds().isEmpty())
+        assertTrue(repo.idsWithError401().isEmpty())
+        assertTrue(repo.stuckToNotify().isEmpty())
+        assertTrue(repo.observeAll().first().isEmpty())
+        assertEquals(null, repo.observe(queued).first())
+        // The row is still there, with its key, so ingest recognises the SMS.
+        assertEquals(now, repo.get(queued)!!.deletedAt)
+        assertEquals(
+            IngestResult.AlreadyKnown(queued),
+            repo.ingest(record(t, "queued $body"), SmsOrigin.SWEEP),
+        )
+        // Same SMS seen through the 2 s fallback window (different timestamp, so another localKey).
+        assertEquals(
+            IngestResult.AlreadyKnown(queued),
+            repo.ingest(record(t + 1_500, "queued $body"), SmsOrigin.SWEEP),
+        )
+        assertTrue(repo.isKnown(record(t, "queued $body")))
+    }
+
+    @Test fun deletedStuckRowIsNotNotified() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        now += 2 * 3_600_000L
+        assertEquals(listOf(id), repo.stuckToNotify(3_600_000L).map { it.id })
+        repo.softDelete(id)
+        assertTrue(repo.stuckToNotify(3_600_000L).isEmpty())
+    }
+
+    @Test fun requeueIgnoresDeletedRow() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        repo.recordAttempt(id, SendOutcome.Rejected(400, null))
+        repo.softDelete(id)
+        repo.requeue(id)
+        assertEquals(SmsStatus.ERROR, repo.get(id)!!.status)
+        assertTrue(repo.queuedIds().isEmpty())
+    }
+
+    @Test fun purgeOldRemovesDeletedRowsOlderThanCutoffWhateverTheirStatus() = runBlocking {
+        val (queued, error, _) = oldRows()
+        val recentQueued = (repo.ingest(record(now - 1_000, "recent $body"), SmsOrigin.RECEIVER) as IngestResult.Inserted).id
+        repo.softDelete(queued)
+        repo.softDelete(error)
+        repo.softDelete(recentQueued)
+
+        repo.purgeOld(Retention.D30)
+
+        assertEquals(null, repo.get(queued))
+        assertEquals(null, repo.get(error))
+        assertNotNull(repo.get(recentQueued))
+    }
+
+    @Test fun purgeOldForeverKeepsDeletedRows() = runBlocking {
+        val (queued, _, _) = oldRows()
+        repo.softDelete(queued)
+        repo.purgeOld(Retention.FOREVER)
+        assertNotNull(repo.get(queued))
+    }
 }

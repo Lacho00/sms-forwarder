@@ -30,27 +30,31 @@ interface SmsDao {
     )
     suspend fun candidates(senderNormalized: String, from: Long, to: Long): List<SmsEntity>
 
-    @Query("SELECT * FROM sms ORDER BY receivedAt DESC, id DESC")
+    @Query("SELECT * FROM sms WHERE deletedAt IS NULL ORDER BY receivedAt DESC, id DESC")
     fun observeAll(): Flow<List<SmsEntity>>
 
-    @Query("SELECT * FROM sms WHERE id = :id")
+    @Query("SELECT * FROM sms WHERE id = :id AND deletedAt IS NULL")
     fun observe(id: Long): Flow<SmsEntity?>
 
     @Query("SELECT * FROM attempt WHERE smsId = :smsId ORDER BY at DESC, id DESC")
     fun observeAttempts(smsId: Long): Flow<List<AttemptEntity>>
 
-    @Query("SELECT id FROM sms WHERE status = :status ORDER BY receivedAt ASC")
+    @Query("SELECT id FROM sms WHERE status = :status AND deletedAt IS NULL ORDER BY receivedAt ASC")
     suspend fun idsWithStatus(status: SmsStatus): List<Long>
 
-    @Query("SELECT id FROM sms WHERE status = :status AND lastHttpCode = :code ORDER BY receivedAt ASC")
+    @Query("SELECT id FROM sms WHERE status = :status AND lastHttpCode = :code AND deletedAt IS NULL ORDER BY receivedAt ASC")
     suspend fun idsWithStatusAndCode(status: SmsStatus, code: Int): List<Long>
 
-    @Query("SELECT * FROM sms WHERE status != :sent AND stuckNotified = 0")
+    @Query("SELECT * FROM sms WHERE status != :sent AND stuckNotified = 0 AND deletedAt IS NULL")
     suspend fun unsentNotNotified(sent: SmsStatus = SmsStatus.SENT): List<SmsEntity>
 
     @Query("UPDATE sms SET stuckNotified = 1 WHERE id = :id")
     suspend fun markStuckNotified(id: Long)
 
-    @Query("DELETE FROM sms WHERE status = :status AND receivedAt < :cutoff")
+    @Query("UPDATE sms SET deletedAt = :at WHERE id = :id AND deletedAt IS NULL")
+    suspend fun softDelete(id: Long, at: Long)
+
+    // Rows the user deleted go at the cutoff whatever their status; the rest only when already sent.
+    @Query("DELETE FROM sms WHERE receivedAt < :cutoff AND (status = :status OR deletedAt IS NOT NULL)")
     suspend fun deleteOlderThan(status: SmsStatus, cutoff: Long): Int
 }

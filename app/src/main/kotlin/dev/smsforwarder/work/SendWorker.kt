@@ -18,7 +18,7 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val graph = (applicationContext as SmsForwarderApp).graph
         val repo = graph.smsRepository
         val sms = repo.get(id) ?: return Result.success()
-        if (sms.status == SmsStatus.SENT) return Result.success()
+        if (sms.status == SmsStatus.SENT || sms.deletedAt != null) return Result.success()
 
         // Transient failures (Keystore provider, DataStore read) keep the SMS queued and back off.
         val outcome = try {

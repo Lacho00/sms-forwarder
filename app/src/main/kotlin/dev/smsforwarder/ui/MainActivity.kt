@@ -116,9 +116,13 @@ class MainActivity : ComponentActivity() {
     private fun detailViewModel(id: Long): DetailViewModel =
         ViewModelProvider(
             this,
-            DetailViewModel.Factory(id, graph.smsRepository) { smsId ->
-                WorkScheduler.enqueueSend(applicationContext, smsId, replace = true)
-            },
+            DetailViewModel.Factory(
+                id,
+                graph.smsRepository,
+                enqueueSend = { smsId -> WorkScheduler.enqueueSend(applicationContext, smsId, replace = true) },
+                hideText = graph.settings.hideText,
+                cancelSend = { smsId -> WorkScheduler.cancelSend(applicationContext, smsId) },
+            ),
         ).get("detail-$id", DetailViewModel::class.java)
 
     private fun openSystemIssue(issue: HealthIssue) {

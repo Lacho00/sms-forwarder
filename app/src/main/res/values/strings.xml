@@ -175,4 +175,17 @@
     <string name="language_es">Spanish</string>
     <string name="language_en">English</string>
     <string name="settings_permissions_button">Permissions and system screens</string>
+    <string name="main_search_open">Search</string>
+    <string name="main_search_close">Close search</string>
+    <string name="main_search_hint">Search by text or sender</string>
+    <string name="main_filter_all">All</string>
+    <string name="main_filter_queued">Queued</string>
+    <string name="main_filter_error">Error</string>
+    <string name="main_no_results">No SMS match</string>
+    <string name="detail_show_text">Show</string>
+    <string name="detail_delete">Delete</string>
+    <string name="detail_delete_title">Delete this SMS?</string>
+    <string name="detail_delete_message">It disappears from the app and is not sent if it was still queued. Nothing changes on the server.</string>
+    <string name="detail_delete_confirm">Delete</string>
+    <string name="detail_delete_cancel">Cancel</string>
 </resources>

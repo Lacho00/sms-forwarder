@@ -175,4 +175,17 @@
     <string name="language_es">Español</string>
     <string name="language_en">Inglés</string>
     <string name="settings_permissions_button">Permisos y pantallas del sistema</string>
+    <string name="main_search_open">Buscar</string>
+    <string name="main_search_close">Cerrar búsqueda</string>
+    <string name="main_search_hint">Buscar por texto o remitente</string>
+    <string name="main_filter_all">Todos</string>
+    <string name="main_filter_queued">En cola</string>
+    <string name="main_filter_error">Error</string>
+    <string name="main_no_results">Ningún SMS coincide</string>
+    <string name="detail_show_text">Mostrar</string>
+    <string name="detail_delete">Borrar</string>
+    <string name="detail_delete_title">¿Borrar este SMS?</string>
+    <string name="detail_delete_message">Desaparece de la app y, si seguía en cola, no se envía. No cambia nada en el servidor.</string>
+    <string name="detail_delete_confirm">Borrar</string>
+    <string name="detail_delete_cancel">Cancelar</string>
 </resources>

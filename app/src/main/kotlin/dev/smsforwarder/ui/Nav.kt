@@ -2,6 +2,11 @@ package dev.smsforwarder.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,6 +83,8 @@ fun AppNavHost(
     onSweepNow: () -> Unit,
 ) {
     var stack by rememberSaveable { mutableStateOf(startRoute) }
+    // Kept here, not in the Home branch, so opening an SMS and coming back keeps the search field next to its query.
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     val routes = stack.split(STACK_SEPARATOR)
     val current = routes.last()
 
@@ -98,6 +105,20 @@ fun AppNavHost(
                 title = stringResource(R.string.app_name),
                 onTab = onTab,
                 onAbout = { navigate(Routes.ABOUT) },
+                actions = {
+                    IconButton(onClick = {
+                        // Closing the field also clears the query, so a hidden search never filters the list.
+                        if (searchOpen) mainViewModel.setQuery("")
+                        searchOpen = !searchOpen
+                    }) {
+                        Icon(
+                            if (searchOpen) Icons.Filled.Close else Icons.Filled.Search,
+                            contentDescription = stringResource(
+                                if (searchOpen) R.string.main_search_close else R.string.main_search_open,
+                            ),
+                        )
+                    }
+                },
             ) { padding ->
                 MainScreen(
                     state = state,
@@ -107,13 +128,24 @@ fun AppNavHost(
                     onSweepNow = onSweepNow,
                     onOpen = { id -> navigate(Routes.detail(id)) },
                     padding = padding,
+                    searchOpen = searchOpen,
+                    onQueryChange = mainViewModel::setQuery,
+                    onFilterChange = mainViewModel::setFilter,
                 )
             }
         }
         detailId != null -> {
             val vm = remember(detailId) { detailViewModel(detailId) }
             val state by vm.state.collectAsState()
-            DetailScreen(state = state, onRetry = { vm.retry() }, onBack = back)
+            DetailScreen(
+                state = state,
+                onRetry = { vm.retry() },
+                onDelete = {
+                    vm.delete()
+                    back()
+                },
+                onBack = back,
+            )
         }
         current == Routes.SETTINGS -> {
             val form by settingsViewModel.form.collectAsState()

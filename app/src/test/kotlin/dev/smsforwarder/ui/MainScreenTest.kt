@@ -3,6 +3,9 @@ package dev.smsforwarder.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import dev.smsforwarder.core.StatusFilter
+import org.junit.Assert.assertEquals
 import dev.smsforwarder.R
 import dev.smsforwarder.core.StatusKind
 import dev.smsforwarder.core.StatusLabel
@@ -71,5 +74,49 @@ class MainScreenTest {
         )
         show(state(rows = listOf(row)))
         compose.onNodeWithText(str(R.string.status_recovered_code, 200)).assertIsDisplayed()
+    }
+
+    private val previewRow = RowUi(
+        id = 1,
+        sender = "SENDER",
+        subId = null,
+        receivedAt = 1_800_000_000_000L,
+        preview = "Code 1234",
+        label = StatusLabel(StatusKind.SENT, 1, 200),
+    )
+
+    @Test fun rowShowsPreviewWhenTextIsVisible() {
+        show(state(rows = listOf(previewRow)))
+        compose.onNodeWithText("Code 1234").assertIsDisplayed()
+    }
+
+    @Test fun hideTextKeepsSenderAndHidesBody() {
+        show(state(rows = listOf(previewRow)).copy(hideText = true))
+        compose.onNodeWithText("SENDER").assertIsDisplayed()
+        compose.onNodeWithText("Code 1234").assertDoesNotExist()
+    }
+
+    @Test fun filterChipsAreShownAndReportTheChoice() {
+        var picked: StatusFilter? = null
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                MainScreen(
+                    state = state(),
+                    onOpenIssue = {},
+                    onSweepNow = {},
+                    onOpen = {},
+                    onFilterChange = { picked = it },
+                )
+            }
+        }
+        compose.onNodeWithText(str(R.string.main_filter_all)).assertIsDisplayed()
+        compose.onNodeWithText(str(R.string.main_filter_queued)).assertIsDisplayed()
+        compose.onNodeWithText(str(R.string.main_filter_error)).performClick()
+        compose.runOnIdle { assertEquals(StatusFilter.ERROR, picked) }
+    }
+
+    @Test fun emptyResultOfASearchSaysNoMatch() {
+        show(state().copy(query = "zzz"))
+        compose.onNodeWithText(str(R.string.main_no_results)).assertIsDisplayed()
     }
 }

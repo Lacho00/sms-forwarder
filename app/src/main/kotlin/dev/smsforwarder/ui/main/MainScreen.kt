@@ -4,20 +4,28 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
+import dev.smsforwarder.core.StatusFilter
 import dev.smsforwarder.health.HealthIssue
 import java.text.DateFormat
 import java.util.Date
@@ -61,6 +69,9 @@ fun MainScreen(
     onSweepNow: () -> Unit,
     onOpen: (Long) -> Unit,
     padding: PaddingValues = PaddingValues(),
+    searchOpen: Boolean = false,
+    onQueryChange: (String) -> Unit = {},
+    onFilterChange: (StatusFilter) -> Unit = {},
 ) {
     run {
         LazyColumn(
@@ -101,11 +112,31 @@ fun MainScreen(
                     Button(onClick = onSweepNow) { Text(stringResource(R.string.main_sweep_now)) }
                 }
             }
+            if (searchOpen) {
+                item(key = "search") { SearchField(state.query, onQueryChange) }
+            }
+            item(key = "filters") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatusFilter.entries.forEach { option ->
+                        FilterChip(
+                            selected = state.filter == option,
+                            onClick = { onFilterChange(option) },
+                            label = { Text(filterLabel(option)) },
+                        )
+                    }
+                }
+            }
             if (state.rows.isEmpty()) {
-                item(key = "empty") { Text(stringResource(R.string.main_empty), style = MaterialTheme.typography.bodyMedium) }
+                val filtering = state.query.isNotBlank() || state.filter != StatusFilter.ALL
+                item(key = "empty") {
+                    Text(
+                        stringResource(if (filtering) R.string.main_no_results else R.string.main_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
             items(state.rows, key = { it.id }) { row ->
-                SmsRow(row, onClick = { onOpen(row.id) })
+                SmsRow(row, hideText = state.hideText, onClick = { onOpen(row.id) })
                 HorizontalDivider()
             }
         }
@@ -113,7 +144,7 @@ fun MainScreen(
 }
 
 @Composable
-private fun SmsRow(row: RowUi, onClick: () -> Unit) {
+private fun SmsRow(row: RowUi, hideText: Boolean, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -123,7 +154,29 @@ private fun SmsRow(row: RowUi, onClick: () -> Unit) {
         val senderLine = row.subId?.let { stringResource(R.string.row_sender_sim, row.sender, it) } ?: row.sender
         Text(senderLine, style = MaterialTheme.typography.titleSmall)
         Text(formatDateTime(row.receivedAt), style = MaterialTheme.typography.bodySmall)
-        Text(row.preview, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+        if (!hideText) Text(row.preview, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
         Text(statusText(row.label), style = MaterialTheme.typography.labelMedium)
     }
+}
+
+@Composable
+private fun filterLabel(filter: StatusFilter): String = stringResource(
+    when (filter) {
+        StatusFilter.ALL -> R.string.main_filter_all
+        StatusFilter.QUEUED -> R.string.main_filter_queued
+        StatusFilter.ERROR -> R.string.main_filter_error
+    },
+)
+
+@Composable
+private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    TextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+        singleLine = true,
+        placeholder = { Text(stringResource(R.string.main_search_hint)) },
+    )
 }

@@ -8,9 +8,11 @@ import dev.smsforwarder.core.statusLabelOf
 import dev.smsforwarder.data.AttemptEntity
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -19,6 +21,7 @@ data class DetailUiState(
     val sms: SmsEntity?,
     val attempts: List<AttemptEntity>,
     val loaded: Boolean = true,
+    val hideText: Boolean = false,
 ) {
     val label: StatusLabel?
         get() = sms?.let { statusLabelOf(it.status, it.origin, it.attempts, it.lastHttpCode) }
@@ -28,12 +31,15 @@ class DetailViewModel(
     private val smsId: Long,
     private val smsRepository: SmsRepository,
     private val enqueueSend: (Long) -> Unit,
+    hideText: Flow<Boolean> = flowOf(false),
+    private val cancelSend: (Long) -> Unit = {},
 ) : ViewModel() {
 
     val state: StateFlow<DetailUiState> = combine(
         smsRepository.observe(smsId),
         smsRepository.observeAttempts(smsId),
-    ) { sms, attempts -> DetailUiState(sms, attempts) }
+        hideText,
+    ) { sms, attempts, hide -> DetailUiState(sms, attempts, hideText = hide) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -48,13 +54,23 @@ class DetailViewModel(
         }
     }
 
+    /** Hides the SMS from the app and stops its send; the row stays so the sweep does not bring it back. */
+    fun delete() {
+        viewModelScope.launch {
+            smsRepository.softDelete(smsId)
+            cancelSend(smsId)
+        }
+    }
+
     class Factory(
         private val smsId: Long,
         private val smsRepository: SmsRepository,
         private val enqueueSend: (Long) -> Unit,
+        private val hideText: Flow<Boolean> = flowOf(false),
+        private val cancelSend: (Long) -> Unit = {},
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            DetailViewModel(smsId, smsRepository, enqueueSend) as T
+            DetailViewModel(smsId, smsRepository, enqueueSend, hideText, cancelSend) as T
     }
 }

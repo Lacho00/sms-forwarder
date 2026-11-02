@@ -134,4 +134,15 @@ class SendWorkerTest {
         assertEquals(0, sms.attempts)
         assertEquals(0, server.requestCount)
     }
+
+
+    @Test fun deletedQueuedSmsReturnsSuccessWithoutRequest() = runBlocking {
+        val id = insertSms()
+        graph.smsRepository.softDelete(id)
+        assertEquals(ListenableWorker.Result.success(), run(id))
+        assertEquals(0, server.requestCount)
+        val sms = graph.smsRepository.get(id)!!
+        assertEquals(SmsStatus.QUEUED, sms.status)
+        assertEquals(0, sms.attempts)
+    }
 }

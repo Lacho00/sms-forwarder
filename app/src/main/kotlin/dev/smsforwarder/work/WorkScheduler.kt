@@ -32,6 +32,11 @@ object WorkScheduler {
         )
     }
 
+    /** Cancels the unique send job of a deleted SMS; SendWorker also ignores deleted rows if it still runs. */
+    fun cancelSend(context: Context, smsId: Long) {
+        WorkManager.getInstance(context).cancelUniqueWork("send-$smsId")
+    }
+
     fun kickQueued(context: Context, ids: List<Long>) {
         ids.forEach { enqueueSend(context, it, replace = true) }
     }

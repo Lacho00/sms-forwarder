@@ -4,7 +4,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertEquals
 import dev.smsforwarder.R
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsStatus
@@ -45,7 +50,7 @@ class DetailScreenTest {
         var state by mutableStateOf(DetailUiState(sms(SmsStatus.ERROR), emptyList()))
         compose.setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {
-                DetailScreen(state = state, onRetry = {}, onBack = {})
+                DetailScreen(state = state, onRetry = {}, onDelete = {}, onBack = {})
             }
         }
         compose.onNodeWithText(retry).assertExists()
@@ -55,5 +60,48 @@ class DetailScreenTest {
 
         compose.runOnIdle { state = DetailUiState(sms(SmsStatus.SENT), emptyList()) }
         compose.onNodeWithText(retry).assertDoesNotExist()
+    }
+
+    private fun str(id: Int): String = RuntimeEnvironment.getApplication().getString(id)
+
+    @Test fun deleteAsksForConfirmationAndOnlyConfirmCallsOnDelete() {
+        var deleted = 0
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(
+                    state = DetailUiState(sms(SmsStatus.QUEUED), emptyList()),
+                    onRetry = {},
+                    onDelete = { deleted++ },
+                    onBack = {},
+                )
+            }
+        }
+        compose.onNodeWithText(str(R.string.detail_delete)).performClick()
+        compose.onNodeWithText(str(R.string.detail_delete_title)).assertExists()
+        compose.runOnIdle { assertEquals(0, deleted) }
+
+        compose.onNodeWithText(str(R.string.detail_delete_cancel)).performClick()
+        compose.onNodeWithText(str(R.string.detail_delete_title)).assertDoesNotExist()
+        compose.runOnIdle { assertEquals(0, deleted) }
+
+        compose.onNodeWithText(str(R.string.detail_delete)).performClick()
+        compose.onNode(hasText(str(R.string.detail_delete_confirm)) and hasAnyAncestor(isDialog())).performClick()
+        compose.runOnIdle { assertEquals(1, deleted) }
+    }
+
+    @Test fun hiddenTextIsRevealedByShow() {
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(
+                    state = DetailUiState(sms(SmsStatus.SENT), emptyList(), hideText = true),
+                    onRetry = {},
+                    onDelete = {},
+                    onBack = {},
+                )
+            }
+        }
+        compose.onNodeWithText("OPERADOR: Se ha comprado", substring = true).assertDoesNotExist()
+        compose.onNodeWithText(str(R.string.detail_show_text)).performClick()
+        compose.onNodeWithText("OPERADOR: Se ha comprado", substring = true).assertExists()
     }
 }
