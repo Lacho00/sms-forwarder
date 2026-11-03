@@ -71,7 +71,7 @@ class HealthChecker(
 
         // A Keystore hiccup is not "not configured": skip the check instead of raising a false alarm.
         try {
-            if (destinations.primaryCredentials() == null) issues += HealthIssue.NOT_CONFIGURED
+            if (destinations.unconfiguredInUse().isNotEmpty()) issues += HealthIssue.NOT_CONFIGURED
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

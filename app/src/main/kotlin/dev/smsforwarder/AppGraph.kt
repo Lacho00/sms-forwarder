@@ -52,7 +52,7 @@ class AppGraph(context: Context) {
         override suspend fun remove(destinationId: Long) = destinationSecretStore.remove(destinationId)
     }
     val destinationRepository by lazy {
-        DestinationRepository(db, secretsProxy, clock, context.getString(R.string.destination_primary_name))
+        DestinationRepository(db, secretsProxy, clock, context.getString(R.string.destination_primary_name), smsRepository, notifier)
     }
     val ruleRepository by lazy { RuleRepository(db, destinationRepository, clock) }
 

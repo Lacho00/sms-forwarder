@@ -6,7 +6,9 @@ import androidx.room.Room
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
+import dev.smsforwarder.core.DestinationPresets
 import dev.smsforwarder.data.AppDatabase
+import dev.smsforwarder.data.RuleDestinationEntity
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.IngestResult
 import dev.smsforwarder.data.recordAttemptForSms
@@ -102,7 +104,25 @@ class HealthCheckerTest {
     }
 
     @Test fun missingCredentialsIsNotConfigured() = runBlocking {
+        settings.addSender("AAA")
         repos.secrets.map.clear()
         assertTrue(HealthIssue.NOT_CONFIGURED in checker.check())
+    }
+
+    private suspend fun bareDestination(name: String): Long = repos.destinations.create(
+        DestinationPresets.custom(name).copy(url = "https://h.example/x"),
+    ).also { repos.secrets.map.remove(it) }
+
+    @Test fun notConfiguredWhenRuleTargetsDestinationWithoutSecrets() = runBlocking {
+        val id = bareDestination("Other")
+        repos.rules.addSender("AAA")
+        db.ruleDao().insertLinks(listOf(RuleDestinationEntity(db.ruleDao().activeWithDestinations().first().rule.id, id)))
+        assertTrue(HealthIssue.NOT_CONFIGURED in checker.check())
+    }
+
+    @Test fun noIssueForUnlinkedDestinationWithoutSecrets() = runBlocking {
+        repos.rules.addSender("AAA")
+        bareDestination("Other")
+        assertFalse(HealthIssue.NOT_CONFIGURED in checker.check())
     }
 }

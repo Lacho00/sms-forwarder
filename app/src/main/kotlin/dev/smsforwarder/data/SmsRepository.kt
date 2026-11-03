@@ -16,6 +16,7 @@ import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.core.aggregateStatus
 import dev.smsforwarder.core.httpCode
 import dev.smsforwarder.core.isAuthRejection
+import dev.smsforwarder.core.isConfigError
 import kotlinx.coroutines.flow.Flow
 
 sealed interface IngestResult {
@@ -149,10 +150,10 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
             val sms = dao.get(id) ?: return@withTransaction
             if (sms.status == SmsStatus.SENT || sms.deletedAt != null) return@withTransaction
             val all = deliveries.forSms(id)
-            all.filter { it.status != DeliveryStatus.SENT }.forEach {
-                deliveries.update(it.copy(status = DeliveryStatus.QUEUED))
-            }
-            resetSms(sms, all.map { if (it.status == DeliveryStatus.SENT) it.status else DeliveryStatus.QUEUED })
+            // SENT stays, and CANCELED (deleted destination) is never revived.
+            val retry = all.filter { it.status == DeliveryStatus.QUEUED || it.status == DeliveryStatus.ERROR }
+            retry.forEach { deliveries.update(it.copy(status = DeliveryStatus.QUEUED)) }
+            resetSms(sms, all.map { if (it in retry) DeliveryStatus.QUEUED else it.status })
         }
     }
 
@@ -167,6 +168,44 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
             }.forEach { deliveries.update(it.copy(status = DeliveryStatus.QUEUED)) }
             val after = deliveries.forSms(id).map { it.status }
             resetSms(sms, after)
+        }
+        ids
+    }
+
+    /** Requeues the ERROR deliveries to [destinationId] that failed on configuration; returns the affected SMS ids. */
+    suspend fun requeueConfigErrors(destinationId: Long): List<Long> = db.withTransaction {
+        val ids = deliveries.idsConfigErrors(destinationId)
+        for (id in ids) {
+            val sms = dao.get(id) ?: continue
+            deliveries.forSms(id).filter {
+                it.destinationId == destinationId && it.status == DeliveryStatus.ERROR && isConfigError(it.lastError)
+            }.forEach { deliveries.update(it.copy(status = DeliveryStatus.QUEUED)) }
+            resetSms(sms, deliveries.forSms(id).map { it.status })
+        }
+        ids
+    }
+
+    /**
+     * Cancels the QUEUED and ERROR deliveries to [destinationId] and recomputes each SMS aggregate. An SMS
+     * left with only canceled deliveries ends in ERROR with `lastError = "destination_deleted"`. Returns the SMS ids.
+     */
+    suspend fun cancelDeliveriesTo(destinationId: Long): List<Long> = db.withTransaction {
+        val pending = deliveries.unfinishedTo(destinationId)
+        pending.forEach { deliveries.update(it.copy(status = DeliveryStatus.CANCELED)) }
+        val ids = pending.map { it.smsId }.distinct()
+        for (id in ids) {
+            val sms = dao.get(id) ?: continue
+            val statuses = deliveries.forSms(id).map { it.status }
+            val aggregate = aggregateStatus(statuses)
+            val allCanceled = statuses.all { it == DeliveryStatus.CANCELED }
+            dao.update(
+                sms.copy(
+                    status = aggregate,
+                    lastError = if (allCanceled) DESTINATION_DELETED else sms.lastError,
+                    lastHttpCode = if (allCanceled) null else sms.lastHttpCode,
+                    sentAt = if (aggregate == SmsStatus.SENT) sms.sentAt ?: clock.now() else sms.sentAt,
+                ),
+            )
         }
         ids
     }
@@ -221,3 +260,6 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
 
     suspend fun markStuckNotified(id: Long) = dao.markStuckNotified(id)
 }
+
+/** `lastError` of an SMS whose every delivery was canceled because its destination was deleted. */
+const val DESTINATION_DELETED = "destination_deleted"

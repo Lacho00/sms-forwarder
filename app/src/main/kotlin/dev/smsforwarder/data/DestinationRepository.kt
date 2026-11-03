@@ -2,9 +2,19 @@ package dev.smsforwarder.data
 
 import androidx.room.withTransaction
 import dev.smsforwarder.core.Clock
+import dev.smsforwarder.core.DestinationDraft
+import dev.smsforwarder.core.HeaderDraft
 import dev.smsforwarder.core.HttpMethod
 import dev.smsforwarder.core.SuccessPolicy
 import dev.smsforwarder.core.TemplateKind
+import dev.smsforwarder.core.validateDestination
+import dev.smsforwarder.notify.Notifier
+import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+
+/** A form's view of a stored destination: URL and secret header values never leave the store. */
+data class EditableDestination(val draft: DestinationDraft, val urlStored: Boolean)
 
 /**
  * Destinations and their secrets. The "primary" is the active destination with the lowest id; the
@@ -15,8 +25,126 @@ class DestinationRepository(
     private val secretStore: DestinationSecretStore,
     private val clock: Clock,
     private val primaryName: String,
+    private val sms: SmsRepository,
+    private val notifier: Notifier,
 ) {
     private val dao = db.destinationDao()
+    private val rulesDao = db.ruleDao()
+    private val deliveries = db.deliveryDao()
+
+    fun observeLive(): Flow<List<DestinationEntity>> = dao.observeLive()
+
+    /** Stores a new destination; the row is removed again if its secrets cannot be saved. */
+    suspend fun create(d: DestinationDraft): Long {
+        require(validateDestination(d, urlStored = false).isEmpty()) { "invalid destination" }
+        val id = dao.insert(
+            DestinationEntity(
+                name = d.name.trim(),
+                enabled = d.enabled,
+                template = d.template,
+                method = d.method,
+                bodyTemplate = d.body.ifBlank { null },
+                bodyIsJson = d.bodyIsJson,
+                publicHeaders = publicHeadersJson(d.headers),
+                successPolicy = d.successPolicy,
+                createdAt = clock.now(),
+            ),
+        )
+        try {
+            secretStore.set(id, DestinationSecrets(d.url.orEmpty().trim(), secretHeaders(d.headers, emptyList())))
+        } catch (e: Throwable) {
+            db.withTransaction { dao.hardDelete(id) }
+            throw e
+        }
+        return id
+    }
+
+    suspend fun editable(id: Long): EditableDestination? {
+        val e = dao.get(id)?.takeIf { it.deletedAt == null } ?: return null
+        val stored = secretStore.get(id)
+        val headers = e.publicHeaderList().map { (n, v) -> HeaderDraft(n, v, secret = false) } +
+            stored?.headers.orEmpty().map { (n, _) -> HeaderDraft(n, null, secret = true) }
+        return EditableDestination(
+            DestinationDraft(
+                name = e.name, enabled = e.enabled, template = e.template, method = e.method, url = null,
+                headers = headers, body = e.bodyTemplate.orEmpty(), bodyIsJson = e.bodyIsJson,
+                successPolicy = e.successPolicy,
+            ),
+            urlStored = stored != null,
+        )
+    }
+
+    /**
+     * Saves the edit; a null URL or secret header value keeps what is stored. Auth and configuration errors of this
+     * destination go back to QUEUED; returns those SMS ids for the caller to schedule.
+     */
+    suspend fun update(id: Long, d: DestinationDraft): List<Long> {
+        val entity = dao.get(id)?.takeIf { it.deletedAt == null } ?: throw IllegalArgumentException("unknown destination")
+        // A transient Keystore failure throws here, before anything changes.
+        val stored = secretStore.get(id)
+        require(validateDestination(d, urlStored = stored != null).isEmpty()) { "invalid destination" }
+        return db.withTransaction {
+            dao.update(
+                entity.copy(
+                    name = d.name.trim(),
+                    enabled = d.enabled,
+                    template = d.template,
+                    method = d.method,
+                    bodyTemplate = d.body.ifBlank { null },
+                    bodyIsJson = d.bodyIsJson,
+                    publicHeaders = publicHeadersJson(d.headers),
+                    successPolicy = d.successPolicy,
+                ),
+            )
+            val url = d.url?.trim() ?: stored?.url ?: throw IllegalArgumentException("invalid destination")
+            secretStore.set(id, DestinationSecrets(url, secretHeaders(d.headers, stored?.headers.orEmpty())))
+            (sms.requeueAuthErrors(id) + sms.requeueConfigErrors(id)).distinct()
+        }
+    }
+
+    /** Pauses or resumes; resuming returns the SMS with a QUEUED delivery here for the caller to schedule. */
+    suspend fun setEnabled(id: Long, enabled: Boolean): List<Long> = db.withTransaction {
+        val entity = dao.get(id)?.takeIf { it.deletedAt == null } ?: return@withTransaction emptyList()
+        if (entity.enabled != enabled) dao.update(entity.copy(enabled = enabled))
+        if (enabled) deliveries.smsIdsQueuedFor(id) else emptyList()
+    }
+
+    /** QUEUED plus ERROR deliveries here, for the delete confirmation. */
+    suspend fun pendingCount(id: Long): Int = deliveries.pendingCountFor(id)
+
+    /**
+     * Soft-deletes: pending deliveries become CANCELED (finished ones keep the destination's name), rules lose the
+     * link, then the secrets and the token alert go.
+     */
+    suspend fun delete(id: Long) {
+        db.withTransaction {
+            val entity = dao.get(id) ?: return@withTransaction
+            if (entity.deletedAt == null) dao.update(entity.copy(deletedAt = clock.now()))
+            sms.cancelDeliveriesTo(id)
+            rulesDao.deleteLinksTo(id)
+        }
+        secretStore.remove(id)
+        notifier.cancelTokenRejected(id)
+    }
+
+    /** Live destinations that an enabled rule points at and that have no stored secrets. */
+    suspend fun unconfiguredInUse(): List<Long> {
+        val used = rulesDao.activeWithDestinations()
+            .flatMap { it.destinations }.filter { it.deletedAt == null }.map { it.id }.distinct().sorted()
+        return used.filter { secretStore.get(it) == null }
+    }
+
+    private fun publicHeadersJson(headers: List<HeaderDraft>): String =
+        JsonArray(
+            headers.filter { !it.secret }.map { JsonArray(listOf(JsonPrimitive(it.name), JsonPrimitive(it.value.orEmpty()))) },
+        ).toString()
+
+    /** Secret headers of the draft; a null value takes the stored one of the same name, or drops the header. */
+    private fun secretHeaders(headers: List<HeaderDraft>, stored: List<Pair<String, String>>): List<Pair<String, String>> =
+        headers.filter { it.secret }.mapNotNull { h ->
+            val value = h.value ?: stored.firstOrNull { it.first.equals(h.name, ignoreCase = true) }?.second
+            value?.let { h.name to it }
+        }
 
     /** Id of the primary destination, creating the standard JSON one when there is none. */
     suspend fun ensurePrimary(): Long = db.withTransaction {

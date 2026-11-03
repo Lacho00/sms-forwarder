@@ -33,6 +33,9 @@ interface RuleDao {
     )
     suspend fun deleteExactForDestination(pattern: String, destinationId: Long): Int
 
+    @Query("DELETE FROM rule_destination WHERE destinationId = :destinationId")
+    suspend fun deleteLinksTo(destinationId: Long)
+
     /** Sender-only exact patterns of the primary destination (lowest id not deleted), oldest rule first. */
     @Query(PRIMARY_EXACT_SENDERS)
     fun observePrimaryExactSenders(): Flow<List<String>>

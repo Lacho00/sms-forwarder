@@ -1,14 +1,19 @@
 package dev.smsforwarder.data
 
 import dev.smsforwarder.core.Clock
+import dev.smsforwarder.notify.Notifier
+import org.robolectric.RuntimeEnvironment
 
 /** Destination and rule repositories over a test database, sharing one fake secret store. */
 class TestRepos(
     db: AppDatabase,
     clock: Clock = Clock { 1_800_000_000_000L },
     val secrets: FakeDestinationSecretStore = FakeDestinationSecretStore(),
+    val sms: SmsRepository = SmsRepository(db, clock),
 ) {
-    val destinations = DestinationRepository(db, secrets, clock, "Primary")
+    val destinations = DestinationRepository(
+        db, secrets, clock, "Primary", sms, Notifier(RuntimeEnvironment.getApplication()),
+    )
     val rules = RuleRepository(db, destinations, clock)
 }
 
