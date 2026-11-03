@@ -52,14 +52,17 @@ class NotifierTest {
             n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT),
         ).joinToString(" | ")
 
-    @Test fun tokenRejectedIsSingleNotification() {
+    @Test fun tokenRejectedIsOneNotificationPerDestination() {
         val notifier = Notifier(context, utc)
-        notifier.tokenRejected(1)
-        notifier.tokenRejected(3)
+        notifier.tokenRejected(1L, 1)
+        notifier.tokenRejected(1L, 3)
+        notifier.tokenRejected(2L, 5)
         val all = shadowOf(manager).allNotifications
-        assertEquals(1, all.size)
-        assertNotNull(shadowOf(manager).getNotification(Notifier.ID_TOKEN_REJECTED))
-        assertTrue(text(all.single()).contains(context.getString(R.string.notif_token_rejected_text, 3)))
+        assertEquals(2, all.size)
+        val first = shadowOf(manager).getNotification(Notifier.TOKEN_TAG, 1)
+        assertNotNull(first)
+        assertNotNull(shadowOf(manager).getNotification(Notifier.TOKEN_TAG, 2))
+        assertTrue(text(first).contains(context.getString(R.string.notif_token_rejected_text, 3)))
     }
 
     @Test fun recoveredTextNamesSenderAndTime() {

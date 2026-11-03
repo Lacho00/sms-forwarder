@@ -88,51 +88,51 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
 
     fun observeAttempts(smsId: Long): Flow<List<AttemptEntity>> = dao.observeAttempts(smsId)
 
-    suspend fun recordAttempt(id: Long, outcome: SendOutcome) {
+    /**
+     * Records one attempt for a delivery and recomputes the SMS aggregate in the same transaction.
+     * A delivery that is already SENT is never undone, and deliveries to deleted destinations do not count
+     * toward the aggregate, so they cannot keep the SMS from reaching SENT.
+     */
+    suspend fun recordAttempt(deliveryId: Long, outcome: SendOutcome) {
         db.withTransaction {
-            val sms = dao.get(id) ?: return@withTransaction
+            val delivery = deliveries.get(deliveryId) ?: return@withTransaction
+            if (delivery.status == DeliveryStatus.SENT) return@withTransaction
+            val sms = dao.get(delivery.smsId) ?: return@withTransaction
             val now = clock.now()
-            // A late result from an overlapping worker must not undo a delivered SMS.
-            if (sms.status == SmsStatus.SENT) {
-                if (outcome !is SendOutcome.Accepted) return@withTransaction
-            }
             val (httpCode, error) = when (outcome) {
                 SendOutcome.Accepted -> 200 to null
                 is SendOutcome.Retry -> outcome.httpCode to outcome.reason
                 is SendOutcome.Rejected -> outcome.httpCode to outcome.errorCode
             }
             val status = when (outcome) {
-                SendOutcome.Accepted -> SmsStatus.SENT
-                is SendOutcome.Retry -> SmsStatus.QUEUED
-                is SendOutcome.Rejected -> SmsStatus.ERROR
+                SendOutcome.Accepted -> DeliveryStatus.SENT
+                is SendOutcome.Retry -> DeliveryStatus.QUEUED
+                is SendOutcome.Rejected -> DeliveryStatus.ERROR
             }
-            dao.insertAttempt(AttemptEntity(smsId = id, at = now, httpCode = httpCode, error = error))
-            // Until the per-destination send path lands, the single request is tracked on the primary delivery.
-            destinations.primary()?.let { primary ->
-                deliveries.forSms(id).firstOrNull { it.destinationId == primary.id }?.let { d ->
-                    val deliveryStatus = when (status) {
-                        SmsStatus.SENT -> DeliveryStatus.SENT
-                        SmsStatus.QUEUED -> DeliveryStatus.QUEUED
-                        SmsStatus.ERROR -> DeliveryStatus.ERROR
-                    }
-                    deliveries.update(
-                        d.copy(
-                            status = deliveryStatus,
-                            attempts = d.attempts + 1,
-                            lastHttpCode = httpCode,
-                            lastError = error,
-                            sentAt = if (deliveryStatus == DeliveryStatus.SENT) now else d.sentAt,
-                        ),
-                    )
-                }
-            }
-            dao.update(
-                sms.copy(
+            dao.insertAttempt(
+                AttemptEntity(smsId = sms.id, at = now, httpCode = httpCode, error = error, deliveryId = deliveryId),
+            )
+            deliveries.update(
+                delivery.copy(
                     status = status,
-                    attempts = sms.attempts + 1,
+                    attempts = delivery.attempts + 1,
                     lastHttpCode = httpCode,
                     lastError = error,
-                    sentAt = if (status == SmsStatus.SENT) now else sms.sentAt,
+                    sentAt = if (status == DeliveryStatus.SENT) now else delivery.sentAt,
+                ),
+            )
+            val all = deliveries.forSms(sms.id)
+            val counted = all.filter { d ->
+                d.destinationId == null || destinations.get(d.destinationId)?.deletedAt == null
+            }
+            val aggregate = aggregateStatus(counted.map { it.status })
+            dao.update(
+                sms.copy(
+                    status = aggregate,
+                    attempts = all.sumOf { it.attempts },
+                    lastHttpCode = httpCode,
+                    lastError = error,
+                    sentAt = if (aggregate == SmsStatus.SENT) sms.sentAt ?: now else sms.sentAt,
                 ),
             )
         }
@@ -177,6 +177,16 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
     suspend fun softDelete(id: Long) = dao.softDelete(id, clock.now())
 
     suspend fun queuedIds(): List<Long> = dao.idsWithStatus(SmsStatus.QUEUED)
+
+    /** QUEUED deliveries of the SMS, whatever the SMS aggregate says. */
+    suspend fun pendingDeliveries(smsId: Long): List<DeliveryEntity> = deliveries.pendingForSms(smsId)
+
+    suspend fun deliveriesOf(smsId: Long): List<DeliveryEntity> = deliveries.forSms(smsId)
+
+    suspend fun delivery(id: Long): DeliveryEntity? = deliveries.get(id)
+
+    /** SMS ids waiting on a rejected token for [destinationId]. */
+    suspend fun idsAuthRejected(destinationId: Long): List<Long> = deliveries.idsAuthRejected(destinationId)
 
     suspend fun idsWithAuthError(): List<Long> = deliveries.idsAnyAuthRejected()
 

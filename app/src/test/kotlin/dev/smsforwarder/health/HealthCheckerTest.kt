@@ -9,6 +9,7 @@ import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.Credentials
 import dev.smsforwarder.data.IngestResult
+import dev.smsforwarder.data.recordAttemptForSms
 import dev.smsforwarder.data.TestRepos
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsRepository
@@ -81,7 +82,7 @@ class HealthCheckerTest {
         val record = SmsRecord("OPERADOR", "uno", 1_799_999_999_000L, null, null)
         val id = (sms.ingest(record, SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         assertFalse(HealthIssue.TOKEN_REJECTED in checker.check())
-        sms.recordAttempt(id, SendOutcome.Rejected(401, "unauthorized"))
+        sms.recordAttemptForSms(id, SendOutcome.Rejected(401, "unauthorized"))
         assertTrue(HealthIssue.TOKEN_REJECTED in checker.check())
     }
 

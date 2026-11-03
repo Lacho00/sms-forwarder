@@ -83,7 +83,7 @@ class SmsRepositoryTest {
 
     @Test fun recordAttemptRetryKeepsQueued() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(id, SendOutcome.Retry(null, "io"))
+        repo.recordAttemptForSms(id, SendOutcome.Retry(null, "io"))
         val sms = repo.get(id)!!
         assertEquals(SmsStatus.QUEUED, sms.status)
         assertEquals(1, sms.attempts)
@@ -91,7 +91,7 @@ class SmsRepositoryTest {
 
     @Test fun recordAttemptAcceptedSetsSent() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(id, SendOutcome.Accepted)
+        repo.recordAttemptForSms(id, SendOutcome.Accepted)
         val sms = repo.get(id)!!
         assertEquals(SmsStatus.SENT, sms.status)
         assertEquals(200, sms.lastHttpCode)
@@ -100,7 +100,7 @@ class SmsRepositoryTest {
 
     @Test fun recordAttempt401SetsErrorAndIsListedIn401() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(id, SendOutcome.Rejected(401, null))
+        repo.recordAttemptForSms(id, SendOutcome.Rejected(401, null))
         assertEquals(SmsStatus.ERROR, repo.get(id)!!.status)
         assertEquals(listOf(id), repo.idsWithAuthError())
     }
@@ -149,8 +149,8 @@ class SmsRepositoryTest {
         val queued = (repo.ingest(record(old, "queued $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         val error = (repo.ingest(record(old, "error $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         val sent = (repo.ingest(record(old, "sent $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(error, SendOutcome.Rejected(400, null))
-        repo.recordAttempt(sent, SendOutcome.Accepted)
+        repo.recordAttemptForSms(error, SendOutcome.Rejected(400, null))
+        repo.recordAttemptForSms(sent, SendOutcome.Accepted)
         Triple(queued, error, sent)
     }
 
@@ -183,8 +183,8 @@ class SmsRepositoryTest {
             val q = (repo.ingest(record(old, "queued $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
             val e = (repo.ingest(record(old, "error $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
             val s = (repo.ingest(record(old, "sent $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-            repo.recordAttempt(e, SendOutcome.Rejected(400, null))
-            repo.recordAttempt(s, SendOutcome.Accepted)
+            repo.recordAttemptForSms(e, SendOutcome.Rejected(400, null))
+            repo.recordAttemptForSms(s, SendOutcome.Accepted)
             Triple(q, e, s)
         }
 
@@ -197,7 +197,7 @@ class SmsRepositoryTest {
 
     @Test fun requeueRestartsStuckClock() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(id, SendOutcome.Rejected(400, null))
+        repo.recordAttemptForSms(id, SendOutcome.Rejected(400, null))
         now += QueuePolicy.STUCK_AFTER_MS + 1L
         assertEquals(listOf(id), repo.stuckToNotify().map { it.id })
 
@@ -207,10 +207,50 @@ class SmsRepositoryTest {
         assertTrue(repo.stuckToNotify().isEmpty())
     }
 
+    @Test fun lateResultDoesNotUndoSent() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
+        val (a, b) = db.deliveryDao().forSms(id)
+        repo.recordAttempt(a.id, SendOutcome.Accepted)
+        repo.recordAttempt(a.id, SendOutcome.Retry(null, "network"))
+        repo.recordAttempt(a.id, SendOutcome.Rejected(401, null))
+        assertEquals(DeliveryStatus.SENT, db.deliveryDao().get(a.id)!!.status)
+        assertEquals(1, db.deliveryDao().get(a.id)!!.attempts)
+        assertEquals(SmsStatus.QUEUED, repo.get(id)!!.status)
+        repo.recordAttempt(b.id, SendOutcome.Accepted)
+        assertEquals(SmsStatus.SENT, repo.get(id)!!.status)
+        assertNotNull(repo.get(id)!!.sentAt)
+        assertEquals(2, repo.get(id)!!.attempts)
+    }
+
+    @Test fun attemptsVisibleOnSms() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
+        val (a, b) = db.deliveryDao().forSms(id)
+        repo.recordAttempt(a.id, SendOutcome.Retry(500, "http_500"))
+        repo.recordAttempt(b.id, SendOutcome.Accepted)
+        repo.recordAttempt(a.id, SendOutcome.Rejected(400, "bad"))
+        val attempts = repo.observeAttempts(id).first()
+        assertEquals(3, attempts.size)
+        assertEquals(listOf(a.id, b.id, a.id), attempts.map { it.deliveryId })
+        val sms = repo.get(id)!!
+        assertEquals(3, sms.attempts)
+        assertEquals(SmsStatus.ERROR, sms.status)
+        assertEquals(400, sms.lastHttpCode)
+        assertEquals("bad", sms.lastError)
+    }
+
+    @Test fun deletedDestinationIsIgnoredByAggregate() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
+        val (a, b) = db.deliveryDao().forSms(id)
+        db.destinationDao().update(db.destinationDao().get(1L)!!.copy(deletedAt = now))
+        repo.recordAttempt(b.id, SendOutcome.Accepted)
+        assertEquals(SmsStatus.SENT, repo.get(id)!!.status)
+        assertEquals(DeliveryStatus.QUEUED, db.deliveryDao().get(a.id)!!.status)
+    }
+
     @Test fun lateRetryDoesNotUndoSent() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(id, SendOutcome.Accepted)
-        repo.recordAttempt(id, SendOutcome.Retry(null, "network"))
+        repo.recordAttemptForSms(id, SendOutcome.Accepted)
+        repo.recordAttemptForSms(id, SendOutcome.Retry(null, "network"))
         repo.requeue(id)
         assertEquals(SmsStatus.SENT, repo.get(id)!!.status)
         assertTrue(repo.queuedIds().isEmpty())
@@ -221,7 +261,7 @@ class SmsRepositoryTest {
         val t = now - 10_000L
         val queued = (repo.ingest(record(t, "queued $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         val rejected = (repo.ingest(record(t - 5_000, "rejected $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(rejected, SendOutcome.Rejected(401, null))
+        repo.recordAttemptForSms(rejected, SendOutcome.Rejected(401, null))
         now += QueuePolicy.STUCK_AFTER_MS + 1L
         assertEquals(listOf(queued), repo.queuedIds())
         assertEquals(listOf(rejected), repo.idsWithAuthError())
@@ -260,7 +300,7 @@ class SmsRepositoryTest {
 
     @Test fun requeueIgnoresDeletedRow() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(id, SendOutcome.Rejected(400, null))
+        repo.recordAttemptForSms(id, SendOutcome.Rejected(400, null))
         repo.softDelete(id)
         repo.requeue(id)
         assertEquals(SmsStatus.ERROR, repo.get(id)!!.status)
@@ -304,7 +344,7 @@ class SmsRepositoryTest {
     @Test fun purgeOldKeepsSentRowSeenRecentlyEvenWithOldCarrierTime() = runBlocking {
         val old = now - 40 * 86_400_000L
         val id = (repo.ingest(record(old, "sent $body"), SmsOrigin.SWEEP, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(id, SendOutcome.Accepted)
+        repo.recordAttemptForSms(id, SendOutcome.Accepted)
         repo.purgeOld(Retention.D30)
         assertNotNull(repo.get(id))
     }
@@ -320,7 +360,7 @@ class SmsRepositoryTest {
 
     @Test fun idsWithAuthErrorIgnoresDeletedDestinations() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttempt(id, SendOutcome.Rejected(401, null))
+        repo.recordAttemptForSms(id, SendOutcome.Rejected(401, null))
         assertEquals(listOf(id), repo.idsWithAuthError())
         db.destinationDao().update(db.destinationDao().get(1L)!!.copy(deletedAt = now))
         assertEquals(emptyList<Long>(), repo.idsWithAuthError())

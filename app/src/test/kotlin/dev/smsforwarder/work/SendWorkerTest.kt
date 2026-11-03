@@ -7,7 +7,16 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
 import dev.smsforwarder.AppGraph
 import dev.smsforwarder.SmsForwarderApp
+import dev.smsforwarder.core.DeliveryStatus
+import dev.smsforwarder.core.HttpMethod
+import dev.smsforwarder.core.IngestPayload
+import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SmsOrigin
+import dev.smsforwarder.core.SuccessPolicy
+import dev.smsforwarder.core.TemplateKind
+import dev.smsforwarder.data.DestinationEntity
+import dev.smsforwarder.data.DestinationSecrets
+import dev.smsforwarder.data.STANDARD_JSON_BODY
 import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.data.Credentials
@@ -81,7 +90,7 @@ class SendWorkerTest {
         assertEquals(1, sms.attempts)
     }
 
-    @Test fun failedImportKeepsSmsQueuedAndSendsNothing() = runBlocking {
+    @Test fun importFailedSendsNothing() = runBlocking {
         val failing = dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }
         // The 1.1.x credentials are still in the old store, so the import has a secret to copy and fails on it.
         val legacy = FakeSecretStore(Credentials(server.url("/ingest").toString(), "test-token"))
@@ -120,7 +129,7 @@ class SendWorkerTest {
         val manager = context.getSystemService(NotificationManager::class.java)
         val shadow = shadowOf(manager)
         assertEquals(1, shadow.allNotifications.size)
-        assertNotNull(shadow.getNotification(Notifier.ID_TOKEN_REJECTED))
+        assertNotNull(shadow.getNotification(Notifier.TOKEN_TAG, 1))
         assertNull(shadow.getNotification(Notifier.STUCK_TAG, first.toInt()))
         assertNull(shadow.getNotification(Notifier.STUCK_TAG, second.toInt()))
     }
@@ -164,6 +173,130 @@ class SendWorkerTest {
         assertEquals(0, server.requestCount)
     }
 
+
+    private lateinit var second: MockWebServer
+
+    /** Adds a standard-JSON destination pointing at [target]; returns its id. */
+    private suspend fun addDestination(target: MockWebServer, enabled: Boolean = true, name: String = "Second"): Long {
+        val id = graph.db.destinationDao().insert(
+            DestinationEntity(
+                name = name, enabled = enabled, template = TemplateKind.STANDARD_JSON, method = HttpMethod.POST,
+                bodyTemplate = STANDARD_JSON_BODY, bodyIsJson = true, publicHeaders = "[]",
+                successPolicy = SuccessPolicy.ANY_2XX, createdAt = 1L,
+            ),
+        )
+        graph.destinationSecretStore.set(
+            id, DestinationSecrets(target.url("/ingest").toString(), listOf("Authorization" to "Bearer b-token")),
+        )
+        return id
+    }
+
+    private suspend fun insertSmsTo(vararg destinations: Long): Long {
+        val record = SmsRecord("OPERADOR", body, 1_800_000_000_000L, null, null)
+        return (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, destinations.toSet()) as IngestResult.Inserted).id
+    }
+
+    @Test fun primarySendsV1Payload() = runBlocking {
+        val id = insertSms()
+        server.enqueue(MockResponse.Builder().code(200).build())
+        assertEquals(ListenableWorker.Result.success(), run(id))
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("Bearer test-token", request.headers["Authorization"])
+        assertEquals("application/json; charset=utf-8", request.headers["Content-Type"])
+        assertEquals(IngestPayload.encode("OPERADOR", body, 1_800_000_000_000L), request.body!!.utf8())
+    }
+
+    @Test fun downDestinationDoesNotBlockOther() = runBlocking {
+        second = MockWebServer().also { it.start() }
+        try {
+            val b = addDestination(second)
+            val id = insertSmsTo(1L, b)
+            server.enqueue(MockResponse.Builder().code(500).build())
+            second.enqueue(MockResponse.Builder().code(200).build())
+
+            assertEquals(ListenableWorker.Result.retry(), run(id))
+            val byDestination = graph.smsRepository.deliveriesOf(id).associateBy { it.destinationId }
+            assertEquals(DeliveryStatus.QUEUED, byDestination[1L]!!.status)
+            assertEquals(1, byDestination[1L]!!.attempts)
+            assertEquals(DeliveryStatus.SENT, byDestination[b]!!.status)
+            assertEquals(SmsStatus.QUEUED, graph.smsRepository.get(id)!!.status)
+
+            server.enqueue(MockResponse.Builder().code(200).build())
+            assertEquals(ListenableWorker.Result.success(), run(id))
+            assertEquals(SmsStatus.SENT, graph.smsRepository.get(id)!!.status)
+            assertEquals(1, second.requestCount)
+            assertEquals(2, server.requestCount)
+        } finally {
+            second.close()
+        }
+    }
+
+    @Test fun pausedDestinationSkipped() = runBlocking {
+        second = MockWebServer().also { it.start() }
+        try {
+            val b = addDestination(second)
+            val id = insertSmsTo(1L, b)
+            val a = graph.db.destinationDao().get(1L)!!
+            graph.db.destinationDao().update(a.copy(enabled = false))
+            second.enqueue(MockResponse.Builder().code(200).build())
+
+            assertEquals(ListenableWorker.Result.success(), run(id))
+            val byDestination = graph.smsRepository.deliveriesOf(id).associateBy { it.destinationId }
+            assertEquals(DeliveryStatus.QUEUED, byDestination[1L]!!.status)
+            assertEquals(0, byDestination[1L]!!.attempts)
+            assertEquals(DeliveryStatus.SENT, byDestination[b]!!.status)
+            assertEquals(0, server.requestCount)
+        } finally {
+            second.close()
+        }
+    }
+
+    @Test fun deletedDestinationDoesNotKeepSmsFromSent() = runBlocking {
+        second = MockWebServer().also { it.start() }
+        try {
+            val b = addDestination(second)
+            val id = insertSmsTo(1L, b)
+            val a = graph.db.destinationDao().get(1L)!!
+            graph.db.destinationDao().update(a.copy(deletedAt = 5L))
+            second.enqueue(MockResponse.Builder().code(200).build())
+
+            assertEquals(ListenableWorker.Result.success(), run(id))
+            assertEquals(0, server.requestCount)
+            assertEquals(SmsStatus.SENT, graph.smsRepository.get(id)!!.status)
+        } finally {
+            second.close()
+        }
+    }
+
+    @Test fun errorAggregateStillSendsQueuedDelivery() = runBlocking {
+        second = MockWebServer().also { it.start() }
+        try {
+            val b = addDestination(second)
+            val id = insertSmsTo(1L, b)
+            val (da, _) = graph.smsRepository.deliveriesOf(id)
+            graph.smsRepository.recordAttempt(da.id, SendOutcome.Rejected(401, null))
+            assertEquals(SmsStatus.ERROR, graph.smsRepository.get(id)!!.status)
+            second.enqueue(MockResponse.Builder().code(200).build())
+
+            assertEquals(ListenableWorker.Result.success(), run(id))
+            assertEquals(1, second.requestCount)
+            assertEquals(0, server.requestCount)
+        } finally {
+            second.close()
+        }
+    }
+
+    @Test fun legacyQueuedWorkStillSends() = runBlocking {
+        val id = insertSms()
+        server.enqueue(MockResponse.Builder().code(200).build())
+        val result = TestListenableWorkerBuilder<SendWorker>(context)
+            .setInputData(workDataOf("smsId" to id))
+            .build()
+            .doWork()
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals(1, server.requestCount)
+    }
 
     @Test fun deletedQueuedSmsReturnsSuccessWithoutRequest() = runBlocking {
         val id = insertSms()

@@ -90,12 +90,14 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
         )
     }
 
-    fun tokenRejected(count: Int) {
+    /** One notification per destination: a new count replaces the previous one for the same destination. */
+    fun tokenRejected(destinationId: Long, waiting: Int) {
         val res = localized()
         post(
-            ID_TOKEN_REJECTED,
+            destinationId.toInt(),
             res.getString(R.string.notif_token_rejected_title),
-            res.getString(R.string.notif_token_rejected_text, count),
+            res.getString(R.string.notif_token_rejected_text, waiting),
+            TOKEN_TAG,
         )
     }
 
@@ -145,7 +147,8 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
         /** Stuck notifications use this tag with the SMS id, so they never clash with the fixed ids. */
         const val STUCK_TAG = "stuck"
         const val ID_HEALTH = 3001
-        const val ID_TOKEN_REJECTED = 3002
+        /** Token-rejected notifications use this tag with the destination id. */
+        const val TOKEN_TAG = "token"
 
         /** Creating an existing channel is a no-op, so this is safe to call from several places. */
         fun ensureChannel(context: Context) {

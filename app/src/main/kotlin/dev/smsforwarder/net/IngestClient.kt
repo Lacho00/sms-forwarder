@@ -1,9 +1,6 @@
 package dev.smsforwarder.net
 
 import dev.smsforwarder.core.ConnectionTestResult
-import dev.smsforwarder.core.IngestPayload
-import dev.smsforwarder.core.SendOutcome
-import dev.smsforwarder.core.classify
 import dev.smsforwarder.core.interpretConnectionTest
 import dev.smsforwarder.data.Credentials
 import kotlinx.coroutines.Dispatchers
@@ -30,11 +27,6 @@ fun defaultHttpClient(): OkHttpClient =
 
 /** Talks to the Worker. Never logs the URL, the token or the SMS body. */
 class IngestClient(private val http: OkHttpClient) {
-
-    suspend fun send(c: Credentials, sender: String, body: String, receivedAt: Long): SendOutcome {
-        val result = post(c, IngestPayload.encode(sender, body, receivedAt))
-        return classify(result?.code, result?.body)
-    }
 
     suspend fun testConnection(c: Credentials): ConnectionTestResult =
         interpretConnectionTest(post(c, "{}")?.code)
@@ -73,7 +65,7 @@ class IngestClient(private val http: OkHttpClient) {
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
-private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont ->
+internal suspend fun Call.await(): Response = suspendCancellableCoroutine { cont ->
     cont.invokeOnCancellation { cancel() }
     enqueue(
         object : Callback {

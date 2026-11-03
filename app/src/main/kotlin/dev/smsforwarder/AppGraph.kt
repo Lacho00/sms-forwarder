@@ -20,6 +20,7 @@ import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.health.HealthChecker
 import dev.smsforwarder.health.HealthIssue
+import dev.smsforwarder.net.DeliveryClient
 import dev.smsforwarder.net.IngestClient
 import dev.smsforwarder.net.defaultHttpClient
 import dev.smsforwarder.notify.Notifier
@@ -39,7 +40,9 @@ class AppGraph(context: Context) {
     var secretStore: SecretStore = KeystoreSecretStore(context)
     /** `var` so tests can swap in a fake instead of the Android Keystore. */
     var destinationSecretStore: DestinationSecretStore = KeystoreDestinationSecretStore(context)
-    val ingestClient = IngestClient(defaultHttpClient())
+    private val httpClient = defaultHttpClient()
+    val ingestClient = IngestClient(httpClient)
+    val deliveryClient = DeliveryClient(httpClient)
 
     /** Forwards to whichever store is current, so a test swap after the first use still takes effect. */
     private val secretsProxy = object : DestinationSecretStore {

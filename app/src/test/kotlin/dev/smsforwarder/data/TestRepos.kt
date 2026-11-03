@@ -11,3 +11,7 @@ class TestRepos(
     val destinations = DestinationRepository(db, secrets, clock, "Primary")
     val rules = RuleRepository(db, destinations, clock)
 }
+
+/** Records the outcome on the SMS's first delivery, for tests that only have a single destination in play. */
+suspend fun SmsRepository.recordAttemptForSms(smsId: Long, outcome: dev.smsforwarder.core.SendOutcome) =
+    recordAttempt(deliveriesOf(smsId).first().id, outcome)

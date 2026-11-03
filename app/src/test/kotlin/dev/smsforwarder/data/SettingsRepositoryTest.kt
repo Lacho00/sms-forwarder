@@ -75,7 +75,7 @@ class SettingsRepositoryTest {
     @Test fun saveCredentialsRequeues401AndKicksQueued() = runBlocking {
         val rejected = (sms.ingest(record("uno"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         val queued = (sms.ingest(record("dos"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        sms.recordAttempt(rejected, SendOutcome.Rejected(401, null))
+        sms.recordAttemptForSms(rejected, SendOutcome.Rejected(401, null))
         assertEquals(SmsStatus.ERROR, sms.get(rejected)!!.status)
 
         val credentials = Credentials("https://example.invalid/ingest", "test-token")
