@@ -110,6 +110,10 @@ class AppGraphAlertsTest {
         val id = stuckSms()
         val dao = graph.db.smsDao()
         dao.update(dao.get(id)!!.copy(status = SmsStatus.ERROR, lastHttpCode = 401))
+        val deliveries = graph.db.deliveryDao()
+        for (d in deliveries.forSms(id)) {
+            deliveries.update(d.copy(status = DeliveryStatus.ERROR, lastHttpCode = 401))
+        }
         graph.settings.setNotifyEnabled(NotifyKind.PERMISSIONS, false)
         graph.afterSweep(SweepResult(0, false))
         val text = shadowOf(manager).getNotification(Notifier.ID_HEALTH)

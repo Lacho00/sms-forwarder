@@ -83,8 +83,11 @@ class SendWorkerTest {
 
     @Test fun failedImportKeepsSmsQueuedAndSendsNothing() = runBlocking {
         val failing = dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }
+        // The 1.1.x credentials are still in the old store, so the import has a secret to copy and fails on it.
+        val legacy = FakeSecretStore(Credentials(server.url("/ingest").toString(), "test-token"))
+        graph.destinationSecretStore = dev.smsforwarder.data.FakeDestinationSecretStore()
         graph.legacyImport = dev.smsforwarder.data.LegacyImport(
-            graph.db, graph.secretStore, failing, freshSettings(),
+            graph.db, legacy, failing, freshSettings(),
         )
         val id = insertSms()
         assertEquals(ListenableWorker.Result.retry(), run(id))
