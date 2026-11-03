@@ -43,7 +43,7 @@ class DestinationEditorViewModelTest {
     private lateinit var db: AppDatabase
     private lateinit var repos: TestRepos
     private lateinit var server: MockWebServer
-    private val enqueued = mutableListOf<List<Long>>()
+    private val enqueued = java.util.concurrent.CopyOnWriteArrayList<List<Long>>()
 
     @Before fun setUp() {
         db = Room.inMemoryDatabaseBuilder(app, AppDatabase::class.java).allowMainThreadQueries().build()
@@ -67,6 +67,15 @@ class DestinationEditorViewModelTest {
         ),
         { enqueued += it }, ::defaultName, CoroutineScope(Dispatchers.Unconfined),
     )
+
+    // Room runs its queries on its own executor, so the ViewModel finishes on another thread.
+    private fun DestinationEditorViewModel.await(cond: (dev.smsforwarder.ui.destinations.DestinationEditorState) -> Boolean) {
+        val end = System.currentTimeMillis() + 5_000
+        while (!cond(state.value) && System.currentTimeMillis() < end) Thread.sleep(10)
+        assertTrue("timed out waiting for the state", cond(state.value))
+    }
+
+    private fun loaded(id: Long) = vm(id).also { it.await { s -> s.loaded } }
 
     private fun draft(name: String, vararg headers: HeaderDraft) =
         DestinationPresets.custom(name).copy(url = "https://h.example/$name", headers = headers.toList(), body = "{}")
@@ -123,7 +132,7 @@ class DestinationEditorViewModelTest {
         vm.setUrl("https://h.example/x")
         vm.setBody("{\"s\":\"{sim}\"}")
         vm.save()
-        assertTrue(vm.state.value.done)
+        vm.await { it.done }
         assertEquals(1, liveCount())
     }
 
@@ -142,7 +151,7 @@ class DestinationEditorViewModelTest {
             draft("One", HeaderDraft("X-A", "pub", false), HeaderDraft("X-Key", "tok-secret-1", true))
                 .copy(url = "https://h.example/secret-path"),
         )
-        val vm = vm(id)
+        val vm = loaded(id)
         val s = vm.state.value
         assertTrue(s.loaded)
         assertFalse(s.isNew)
@@ -173,10 +182,10 @@ class DestinationEditorViewModelTest {
         val id = repos.destinations.create(
             draft("One", HeaderDraft("X-Key", "tok-secret-1", true)).copy(url = "https://h.example/secret-path"),
         )
-        val vm = vm(id)
+        val vm = loaded(id)
         vm.setName("Renamed")
         vm.save()
-        assertTrue(vm.state.value.done)
+        vm.await { it.done }
         val stored = repos.secrets.map.getValue(id)
         assertEquals("https://h.example/secret-path", stored.url)
         assertEquals(listOf("X-Key" to "tok-secret-1"), stored.headers)
@@ -188,26 +197,28 @@ class DestinationEditorViewModelTest {
         val smsId = ingest(id)
         repos.sms.recordAttempt(repos.sms.deliveriesOf(smsId).first().id, SendOutcome.Rejected(401, null))
         assertEquals(DeliveryStatus.ERROR, repos.sms.deliveriesOf(smsId).first().status)
-        val vm = vm(id)
+        val vm = loaded(id)
         vm.setName("Again")
         vm.save()
+        vm.await { it.done }
         assertEquals(listOf(listOf(smsId)), enqueued)
-        assertTrue(vm.state.value.done)
     }
 
     @Test fun deleteAsksWithPendingCount() = runBlocking {
         val id = repos.destinations.create(draft("One"))
         repeat(3) { ingest(id) }
-        val vm = vm(id)
+        val vm = loaded(id)
         vm.requestDelete()
+        vm.await { it.deletePending != null }
         assertEquals(3, vm.state.value.deletePending)
         vm.dismissDelete()
         assertNull(vm.state.value.deletePending)
         assertEquals(1, liveCount())
         assertFalse(vm.state.value.done)
         vm.requestDelete()
+        vm.await { it.deletePending != null }
         vm.confirmDelete()
-        assertTrue(vm.state.value.done)
+        vm.await { it.done }
         assertEquals(0, liveCount())
     }
 }

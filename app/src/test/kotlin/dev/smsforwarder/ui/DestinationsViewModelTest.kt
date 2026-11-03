@@ -30,7 +30,7 @@ class DestinationsViewModelTest {
     private val clock = Clock { 1_800_000_000_000L }
     private lateinit var db: AppDatabase
     private lateinit var repos: TestRepos
-    private val enqueued = mutableListOf<List<Long>>()
+    private val enqueued = java.util.concurrent.CopyOnWriteArrayList<List<Long>>()
 
     @Before fun setUp() {
         db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), AppDatabase::class.java)
@@ -79,6 +79,8 @@ class DestinationsViewModelTest {
         assertFalse(vm.rows.first { it.isNotEmpty() && !it[0].enabled }[0].enabled)
         assertEquals(emptyList<List<Long>>(), enqueued)
         vm.setEnabled(a, true)
+        val end = System.currentTimeMillis() + 5_000
+        while (enqueued.isEmpty() && System.currentTimeMillis() < end) Thread.sleep(10)
         assertEquals(1, enqueued.size)
         assertEquals(setOf(s1, s2), enqueued[0].toSet())
     }
