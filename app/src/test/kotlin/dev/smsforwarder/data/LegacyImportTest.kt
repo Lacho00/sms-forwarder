@@ -83,6 +83,18 @@ class LegacyImportTest {
     private fun importer(legacy: Credentials?, secrets: DestinationSecretStore) =
         LegacyImport(db, LegacyStore(legacy), secrets, settings)
 
+    @Test fun onImportedRunsOnceAfterARealImportAndNotOnFailure() = runBlocking {
+        withPrimary()
+        var calls = 0
+        val failing = FakeDestinationSecretStore().apply { failOnSet = true }
+        assertFalse(LegacyImport(db, LegacyStore(creds), failing, settings, onImported = { calls++ }).run())
+        assertEquals(0, calls)
+        val ok = LegacyImport(db, LegacyStore(creds), FakeDestinationSecretStore(), settings, onImported = { calls++ })
+        assertTrue(ok.run())
+        assertTrue(ok.run())
+        assertEquals(1, calls)
+    }
+
     @Test fun copiesCredentialsAndSenders() = runBlocking {
         withPrimary()
         seedLegacySenders("AAA", "B B")

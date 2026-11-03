@@ -23,6 +23,8 @@ class LegacyImport(
     private val secrets: DestinationSecretStore,
     private val settings: SettingsRepository,
     private val clock: Clock = SystemClock,
+    /** Runs once after a real 1.1 import completes (e.g. to drop alerts 1.1 left behind). */
+    private val onImported: () -> Unit = {},
 ) {
     private val lock = Mutex()
 
@@ -60,6 +62,13 @@ class LegacyImport(
                 }
             }
             settings.markImportDone()
+            try {
+                onImported()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Cosmetic cleanup; never undo a finished import.
+            }
             true
         } catch (e: CancellationException) {
             throw e

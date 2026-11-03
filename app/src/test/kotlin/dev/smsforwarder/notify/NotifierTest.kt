@@ -65,6 +65,18 @@ class NotifierTest {
         assertTrue(text(first).contains(context.getString(R.string.notif_token_rejected_text, 3)))
     }
 
+    @Test fun legacyUntaggedTokenAlertIsCancelled() {
+        val notifier = Notifier(context, utc)
+        manager.notify(
+            Notifier.LEGACY_ID_TOKEN_REJECTED,
+            Notification.Builder(context, Notifier.CHANNEL_ID).setSmallIcon(android.R.drawable.stat_notify_error).build(),
+        )
+        notifier.tokenRejected(1L, 1)
+        notifier.cancelLegacyTokenRejected()
+        assertEquals(null, shadowOf(manager).getNotification(null, Notifier.LEGACY_ID_TOKEN_REJECTED))
+        assertNotNull(shadowOf(manager).getNotification(Notifier.TOKEN_TAG, 1))
+    }
+
     @Test fun recoveredTextNamesSenderAndTime() {
         val at = LocalDateTime.of(2026, 10, 29, 11, 42).toInstant(ZoneOffset.UTC).toEpochMilli()
         Notifier(context, utc).recovered(listOf(entity(1, at)))

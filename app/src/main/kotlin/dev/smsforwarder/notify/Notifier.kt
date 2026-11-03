@@ -101,6 +101,9 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
         )
     }
 
+    /** 1.1 posted the token alert as id 3002 with no tag; 1.2 tags it per destination, so drop the old one. */
+    fun cancelLegacyTokenRejected() = manager.cancel(LEGACY_ID_TOKEN_REJECTED)
+
     private fun describe(issue: HealthIssue): Int = when (issue) {
         HealthIssue.SMS_PERMISSION -> R.string.notif_issue_sms_permission
         HealthIssue.NOTIFICATION_PERMISSION -> R.string.notif_issue_notification_permission
@@ -147,6 +150,8 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
         /** Stuck notifications use this tag with the SMS id, so they never clash with the fixed ids. */
         const val STUCK_TAG = "stuck"
         const val ID_HEALTH = 3001
+        /** Untagged id the 1.1 token-rejected alert used. */
+        const val LEGACY_ID_TOKEN_REJECTED = 3002
         /** Token-rejected notifications use this tag with the destination id. */
         const val TOKEN_TAG = "token"
 

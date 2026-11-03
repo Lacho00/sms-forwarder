@@ -72,7 +72,7 @@ class AppGraph(context: Context) {
     /** Built on first use; a test can assign its own with fake stores. */
     var legacyImport: LegacyImport
         get() = synchronized(this) {
-            legacyImportOrNull ?: LegacyImport(db, secretStore, destinationSecretStore, settings)
+            legacyImportOrNull ?: LegacyImport(db, secretStore, destinationSecretStore, settings, onImported = { notifier.cancelLegacyTokenRejected() })
                 .also { legacyImportOrNull = it }
         }
         set(value) = synchronized(this) { legacyImportOrNull = value }
