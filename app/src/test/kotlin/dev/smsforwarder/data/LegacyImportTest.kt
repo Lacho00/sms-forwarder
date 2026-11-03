@@ -179,7 +179,11 @@ class LegacyImportTest {
         assertEquals(1, db.ruleDao().activeWithDestinations().size)
     }
 
-    @Test fun legacyBlobSurvivesFourFailuresAndIsGivenUpOnTheFifth() = runBlocking {
+    private class Ticking(var t: Long = 1_000_000L) : dev.smsforwarder.core.Clock {
+        override fun now(): Long = t
+    }
+
+    @Test fun legacyBlobSurvivesBurstOfFailuresAndIsGivenUpOnlyAfterADay() = runBlocking {
         withPrimary()
         seedLegacySenders("AAA")
         val legacy = object : SecretStore {
@@ -191,12 +195,15 @@ class LegacyImportTest {
             }
         }
         val secrets = FakeDestinationSecretStore()
-        val imp = LegacyImport(db, legacy, secrets, settings)
-        repeat(4) {
+        val clock = Ticking()
+        val imp = LegacyImport(db, legacy, secrets, settings, clock)
+        repeat(10) {
             assertFalse(imp.run())
             assertFalse(settings.isImportDone())
             assertFalse(legacy.discarded)
+            clock.t += 5 * 60 * 1000L
         }
+        clock.t += 24L * 60 * 60 * 1000
         assertTrue(imp.run())
         assertTrue(legacy.discarded)
         assertTrue(settings.isImportDone())
@@ -220,6 +227,7 @@ class LegacyImportTest {
         assertTrue(imp.run())
         assertEquals(creds.toDestinationSecrets(), secrets.get(PRIMARY_DESTINATION_ID))
         assertEquals(0, settings.importFailureCount())
+        assertNull(settings.importFirstFailureAt())
     }
 
     @Test fun transientDestinationReadDoesNotMarkDoneOrOverwrite() = runBlocking {

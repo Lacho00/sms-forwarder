@@ -34,7 +34,9 @@ class LegacyImport(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (settings.recordLegacyReadFailure() < MAX_READ_FAILURES) throw e
+            val (count, firstAt) = settings.recordLegacyReadFailure(clock.now())
+            // Runs pile up within seconds after boot: wait for both enough failures and a day.
+            if (count < MAX_READ_FAILURES || clock.now() - firstAt < GIVE_UP_AFTER_MS) throw e
             try {
                 legacySecrets.discard()
             } catch (inner: CancellationException) {
@@ -57,7 +59,7 @@ class LegacyImport(
             }
             // The 1.1 blob is never deleted on the first failure: Keystore errors are often wrapped and
             // look permanent. A failed read lands in safe mode and retries; after MAX_READ_FAILURES
-            // consecutive failed runs it is given up on (import completes without credentials).
+            // failed runs spanning a day it is given up on (import completes without credentials).
             val credentials = readLegacy()
             if (credentials != null && secrets.get(PRIMARY_DESTINATION_ID) == null) {
                 secrets.set(PRIMARY_DESTINATION_ID, credentials.toDestinationSecrets())
@@ -108,5 +110,6 @@ class LegacyImport(
 
     private companion object {
         const val MAX_READ_FAILURES = 5
+        const val GIVE_UP_AFTER_MS = 24L * 60 * 60 * 1000
     }
 }
