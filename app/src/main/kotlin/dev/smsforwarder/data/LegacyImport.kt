@@ -28,6 +28,24 @@ class LegacyImport(
 ) {
     private val lock = Mutex()
 
+    private suspend fun readLegacy(): Credentials? {
+        try {
+            return legacySecrets.get()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (settings.recordLegacyReadFailure() < MAX_READ_FAILURES) throw e
+            try {
+                legacySecrets.discard()
+            } catch (inner: CancellationException) {
+                throw inner
+            } catch (inner: Exception) {
+                // The blob stays; the import still completes without it.
+            }
+            return null
+        }
+    }
+
     /** True when the import is done or was never needed; false means "safe mode": do not send. */
     suspend fun run(): Boolean = lock.withLock {
         try {
@@ -37,9 +55,10 @@ class LegacyImport(
                 settings.markImportDone()
                 return true
             }
-            // A transient Keystore error throws (blob kept) and lands in safe mode below; only a
-            // genuinely corrupt blob reads as null, and that is final.
-            val credentials = legacySecrets.get()
+            // The 1.1 blob is never deleted on the first failure: Keystore errors are often wrapped and
+            // look permanent. A failed read lands in safe mode and retries; after MAX_READ_FAILURES
+            // consecutive failed runs it is given up on (import completes without credentials).
+            val credentials = readLegacy()
             if (credentials != null && secrets.get(PRIMARY_DESTINATION_ID) == null) {
                 secrets.set(PRIMARY_DESTINATION_ID, credentials.toDestinationSecrets())
             }
@@ -85,5 +104,9 @@ class LegacyImport(
             }
             false
         }
+    }
+
+    private companion object {
+        const val MAX_READ_FAILURES = 5
     }
 }

@@ -179,6 +179,49 @@ class LegacyImportTest {
         assertEquals(1, db.ruleDao().activeWithDestinations().size)
     }
 
+    @Test fun legacyBlobSurvivesFourFailuresAndIsGivenUpOnTheFifth() = runBlocking {
+        withPrimary()
+        seedLegacySenders("AAA")
+        val legacy = object : SecretStore {
+            var discarded = false
+            override suspend fun get(): Credentials? = throw UnrecoverableSecretException(IllegalStateException("x"))
+            override suspend fun set(c: Credentials) = Unit
+            override suspend fun discard() {
+                discarded = true
+            }
+        }
+        val secrets = FakeDestinationSecretStore()
+        val imp = LegacyImport(db, legacy, secrets, settings)
+        repeat(4) {
+            assertFalse(imp.run())
+            assertFalse(settings.isImportDone())
+            assertFalse(legacy.discarded)
+        }
+        assertTrue(imp.run())
+        assertTrue(legacy.discarded)
+        assertTrue(settings.isImportDone())
+        assertNull(secrets.get(PRIMARY_DESTINATION_ID))
+        assertEquals(1, db.ruleDao().activeWithDestinations().size)
+        assertFalse(settings.isImportFailed())
+    }
+
+    @Test fun successAfterFailuresImportsAndResetsCounter() = runBlocking {
+        withPrimary()
+        var healthy = false
+        val legacy = object : SecretStore {
+            override suspend fun get(): Credentials? =
+                if (healthy) creds else throw UnrecoverableSecretException(IllegalStateException("x"))
+            override suspend fun set(c: Credentials) = Unit
+        }
+        val secrets = FakeDestinationSecretStore()
+        val imp = LegacyImport(db, legacy, secrets, settings)
+        repeat(3) { assertFalse(imp.run()) }
+        healthy = true
+        assertTrue(imp.run())
+        assertEquals(creds.toDestinationSecrets(), secrets.get(PRIMARY_DESTINATION_ID))
+        assertEquals(0, settings.importFailureCount())
+    }
+
     @Test fun transientDestinationReadDoesNotMarkDoneOrOverwrite() = runBlocking {
         withPrimary()
         val existing = DestinationSecrets("https://other.invalid/x", emptyList())

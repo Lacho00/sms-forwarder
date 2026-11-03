@@ -30,6 +30,9 @@ data class Credentials(val url: String, val token: String) {
 interface SecretStore {
     suspend fun get(): Credentials?
     suspend fun set(c: Credentials)
+
+    /** Deletes the stored blob; used once a read has failed for good. */
+    suspend fun discard() {}
 }
 
 internal val Context.secretsDataStore by preferencesDataStore(name = "secrets")
@@ -37,8 +40,8 @@ internal val Context.secretsDataStore by preferencesDataStore(name = "secrets")
 /**
  * AES-256-GCM key kept in the AndroidKeyStore; ciphertext and IV live in DataStore as base64.
  *
- * [get] deletes the blob only when it is provably unrecoverable. A transient Keystore failure
- * throws [TransientSecretException] and keeps the blob, so the caller can retry later.
+ * [get] never deletes: it throws [TransientSecretException] or [UnrecoverableSecretException] and
+ * keeps the blob; the caller decides when to [discard].
  */
 class KeystoreSecretStore internal constructor(
     context: Context,
@@ -53,17 +56,15 @@ class KeystoreSecretStore internal constructor(
         val iv = prefs[IV_KEY]
         val blob = prefs[BLOB_KEY]
         if (iv == null || blob == null) return null
-        return try {
-            decodeSecret(decrypt, iv, blob) { plain ->
-                val parts = plain.split(SEPARATOR, limit = 2)
-                require(parts.size == 2) { "corrupt blob" }
-                Credentials(parts[0], parts[1])
-            }
-        } catch (e: UnrecoverableSecretException) {
-            clear()
-            null
+        // Never deletes: LegacyImport counts failures and calls discard() only after repeated ones.
+        return decodeSecret(decrypt, iv, blob) { plain ->
+            val parts = plain.split(SEPARATOR, limit = 2)
+            require(parts.size == 2) { "corrupt blob" }
+            Credentials(parts[0], parts[1])
         }
     }
+
+    override suspend fun discard() = clear()
 
     override suspend fun set(c: Credentials) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -239,7 +240,7 @@ private fun createSecretKey(): SecretKey {
 class TransientSecretException(cause: Throwable) : Exception("transient Keystore failure", cause)
 
 /** The blob can never be read again (bad tag, malformed, key gone or invalidated). */
-internal class UnrecoverableSecretException(cause: Throwable) : Exception(cause)
+class UnrecoverableSecretException(cause: Throwable) : Exception(cause)
 
 private class MissingKeyException : java.security.KeyException("missing key")
 
@@ -250,13 +251,23 @@ internal fun keystoreDecrypt(iv: ByteArray, blob: ByteArray): ByteArray {
     return cipher.doFinal(blob)
 }
 
-private fun isUnrecoverable(e: Exception): Boolean =
-    e is javax.crypto.BadPaddingException || // includes AEADBadTagException
+private fun causeChain(e: Throwable): Sequence<Throwable> =
+    generateSequence(e) { it.cause?.takeIf { c -> c !== it } }.take(10)
+
+/** keystore2 reports daemon/system/busy errors as android.security.KeyStoreException, often wrapped in other exceptions. */
+internal fun isAndroidKeystoreFault(t: Throwable): Boolean = t.javaClass.name == "android.security.KeyStoreException"
+
+private fun isUnrecoverable(e: Exception, isKeystoreFault: (Throwable) -> Boolean): Boolean {
+    val chain = causeChain(e).toList()
+    if (chain.any { it is android.security.keystore.KeyPermanentlyInvalidatedException }) return true
+    // API 31+ wraps keystore2 errors in UnrecoverableKeyException / IllegalBlockSizeException: look at the cause.
+    if (chain.any(isKeystoreFault)) return false
+    return e is javax.crypto.BadPaddingException || // includes AEADBadTagException
         e is javax.crypto.IllegalBlockSizeException ||
-        e is android.security.keystore.KeyPermanentlyInvalidatedException ||
         e is java.security.UnrecoverableKeyException ||
         e is MissingKeyException ||
         e is IllegalArgumentException // bad base64 or GCM parameters
+}
 
 /**
  * Decrypts and parses one stored blob. Throws [UnrecoverableSecretException] only for permanent
@@ -268,11 +279,12 @@ internal fun <T> decodeSecret(
     ivB64: String,
     blobB64: String,
     parse: (String) -> T,
+    isKeystoreFault: (Throwable) -> Boolean = ::isAndroidKeystoreFault,
 ): T {
     val plain = try {
         String(decrypt(Base64.decode(ivB64, Base64.NO_WRAP), Base64.decode(blobB64, Base64.NO_WRAP)), Charsets.UTF_8)
     } catch (e: Exception) {
-        throw if (isUnrecoverable(e)) UnrecoverableSecretException(e) else TransientSecretException(e)
+        throw if (isUnrecoverable(e, isKeystoreFault)) UnrecoverableSecretException(e) else TransientSecretException(e)
     }
     return try {
         parse(plain)

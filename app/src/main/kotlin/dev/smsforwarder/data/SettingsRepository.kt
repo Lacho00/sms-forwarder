@@ -56,7 +56,19 @@ class SettingsRepository(
         store.edit {
             it[IMPORT_DONE_KEY] = true
             it.remove(IMPORT_FAILED_KEY)
+            it.remove(IMPORT_FAILURES_KEY)
         }
+    }
+
+    suspend fun importFailureCount(): Int = store.data.first()[IMPORT_FAILURES_KEY] ?: 0
+
+    suspend fun recordLegacyReadFailure(): Int {
+        var n = 0
+        store.edit {
+            n = (it[IMPORT_FAILURES_KEY] ?: 0) + 1
+            it[IMPORT_FAILURES_KEY] = n
+        }
+        return n
     }
 
     suspend fun markImportFailed() {
@@ -202,6 +214,7 @@ class SettingsRepository(
         const val SEPARATOR = "\n"
         val IMPORT_DONE_KEY = booleanPreferencesKey("v2_import_done")
         val IMPORT_FAILED_KEY = booleanPreferencesKey("v2_import_failed")
+        val IMPORT_FAILURES_KEY = androidx.datastore.preferences.core.intPreferencesKey("v2_import_legacy_read_failures")
         val SENDERS_KEY = stringPreferencesKey("senders")
         val THEME_KEY = stringPreferencesKey("theme_mode")
         val SWEEP_CURSOR_KEY = longPreferencesKey("sweep_cursor")

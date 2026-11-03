@@ -48,15 +48,24 @@ class KeystoreSecretStoreTest {
         }
     }
 
-    @Test fun legacyCorruptionDeletesBlob() = runBlocking {
+    @Test fun legacyCorruptionThrowsUnrecoverableButKeepsBlob() = runBlocking {
         seedLegacy()
-        assertNull(KeystoreSecretStore(context, failWith(AEADBadTagException("bad"))).get())
-        assertNull(legacyBlob())
+        for (d in listOf<(ByteArray, ByteArray) -> ByteArray>(
+            failWith(AEADBadTagException("bad")),
+            { _, _ -> "no separator".toByteArray() },
+        )) {
+            try {
+                KeystoreSecretStore(context, d).get()
+                error("expected UnrecoverableSecretException")
+            } catch (e: UnrecoverableSecretException) {
+                assertNotNull(legacyBlob())
+            }
+        }
     }
 
-    @Test fun legacyMalformedPlaintextDeletesBlob() = runBlocking {
+    @Test fun legacyDiscardDeletesBlob() = runBlocking {
         seedLegacy()
-        assertNull(KeystoreSecretStore(context, { _, _ -> "no separator".toByteArray() }).get())
+        KeystoreSecretStore(context, failWith(AEADBadTagException("bad"))).discard()
         assertNull(legacyBlob())
     }
 
@@ -84,5 +93,33 @@ class KeystoreSecretStoreTest {
         seedDestination(8)
         assertNull(KeystoreDestinationSecretStore(context, { _, _ -> "not json".toByteArray() }).get(8))
         assertNull(destBlob(8))
+    }
+
+    /** Stand-in for android.security.KeyStoreException, which Robolectric cannot construct. */
+    private class FakeKsFault : Exception("ks")
+
+    private fun classify(e: Exception): Class<*> = try {
+        decodeSecret({ _, _ -> throw e }, "AAAA", "AAAA", { it }, { it is FakeKsFault })
+        Nothing::class.java
+    } catch (t: Exception) {
+        t.javaClass
+    }
+
+    @Test fun wrappedKeystoreFaultsAreTransient() {
+        val transient = TransientSecretException::class.java
+        assertEquals(transient, classify(java.security.UnrecoverableKeyException("x").initCause(FakeKsFault()) as Exception))
+        assertEquals(transient, classify(javax.crypto.IllegalBlockSizeException("x").initCause(FakeKsFault()) as Exception))
+    }
+
+    @Test fun wrappedPermanentInvalidationIsPermanent() {
+        val kpie = android.security.keystore.KeyPermanentlyInvalidatedException("x")
+        val wrapped = java.security.UnrecoverableKeyException("x").also { it.initCause(kpie) }
+        assertEquals(UnrecoverableSecretException::class.java, classify(wrapped))
+        assertEquals(UnrecoverableSecretException::class.java, classify(java.security.UnrecoverableKeyException("plain")))
+        assertEquals(UnrecoverableSecretException::class.java, classify(AEADBadTagException("bad")))
+    }
+
+    @Test fun realKeystoreFaultClassIsMatchedByName() {
+        assertEquals(false, isAndroidKeystoreFault(RuntimeException()))
     }
 }
