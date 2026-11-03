@@ -38,6 +38,8 @@ data class RenderedRequest(
 object Templates {
     val VARIABLES: Set<String> = setOf("sender", "body", "received_at", "received_at_ms", "sim", "device")
 
+    const val STANDARD_JSON_BODY = "{\"sender\":\"{sender}\",\"body\":\"{body}\",\"received_at\":{received_at}}"
+
     private val PLACEHOLDER = Regex("\\{([a-z_]+)\\}")
     private const val JSON_CONTENT_TYPE = "application/json; charset=utf-8"
     private const val TEXT_CONTENT_TYPE = "text/plain; charset=utf-8"
@@ -63,7 +65,7 @@ object Templates {
         method = HttpMethod.POST,
         url = url,
         headers = listOf("Authorization" to "Bearer $token"),
-        body = "{\"sender\":\"{sender}\",\"body\":\"{body}\",\"received_at\":{received_at}}",
+        body = STANDARD_JSON_BODY,
         bodyIsJson = true,
     )
 
