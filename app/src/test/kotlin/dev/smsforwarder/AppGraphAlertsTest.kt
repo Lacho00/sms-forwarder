@@ -2,6 +2,7 @@ package dev.smsforwarder
 
 import android.app.NotificationManager
 import android.content.Context
+import dev.smsforwarder.core.DeliveryStatus
 import dev.smsforwarder.core.NotifyKind
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
