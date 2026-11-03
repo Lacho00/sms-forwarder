@@ -147,6 +147,22 @@ class DetailScreenTest {
         compose.runOnIdle { assertEquals(2L, resent) }
     }
 
+    @Test fun resendDialogLabelsPausedDestinations() {
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(
+                    state = DetailUiState(
+                        sms(SmsStatus.SENT), emptyList(),
+                        destinations = listOf(destination(1, "Main"), destination(2, "T2").copy(enabled = false)),
+                    ),
+                    onRetry = {}, onDelete = {}, onBack = {},
+                )
+            }
+        }
+        compose.onNodeWithText(str(R.string.detail_resend_to)).performScrollTo().performClick()
+        compose.onNode(hasText("T2 · " + str(R.string.destination_paused)) and hasAnyAncestor(isDialog())).assertExists()
+    }
+
     @Test fun resendHiddenWithoutDestinations() {
         compose.setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {

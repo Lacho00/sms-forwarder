@@ -179,4 +179,14 @@ class MainViewModelTest {
         assertEquals(before.queued, s.queued)
         assertEquals(before.errors, s.errors)
     }
+
+    @Test fun deletedDestinationFilterResets() {
+        val second = addDestination("T2")
+        runBlocking { sms.resendTo(queuedId, second) }
+        vm.setDestinationFilter(second)
+        await { it.destinationFilter == second && it.rows.size == 1 }
+        runBlocking { repos.destinations.delete(second) }
+        val s = await { it.destinationFilter == null && it.rows.size == 3 }
+        assertEquals(null, s.destinationFilter)
+    }
 }

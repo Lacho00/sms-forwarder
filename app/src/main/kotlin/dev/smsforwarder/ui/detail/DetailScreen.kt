@@ -27,11 +27,8 @@ import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.core.StatusLabel
 import dev.smsforwarder.R
-import dev.smsforwarder.core.DeliveryStatus
-import dev.smsforwarder.core.isConfigError
 import dev.smsforwarder.data.AttemptEntity
-import dev.smsforwarder.data.DeliveryEntity
-import dev.smsforwarder.ui.main.DeliveryChipUi
+import dev.smsforwarder.ui.main.toChip
 import dev.smsforwarder.ui.main.deliveryChipText
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.ui.main.formatDateTime
@@ -54,13 +51,6 @@ private fun attemptLine(attempt: AttemptEntity, destinationName: String?): Strin
     // Attempts from before destinations existed carry no delivery, so they carry no name either.
     return if (destinationName == null) line else stringResource(R.string.detail_attempt_destination, destinationName, line)
 }
-
-private fun DeliveryEntity.toChip() = DeliveryChipUi(
-    destinationName = destinationName,
-    status = status,
-    httpCode = lastHttpCode,
-    configError = status == DeliveryStatus.ERROR && isConfigError(lastError),
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,7 +137,10 @@ private fun DetailContent(
                         TextButton(onClick = {
                             pickDestination = false
                             onResendTo(destination.id)
-                        }) { Text(destination.name) }
+                        }) {
+                            val paused = if (destination.enabled) "" else " · " + stringResource(R.string.destination_paused)
+                            Text(destination.name + paused)
+                        }
                     }
                 }
             },

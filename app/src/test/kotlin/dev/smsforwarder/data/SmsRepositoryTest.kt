@@ -425,8 +425,13 @@ class SmsRepositoryTest {
 
         repo.resendTo(id, 1L)
 
-        assertEquals(listOf(DeliveryStatus.QUEUED), repo.deliveriesOf(id).map { it.status })
+        val delivery = repo.deliveriesOf(id).single()
+        assertEquals(DeliveryStatus.QUEUED, delivery.status)
+        assertEquals(null, delivery.sentAt)
+        assertEquals(null, delivery.lastHttpCode)
+        assertEquals(null, delivery.lastError)
         assertEquals(SmsStatus.QUEUED, repo.get(id)!!.status)
+        assertEquals(null, repo.get(id)!!.sentAt)
     }
 
     @Test fun resendToNewDestinationCreatesDelivery() = runBlocking {

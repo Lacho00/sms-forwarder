@@ -1,5 +1,6 @@
 package dev.smsforwarder.ui.detail
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -10,6 +11,7 @@ import dev.smsforwarder.data.DeliveryEntity
 import dev.smsforwarder.data.DestinationEntity
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,7 +60,7 @@ class DetailViewModel(
 
     /** Puts an errored SMS back in the queue and starts a send right away. */
     fun retry() {
-        viewModelScope.launch {
+        launchSafely {
             smsRepository.requeue(smsId)
             enqueueSend(smsId)
         }
@@ -66,7 +68,7 @@ class DetailViewModel(
 
     /** Queues the SMS again for one destination and starts a send right away. */
     fun resendTo(destinationId: Long) {
-        viewModelScope.launch {
+        launchSafely {
             smsRepository.resendTo(smsId, destinationId)
             enqueueSend(smsId)
         }
@@ -74,9 +76,22 @@ class DetailViewModel(
 
     /** Hides the SMS from the app and stops its send; the row stays so the sweep does not bring it back. */
     fun delete() {
-        viewModelScope.launch {
+        launchSafely {
             smsRepository.softDelete(smsId)
             cancelSend(smsId)
+        }
+    }
+
+    // A failing write or enqueue must not crash the app; the screen simply keeps showing the stored state.
+    private fun launchSafely(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("DetailViewModel", "Action failed: ${e.javaClass.simpleName}")
+            }
         }
     }
 

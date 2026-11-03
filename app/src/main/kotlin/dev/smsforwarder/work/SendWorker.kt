@@ -52,9 +52,29 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
         if (pending.isEmpty()) return Result.success()
 
-        val retryNeeded = supervisorScope {
-            pending.map { delivery -> async { sendOne(graph, sms, delivery) } }.awaitAll()
-        }.any { it }
+        var retryNeeded = false
+        // Deliveries queued while this run was sending (a resend or retry finds the work RUNNING and cannot
+        // replace it) are picked up here instead of waiting for the next sweep.
+        var batch = pending
+        var previous = emptyMap<Long, Int>()
+        val retried = mutableSetOf<Long>()
+        repeat(MAX_PASSES) {
+            if (batch.isEmpty()) return@repeat
+            val results = supervisorScope {
+                batch.map { delivery -> async { sendOne(graph, sms, delivery) } }.awaitAll()
+            }
+            batch.forEachIndexed { i, delivery -> if (results[i]) retried += delivery.id }
+            if (results.any { it }) retryNeeded = true
+            previous = batch.associate { it.id to it.attempts }
+            batch = try {
+                // Skip what is waiting for a retry and what this pass did not touch (paused destination).
+                repo.pendingDeliveries(id).filter { it.id !in retried && previous[it.id] != it.attempts }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
         return if (retryNeeded) Result.retry() else Result.success()
     }
 
@@ -147,5 +167,6 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
     companion object {
         const val KEY_SMS_ID = "smsId"
+        private const val MAX_PASSES = 3
     }
 }

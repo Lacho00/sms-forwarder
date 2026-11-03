@@ -185,12 +185,15 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
                     ),
                 )
             } else {
-                deliveries.update(existing.copy(status = DeliveryStatus.QUEUED))
+                deliveries.update(
+                    existing.copy(status = DeliveryStatus.QUEUED, sentAt = null, lastHttpCode = null, lastError = null),
+                )
             }
-            val statuses = deliveries.forSms(smsId).map { it.status }
+            val aggregate = aggregateStatus(deliveries.forSms(smsId).map { it.status })
             dao.update(
                 sms.copy(
-                    status = aggregateStatus(statuses),
+                    status = aggregate,
+                    sentAt = if (aggregate == SmsStatus.SENT) sms.sentAt else null,
                     stuckNotified = false,
                     firstSeenAt = clock.now(),
                     lastError = if (sms.lastError == DESTINATION_DELETED) null else sms.lastError,

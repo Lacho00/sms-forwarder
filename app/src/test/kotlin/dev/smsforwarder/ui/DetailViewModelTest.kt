@@ -36,7 +36,7 @@ class DetailViewModelTest {
     private lateinit var db: AppDatabase
     private lateinit var sms: SmsRepository
     private var smsId = 0L
-    private val enqueued = mutableListOf<Long>()
+    private val enqueued = kotlinx.coroutines.CompletableDeferred<Long>()
     private lateinit var vm: DetailViewModel
 
     @Before fun setUp() = runBlocking {
@@ -54,11 +54,14 @@ class DetailViewModelTest {
             )
         }
         smsId = (sms.ingest(SmsRecord("AAA", "TEST", now, null, null), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        vm = DetailViewModel(
-            smsId, sms, enqueueSend = { enqueued += it },
+        vm = newVm()
+    }
+
+    private fun newVm() =
+        DetailViewModel(
+            smsId, sms, enqueueSend = { enqueued.complete(it) },
             destinations = db.destinationDao().observeLive(),
         )
-    }
 
     @After fun tearDown() {
         db.close()
@@ -76,8 +79,17 @@ class DetailViewModelTest {
 
     @Test fun resendEnqueues() {
         vm.resendTo(2L)
+        assertEquals(smsId, runBlocking { withTimeout(5_000) { enqueued.await() } })
         val s = await { it.deliveries.size == 2 }
         assertEquals(listOf(DeliveryStatus.QUEUED, DeliveryStatus.QUEUED), s.deliveries.map { it.status })
-        assertEquals(listOf(smsId), enqueued)
+    }
+
+    @Test fun failingActionsDoNotCrash() {
+        val broken = DetailViewModel(smsId, sms, enqueueSend = { throw IllegalStateException("boom") })
+        broken.resendTo(2L)
+        broken.retry()
+        broken.delete()
+        // Reaching here without an uncaught exception is the check; the stored state is still readable.
+        assertEquals(smsId, runBlocking { sms.get(smsId)!!.id })
     }
 }

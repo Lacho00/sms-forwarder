@@ -104,6 +104,36 @@ class SendWorkerTest {
         assertEquals(SmsStatus.QUEUED, graph.smsRepository.get(id)!!.status)
     }
 
+    @Test fun deliveryQueuedDuringTheRunIsSentInTheSameRun() = runBlocking {
+        val id = insertSms()
+        val other = graph.db.destinationDao().insert(
+            DestinationEntity(
+                name = "T2", enabled = true, template = TemplateKind.STANDARD_JSON, method = HttpMethod.POST,
+                bodyTemplate = null, bodyIsJson = true, publicHeaders = "[]",
+                successPolicy = SuccessPolicy.ANY_2XX, createdAt = 1L,
+            ),
+        )
+        graph.destinationSecretStore.set(other, DestinationSecrets(server.url("/second").toString(), emptyList()))
+        var queuedOnce = false
+        server.dispatcher = object : mockwebserver3.Dispatcher() {
+            override fun dispatch(request: mockwebserver3.RecordedRequest): MockResponse {
+                if (!queuedOnce) {
+                    queuedOnce = true
+                    // What a resend does while this work item is RUNNING.
+                    runBlocking { graph.smsRepository.resendTo(id, other) }
+                }
+                return MockResponse.Builder().code(200).build()
+            }
+        }
+        assertEquals(ListenableWorker.Result.success(), run(id))
+        assertEquals(2, server.requestCount)
+        assertEquals(
+            listOf(DeliveryStatus.SENT, DeliveryStatus.SENT),
+            graph.smsRepository.deliveriesOf(id).map { it.status },
+        )
+        assertEquals(SmsStatus.SENT, graph.smsRepository.get(id)!!.status)
+    }
+
     @Test fun `200MarksSent`() = runBlocking {
         val id = insertSms()
         server.enqueue(MockResponse.Builder().code(200).build())

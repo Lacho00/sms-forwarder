@@ -67,7 +67,7 @@ private fun matchesFilter(status: SmsStatus, filter: StatusFilter): Boolean = wh
     StatusFilter.ERROR -> status == SmsStatus.ERROR
 }
 
-private fun DeliveryEntity.toChip() = DeliveryChipUi(
+internal fun DeliveryEntity.toChip() = DeliveryChipUi(
     destinationName = destinationName,
     status = status,
     httpCode = lastHttpCode,
@@ -132,6 +132,8 @@ class MainViewModel(
         settings.forwardingEnabled,
         view,
     ) { all, lastSweepAt, currentIssues, forwarding, (c, d) ->
+        // A destination that is gone (or whose chips are hidden) cannot keep filtering the list.
+        val destinationFilter = c.destinationFilter?.takeIf { id -> d.destinations.size > 1 && d.destinations.any { it.id == id } }
         MainUiState(
             issues = currentIssues,
             lastSweepAt = lastSweepAt,
@@ -141,8 +143,8 @@ class MainViewModel(
             rows = all
                 .filter {
                     matchesFilter(it.status, c.filter) && SmsSearch.matches(it.sender, it.body, c.query) &&
-                        (c.destinationFilter == null ||
-                            d.bySms[it.id].orEmpty().any { delivery -> delivery.destinationId == c.destinationFilter })
+                        (destinationFilter == null ||
+                            d.bySms[it.id].orEmpty().any { delivery -> delivery.destinationId == destinationFilter })
                 }
                 .map { it.toRowUi(d.bySms[it.id].orEmpty()) },
             paused = !forwarding,
@@ -150,7 +152,7 @@ class MainViewModel(
             filter = c.filter,
             hideText = c.hideText,
             destinations = d.destinations.map { it.id to it.name },
-            destinationFilter = c.destinationFilter,
+            destinationFilter = destinationFilter,
         )
     }.stateIn(
         scope = viewModelScope,
