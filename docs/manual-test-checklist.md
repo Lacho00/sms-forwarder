@@ -34,3 +34,17 @@ Se recorre en el teléfono real con la APK de la Release. Apunta los casos que f
 - [ ] Notificaciones por tipo (recuperado, atascado, permisos): al apagar cada una, ese aviso no sale.
 - [ ] Un rechazo 400 sigue notificando aunque estén apagados los avisos opcionales.
 - [ ] Retención: con un plazo corto, el historial enviado se purga; los SMS en cola o con error no se borran.
+
+## Actualizar de 1.1 a 1.2
+
+Se instala la APK de la Release de la rama sobre la 1.1.0 real, sin desinstalar (`adb install -r`).
+
+- [ ] Inicio muestra el mismo historial que antes de actualizar.
+- [ ] Ajustes muestra los mismos remitentes.
+- [ ] La prueba de conexión funciona.
+- [ ] Un SMS nuevo de un remitente configurado llega al endpoint con 200.
+- [ ] La app no pide ningún permiso nuevo.
+
+La APK de la Release no es depurable, así que no se puede copiar la base de datos antes de actualizar.
+La red de seguridad son las pruebas de migración (T3) y de importación (T5). Quien instala confirma
+antes que acepta ese riesgo.
