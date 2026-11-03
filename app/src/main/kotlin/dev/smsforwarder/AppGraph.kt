@@ -41,7 +41,6 @@ class AppGraph(context: Context) {
     var destinationSecretStore: DestinationSecretStore = KeystoreDestinationSecretStore(context)
     val ingestClient = IngestClient(defaultHttpClient())
 
-    /** Lazy so it picks up the destinationSecretStore a test may have swapped in. */
     /** Forwards to whichever store is current, so a test swap after the first use still takes effect. */
     private val secretsProxy = object : DestinationSecretStore {
         override suspend fun get(destinationId: Long) = destinationSecretStore.get(destinationId)

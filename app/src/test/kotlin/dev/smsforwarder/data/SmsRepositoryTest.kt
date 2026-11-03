@@ -317,4 +317,25 @@ class SmsRepositoryTest {
         repo.purgeOld(Retention.D30)
         assertNotNull(repo.get(id))
     }
+
+    @Test fun idsWithAuthErrorIgnoresDeletedDestinations() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        repo.recordAttempt(id, SendOutcome.Rejected(401, null))
+        assertEquals(listOf(id), repo.idsWithAuthError())
+        db.destinationDao().update(db.destinationDao().get(1L)!!.copy(deletedAt = now))
+        assertEquals(emptyList<Long>(), repo.idsWithAuthError())
+    }
+
+    @Test fun ingestWithOnlyDeletedDestinationStoresNothing() = runBlocking {
+        db.destinationDao().update(db.destinationDao().get(1L)!!.copy(deletedAt = now))
+        val result = repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 99L))
+        assertEquals(IngestResult.NoDestination, result)
+        assertEquals(false, repo.isKnown(record()))
+    }
+
+    @Test fun ingestSkipsDeletedDestinationButKeepsLiveOnes() = runBlocking {
+        db.destinationDao().update(db.destinationDao().get(1L)!!.copy(deletedAt = now))
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
+        assertEquals(listOf(2L), db.deliveryDao().forSms(id).map { it.destinationId })
+    }
 }

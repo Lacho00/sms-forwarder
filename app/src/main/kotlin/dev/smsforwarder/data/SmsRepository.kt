@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.Flow
 sealed interface IngestResult {
     data class Inserted(val id: Long) : IngestResult
     data class AlreadyKnown(val id: Long) : IngestResult
+    /** Every requested destination is missing or deleted, so nothing was stored. */
+    data object NoDestination : IngestResult
 }
 
 class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
@@ -35,6 +37,11 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
             .firstOrNull { SmsIdentity.isSameSms(it.toRecord(), record) }
         if (match != null) return@withTransaction IngestResult.AlreadyKnown(match.id)
 
+        val targets = destinationIds.sorted().mapNotNull { destinationId ->
+            destinations.get(destinationId)?.takeIf { it.deletedAt == null }
+        }
+        if (targets.isEmpty()) return@withTransaction IngestResult.NoDestination
+
         val id = dao.insert(
             SmsEntity(
                 localKey = key,
@@ -50,11 +57,10 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
             ),
         )
         deliveries.insertAll(
-            destinationIds.sorted().mapNotNull { destinationId ->
-                val destination = destinations.get(destinationId) ?: return@mapNotNull null
+            targets.map { destination ->
                 DeliveryEntity(
                     smsId = id,
-                    destinationId = destinationId,
+                    destinationId = destination.id,
                     destinationName = destination.name,
                     status = DeliveryStatus.QUEUED,
                 )

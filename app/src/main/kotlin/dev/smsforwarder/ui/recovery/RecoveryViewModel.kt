@@ -1,6 +1,7 @@
 package dev.smsforwarder.ui.recovery
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import dev.smsforwarder.core.Clock
@@ -31,6 +32,7 @@ data class RecoveryItem(
     val selected: Boolean,
 )
 
+private const val TAG = "RecoveryViewModel"
 private const val PREVIEW_LENGTH = 80
 
 /**
@@ -84,7 +86,9 @@ class RecoveryViewModel(
         val found = LinkedHashMap<String, SmsRecord>()
         rows.filter { row ->
             val slot = SimSlots.slotOf(context, row.subId)
-            RuleEngine.destinationsFor(IncomingSms(row.address, row.body, slot), rules).destinationIds.isNotEmpty()
+            val match = RuleEngine.destinationsFor(IncomingSms(row.address, row.body, slot), rules)
+            match.timedOutRuleIds.forEach { Log.w(TAG, "rule $it timed out") }
+            match.destinationIds.isNotEmpty()
         }
             .map {
                 SmsRecord(
@@ -119,12 +123,14 @@ class RecoveryViewModel(
     /** Stores the selected SMS as manual recoveries and starts their send. Returns how many were new. */
     suspend fun sendSelected(): Int {
         var inserted = 0
+        val rules = ruleRepository.activeRules()
         for (item in _candidates.value.filter { it.selected && !it.alreadyKnown }) {
             val record = records[item.key] ?: continue
             val match = RuleEngine.destinationsFor(
                 IncomingSms(record.sender, record.body, SimSlots.slotOf(context, record.subId)),
-                ruleRepository.activeRules(),
+                rules,
             )
+            match.timedOutRuleIds.forEach { Log.w(TAG, "rule $it timed out") }
             if (match.destinationIds.isEmpty()) continue
             val result = smsRepository.ingest(record, SmsOrigin.MANUAL, match.destinationIds)
             if (result is IngestResult.Inserted) {

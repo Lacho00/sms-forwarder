@@ -29,6 +29,7 @@ interface DeliveryDao {
 
     @Query(
         "SELECT DISTINCT d.smsId FROM delivery d JOIN sms s ON s.id = d.smsId " +
+            "JOIN destination t ON t.id = d.destinationId AND t.deletedAt IS NULL " +
             "WHERE d.status = :status AND s.deletedAt IS NULL ORDER BY s.receivedAt ASC",
     )
     suspend fun smsIdsWithStatus(status: DeliveryStatus): List<Long>
