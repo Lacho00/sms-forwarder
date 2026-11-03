@@ -357,4 +357,69 @@ class SendWorkerTest {
         val manager = context.getSystemService(NotificationManager::class.java)
         assertNotNull(shadowOf(manager).getNotification(Notifier.STUCK_TAG, id.toInt()))
     }
+
+    @Test fun tokenEditedWhileSendingRetriesInsteadOfError() = runBlocking {
+        val id = insertSms()
+        server.dispatcher = object : mockwebserver3.Dispatcher() {
+            override fun dispatch(request: mockwebserver3.RecordedRequest): MockResponse {
+                // The user fixes the token while the request is in flight.
+                runBlocking {
+                    graph.destinationSecretStore.set(
+                        1L, DestinationSecrets(server.url("/ingest").toString(), listOf("Authorization" to "Bearer new-token")),
+                    )
+                }
+                return MockResponse.Builder().code(403).build()
+            }
+        }
+        assertEquals(ListenableWorker.Result.retry(), run(id))
+        val delivery = graph.smsRepository.deliveriesOf(id).single()
+        assertEquals(DeliveryStatus.QUEUED, delivery.status)
+        assertEquals(0, delivery.attempts)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        assertEquals(0, shadowOf(manager).allNotifications.size)
+    }
+
+    @Test fun destinationResumedDuringRunIsSentInTheSameRun() = runBlocking {
+        second = MockWebServer().also { it.start() }
+        try {
+            val b = addDestination(second, enabled = false)
+            val id = insertSmsTo(1L, b)
+            second.enqueue(MockResponse.Builder().code(200).build())
+            server.dispatcher = object : mockwebserver3.Dispatcher() {
+                override fun dispatch(request: mockwebserver3.RecordedRequest): MockResponse {
+                    runBlocking { graph.destinationRepository.setEnabled(b, true) }
+                    return MockResponse.Builder().code(200).build()
+                }
+            }
+            assertEquals(ListenableWorker.Result.success(), run(id))
+            assertEquals(1, second.requestCount)
+            assertEquals(SmsStatus.SENT, graph.smsRepository.get(id)!!.status)
+        } finally {
+            second.close()
+        }
+    }
+
+    @Test fun forwardingPausedDuringRunStopsNextPass() = runBlocking {
+        val id = insertSms()
+        val other = graph.db.destinationDao().insert(
+            DestinationEntity(
+                name = "T2", enabled = true, template = TemplateKind.STANDARD_JSON, method = HttpMethod.POST,
+                bodyTemplate = null, bodyIsJson = true, publicHeaders = "[]",
+                successPolicy = SuccessPolicy.ANY_2XX, createdAt = 1L,
+            ),
+        )
+        graph.destinationSecretStore.set(other, DestinationSecrets(server.url("/second").toString(), emptyList()))
+        server.dispatcher = object : mockwebserver3.Dispatcher() {
+            override fun dispatch(request: mockwebserver3.RecordedRequest): MockResponse {
+                runBlocking {
+                    graph.smsRepository.resendTo(id, other)
+                    graph.settings.setForwardingEnabled(false)
+                }
+                return MockResponse.Builder().code(200).build()
+            }
+        }
+        assertEquals(ListenableWorker.Result.success(), run(id))
+        assertEquals(1, server.requestCount)
+        assertEquals(DeliveryStatus.QUEUED, graph.smsRepository.deliveriesOf(id).first { it.destinationId == other }.status)
+    }
 }

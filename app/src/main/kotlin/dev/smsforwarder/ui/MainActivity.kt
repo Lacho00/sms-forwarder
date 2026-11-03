@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
         )[SettingsViewModel::class.java]
         destinationsViewModel = ViewModelProvider(
             this,
-            DestinationsViewModel.Factory(g.destinationRepository) { ids -> ids.forEach { WorkScheduler.enqueueSend(app, it) } },
+            DestinationsViewModel.Factory(g.destinationRepository) { ids -> WorkScheduler.kickSends(app, ids) },
         )[DestinationsViewModel::class.java]
         rulesViewModel = ViewModelProvider(
             this,
@@ -176,7 +176,7 @@ class MainActivity : ComponentActivity() {
                 id,
                 g.destinationRepository,
                 g.destinationTester,
-                enqueue = { ids -> ids.forEach { WorkScheduler.enqueueSend(app, it) } },
+                enqueue = { ids -> WorkScheduler.kickSends(app, ids) },
                 defaultName = { kind -> Localized.wrap(app, Localized.savedTag(app)).getString(templateLabelRes(kind)) },
             ),
         ).get("destination-${id ?: "new"}", DestinationEditorViewModel::class.java)
