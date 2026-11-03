@@ -417,4 +417,67 @@ class SmsRepositoryTest {
         now += 7 * 3_600_000L
         assertEquals(listOf(id), repo.stuckToNotify(6 * 3_600_000L).map { it.id })
     }
+
+    @Test fun resendToSentDestinationQueuesAgain() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        repo.recordAttemptForSms(id, SendOutcome.Accepted(200))
+        assertEquals(SmsStatus.SENT, repo.get(id)!!.status)
+
+        repo.resendTo(id, 1L)
+
+        assertEquals(listOf(DeliveryStatus.QUEUED), repo.deliveriesOf(id).map { it.status })
+        assertEquals(SmsStatus.QUEUED, repo.get(id)!!.status)
+    }
+
+    @Test fun resendToNewDestinationCreatesDelivery() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        repo.recordAttemptForSms(id, SendOutcome.Accepted(200))
+
+        repo.resendTo(id, 2L)
+
+        val all = repo.deliveriesOf(id)
+        assertEquals(listOf(1L, 2L), all.map { it.destinationId })
+        assertEquals(listOf(DeliveryStatus.SENT, DeliveryStatus.QUEUED), all.map { it.status })
+        assertEquals("Second", all[1].destinationName)
+        assertEquals(SmsStatus.QUEUED, repo.get(id)!!.status)
+    }
+
+    @Test fun resendToDeletedSmsIsNoop() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        repo.softDelete(id)
+
+        repo.resendTo(id, 2L)
+
+        assertEquals(1, repo.deliveriesOf(id).size)
+    }
+
+    @Test fun resendToMissingDestinationIsNoop() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        repo.resendTo(id, 99L)
+        assertEquals(1, repo.deliveriesOf(id).size)
+    }
+
+    @Test fun resendAfterDestinationDeletedGoesElsewhere() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(2L)) as IngestResult.Inserted).id
+        repo.cancelDeliveriesTo(2L)
+        assertEquals(SmsStatus.ERROR, repo.get(id)!!.status)
+        assertEquals(DESTINATION_DELETED, repo.get(id)!!.lastError)
+
+        repo.resendTo(id, 1L)
+
+        val sms = repo.get(id)!!
+        assertEquals(SmsStatus.QUEUED, sms.status)
+        assertEquals(null, sms.lastError)
+        val byDestination = repo.deliveriesOf(id).associate { it.destinationId to it.status }
+        assertEquals(DeliveryStatus.CANCELED, byDestination[2L])
+        assertEquals(DeliveryStatus.QUEUED, byDestination[1L])
+    }
+
+    @Test fun observeDeliveriesSkipsDeletedSms() = runBlocking {
+        val a = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
+        val b = (repo.ingest(record(text = "other"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        assertEquals(3, repo.observeDeliveries().first().size)
+        repo.softDelete(b)
+        assertEquals(setOf(a), repo.observeDeliveries().first().map { it.smsId }.toSet())
+    }
 }

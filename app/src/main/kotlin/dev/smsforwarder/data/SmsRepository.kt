@@ -90,6 +90,11 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
 
     fun observe(id: Long): Flow<SmsEntity?> = dao.observe(id)
 
+    /** Deliveries of every visible SMS, by id. */
+    fun observeDeliveries(): Flow<List<DeliveryEntity>> = deliveries.observeAll()
+
+    fun observeDeliveriesOf(smsId: Long): Flow<List<DeliveryEntity>> = deliveries.observeForSms(smsId)
+
     fun observeAttempts(smsId: Long): Flow<List<AttemptEntity>> = dao.observeAttempts(smsId)
 
     /**
@@ -154,6 +159,43 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
             val retry = all.filter { it.status == DeliveryStatus.QUEUED || it.status == DeliveryStatus.ERROR }
             retry.forEach { deliveries.update(it.copy(status = DeliveryStatus.QUEUED)) }
             resetSms(sms, all.map { if (it in retry) DeliveryStatus.QUEUED else it.status })
+        }
+    }
+
+    /**
+     * Queues the SMS again for one destination: creates the delivery (named after the destination as it is now)
+     * or puts the existing one back to QUEUED, even if it was SENT or CANCELED. Does nothing if the SMS is
+     * deleted or the destination is missing or deleted.
+     */
+    suspend fun resendTo(smsId: Long, destinationId: Long) {
+        db.withTransaction {
+            val sms = dao.get(smsId) ?: return@withTransaction
+            if (sms.deletedAt != null) return@withTransaction
+            val destination = destinations.get(destinationId)?.takeIf { it.deletedAt == null } ?: return@withTransaction
+            val existing = deliveries.forSms(smsId).firstOrNull { it.destinationId == destinationId }
+            if (existing == null) {
+                deliveries.insertAll(
+                    listOf(
+                        DeliveryEntity(
+                            smsId = smsId,
+                            destinationId = destinationId,
+                            destinationName = destination.name,
+                            status = DeliveryStatus.QUEUED,
+                        ),
+                    ),
+                )
+            } else {
+                deliveries.update(existing.copy(status = DeliveryStatus.QUEUED))
+            }
+            val statuses = deliveries.forSms(smsId).map { it.status }
+            dao.update(
+                sms.copy(
+                    status = aggregateStatus(statuses),
+                    stuckNotified = false,
+                    firstSeenAt = clock.now(),
+                    lastError = if (sms.lastError == DESTINATION_DELETED) null else sms.lastError,
+                ),
+            )
         }
     }
 

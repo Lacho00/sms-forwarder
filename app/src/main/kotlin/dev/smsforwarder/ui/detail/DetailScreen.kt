@@ -27,7 +27,12 @@ import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.core.StatusLabel
 import dev.smsforwarder.R
+import dev.smsforwarder.core.DeliveryStatus
+import dev.smsforwarder.core.isConfigError
 import dev.smsforwarder.data.AttemptEntity
+import dev.smsforwarder.data.DeliveryEntity
+import dev.smsforwarder.ui.main.DeliveryChipUi
+import dev.smsforwarder.ui.main.deliveryChipText
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.ui.main.formatDateTime
 import dev.smsforwarder.ui.main.statusText
@@ -42,11 +47,20 @@ private fun originLabel(origin: SmsOrigin): String = stringResource(
 )
 
 @Composable
-private fun attemptLine(attempt: AttemptEntity): String {
+private fun attemptLine(attempt: AttemptEntity, destinationName: String?): String {
     val result = attempt.httpCode?.toString() ?: stringResource(R.string.attempt_no_response)
     val detail = attempt.error?.let { " ($it)" }.orEmpty()
-    return "${formatDateTime(attempt.at)} · $result$detail"
+    val line = "${formatDateTime(attempt.at)} · $result$detail"
+    // Attempts from before destinations existed carry no delivery, so they carry no name either.
+    return if (destinationName == null) line else stringResource(R.string.detail_attempt_destination, destinationName, line)
 }
+
+private fun DeliveryEntity.toChip() = DeliveryChipUi(
+    destinationName = destinationName,
+    status = status,
+    httpCode = lastHttpCode,
+    configError = status == DeliveryStatus.ERROR && isConfigError(lastError),
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +69,7 @@ fun DetailScreen(
     onRetry: () -> Unit,
     onDelete: () -> Unit,
     onBack: () -> Unit,
+    onResendTo: (Long) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -77,7 +92,7 @@ fun DetailScreen(
             if (sms == null || label == null) {
                 if (state.loaded) Text(stringResource(R.string.detail_not_found))
             } else {
-                DetailContent(sms, label, state.attempts, state.hideText, onRetry, onDelete)
+                DetailContent(sms, label, state, onRetry, onDelete, onResendTo)
             }
         }
     }
@@ -87,13 +102,16 @@ fun DetailScreen(
 private fun DetailContent(
     sms: SmsEntity,
     label: StatusLabel,
-    attempts: List<AttemptEntity>,
-    hideText: Boolean,
+    state: DetailUiState,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
+    onResendTo: (Long) -> Unit,
 ) {
+    val attempts = state.attempts
+    val hideText = state.hideText
     var revealed by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var pickDestination by rememberSaveable { mutableStateOf(false) }
     Field(stringResource(R.string.field_sender), sms.sender)
     Field(stringResource(R.string.detail_field_sim), sms.subId?.toString() ?: stringResource(R.string.detail_sim_unknown))
     Field(stringResource(R.string.detail_field_time), formatDateTime(sms.receivedAt))
@@ -107,8 +125,37 @@ private fun DetailContent(
     } else {
         Field(stringResource(R.string.detail_field_text), sms.body)
     }
+    if (state.deliveries.isNotEmpty()) {
+        Column {
+            Text(stringResource(R.string.detail_deliveries), style = MaterialTheme.typography.labelMedium)
+            state.deliveries.forEach { Text(deliveryChipText(it.toChip()), style = MaterialTheme.typography.bodyLarge) }
+        }
+    }
     if (sms.status == SmsStatus.ERROR) {
         Button(onClick = onRetry) { Text(stringResource(R.string.detail_retry)) }
+    }
+    if (state.destinations.isNotEmpty()) {
+        OutlinedButton(onClick = { pickDestination = true }) { Text(stringResource(R.string.detail_resend_to)) }
+    }
+    if (pickDestination) {
+        AlertDialog(
+            onDismissRequest = { pickDestination = false },
+            title = { Text(stringResource(R.string.detail_resend_to_title)) },
+            text = {
+                Column {
+                    state.destinations.forEach { destination ->
+                        TextButton(onClick = {
+                            pickDestination = false
+                            onResendTo(destination.id)
+                        }) { Text(destination.name) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { pickDestination = false }) { Text(stringResource(R.string.detail_delete_cancel)) }
+            },
+        )
     }
     OutlinedButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.detail_delete)) }
     if (confirmDelete) {
@@ -131,7 +178,8 @@ private fun DetailContent(
     if (attempts.isEmpty()) {
         Text(stringResource(R.string.detail_no_attempts), style = MaterialTheme.typography.bodyMedium)
     } else {
-        attempts.forEach { Text(attemptLine(it), style = MaterialTheme.typography.bodyMedium) }
+        val names = state.deliveries.associate { it.id to it.destinationName }
+        attempts.forEach { Text(attemptLine(it, it.deliveryId?.let(names::get)), style = MaterialTheme.typography.bodyMedium) }
     }
 }
 

@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
         }
         mainViewModel = ViewModelProvider(
             this,
-            MainViewModel.Factory(repository, settings, g.healthChecker),
+            MainViewModel.Factory(repository, settings, g.healthChecker, g.destinationRepository),
         )[MainViewModel::class.java]
         onboardingViewModel = ViewModelProvider(
             this,
@@ -159,6 +159,7 @@ class MainActivity : ComponentActivity() {
                 enqueueSend = { smsId -> WorkScheduler.kickSend(app, smsId) },
                 hideText = g.settings.hideText,
                 cancelSend = { smsId -> WorkScheduler.cancelSend(app, smsId) },
+                destinations = g.destinationRepository.observeLive(),
             ),
         ).get("detail-$id", DetailViewModel::class.java)
     }

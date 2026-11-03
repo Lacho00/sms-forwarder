@@ -1,6 +1,7 @@
 package dev.smsforwarder.ui.main
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.TextField
@@ -78,6 +80,7 @@ fun MainScreen(
     searchOpen: Boolean = false,
     onQueryChange: (String) -> Unit = {},
     onFilterChange: (StatusFilter) -> Unit = {},
+    onDestinationFilterChange: (Long?) -> Unit = {},
 ) {
     run {
         LazyColumn(
@@ -132,8 +135,31 @@ fun MainScreen(
                     }
                 }
             }
+            // A single destination has nothing to filter by.
+            if (state.destinations.size > 1) {
+                item(key = "destination-filters") {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(
+                            selected = state.destinationFilter == null,
+                            onClick = { onDestinationFilterChange(null) },
+                            label = { Text(stringResource(R.string.main_filter_all)) },
+                        )
+                        state.destinations.forEach { (id, name) ->
+                            FilterChip(
+                                selected = state.destinationFilter == id,
+                                onClick = { onDestinationFilterChange(id) },
+                                label = { Text(name) },
+                            )
+                        }
+                    }
+                }
+            }
             if (state.rows.isEmpty()) {
-                val filtering = state.query.isNotBlank() || state.filter != StatusFilter.ALL
+                val filtering = state.query.isNotBlank() || state.filter != StatusFilter.ALL ||
+                    state.destinationFilter != null
                 item(key = "empty") {
                     Text(
                         stringResource(if (filtering) R.string.main_no_results else R.string.main_empty),
@@ -162,6 +188,9 @@ private fun SmsRow(row: RowUi, hideText: Boolean, onClick: () -> Unit) {
         Text(formatDateTime(row.receivedAt), style = MaterialTheme.typography.bodySmall)
         if (!hideText) Text(row.preview, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
         Text(statusText(row.label), style = MaterialTheme.typography.labelMedium)
+        if (row.deliveries.isNotEmpty()) {
+            Text(deliveryLine(row.deliveries), style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 

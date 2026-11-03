@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import dev.smsforwarder.R
+import dev.smsforwarder.core.DeliveryStatus
 import dev.smsforwarder.core.StatusKind
 import dev.smsforwarder.core.StatusLabel
 
@@ -26,4 +27,29 @@ fun statusText(label: StatusLabel): String {
         StatusKind.MANUAL ->
             if (code == null) stringResource(R.string.status_manual) else stringResource(R.string.status_manual_code, code)
     }
+}
+
+/** One destination's state, e.g. `Main ✓200` or `T2 queued`. */
+@Composable
+fun deliveryChipText(chip: DeliveryChipUi): String {
+    val name = chip.destinationName
+    val code = chip.httpCode
+    return when (chip.status) {
+        DeliveryStatus.QUEUED -> stringResource(R.string.delivery_queued, name)
+        DeliveryStatus.SENT ->
+            if (code == null) stringResource(R.string.delivery_sent_nocode, name) else stringResource(R.string.delivery_sent, name, code)
+        DeliveryStatus.ERROR -> when {
+            chip.configError -> stringResource(R.string.delivery_config, name)
+            code == null -> stringResource(R.string.delivery_error_nocode, name)
+            else -> stringResource(R.string.delivery_error, name, code)
+        }
+        DeliveryStatus.CANCELED -> stringResource(R.string.delivery_canceled, name)
+    }
+}
+
+/** The per-destination line of a row: each destination's state joined by " · ". */
+@Composable
+fun deliveryLine(chips: List<DeliveryChipUi>): String {
+    val texts = chips.map { deliveryChipText(it) }
+    return texts.joinToString(" · ")
 }

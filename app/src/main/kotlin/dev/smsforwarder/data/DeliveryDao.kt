@@ -27,6 +27,12 @@ interface DeliveryDao {
     @Query("SELECT * FROM delivery WHERE smsId = :smsId ORDER BY id ASC")
     fun observeForSms(smsId: Long): Flow<List<DeliveryEntity>>
 
+    /** Deliveries of every SMS that is not deleted, by id (the home list groups them by SMS). */
+    @Query(
+        "SELECT d.* FROM delivery d JOIN sms s ON s.id = d.smsId WHERE s.deletedAt IS NULL ORDER BY d.id ASC",
+    )
+    fun observeAll(): Flow<List<DeliveryEntity>>
+
     @Query(
         "SELECT DISTINCT d.smsId FROM delivery d JOIN sms s ON s.id = d.smsId " +
             "JOIN destination t ON t.id = d.destinationId AND t.deletedAt IS NULL " +

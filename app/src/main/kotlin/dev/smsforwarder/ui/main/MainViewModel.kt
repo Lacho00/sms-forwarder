@@ -3,7 +3,12 @@ package dev.smsforwarder.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dev.smsforwarder.core.DeliveryStatus
 import dev.smsforwarder.core.SmsStatus
+import dev.smsforwarder.core.isConfigError
+import dev.smsforwarder.data.DeliveryEntity
+import dev.smsforwarder.data.DestinationEntity
+import dev.smsforwarder.data.DestinationRepository
 import dev.smsforwarder.core.SmsSearch
 import dev.smsforwarder.core.StatusFilter
 import dev.smsforwarder.core.StatusLabel
@@ -21,6 +26,14 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** One destination's delivery of an SMS, as the home row shows it. */
+data class DeliveryChipUi(
+    val destinationName: String,
+    val status: DeliveryStatus,
+    val httpCode: Int?,
+    val configError: Boolean,
+)
+
 data class RowUi(
     val id: Long,
     val sender: String,
@@ -28,6 +41,7 @@ data class RowUi(
     val receivedAt: Long,
     val preview: String,
     val label: StatusLabel,
+    val deliveries: List<DeliveryChipUi> = emptyList(),
 )
 
 data class MainUiState(
@@ -40,6 +54,9 @@ data class MainUiState(
     val query: String = "",
     val filter: StatusFilter = StatusFilter.ALL,
     val hideText: Boolean = false,
+    /** Live destinations (id, name) for the filter chips. */
+    val destinations: List<Pair<Long, String>> = emptyList(),
+    val destinationFilter: Long? = null,
 )
 
 private const val PREVIEW_LENGTH = 80
@@ -50,19 +67,28 @@ private fun matchesFilter(status: SmsStatus, filter: StatusFilter): Boolean = wh
     StatusFilter.ERROR -> status == SmsStatus.ERROR
 }
 
-internal fun SmsEntity.toRowUi() = RowUi(
+private fun DeliveryEntity.toChip() = DeliveryChipUi(
+    destinationName = destinationName,
+    status = status,
+    httpCode = lastHttpCode,
+    configError = status == DeliveryStatus.ERROR && isConfigError(lastError),
+)
+
+internal fun SmsEntity.toRowUi(deliveries: List<DeliveryEntity> = emptyList()) = RowUi(
     id = id,
     sender = sender,
     subId = subId,
     receivedAt = receivedAt,
     preview = body.replace(Regex("\\s+"), " ").trim().take(PREVIEW_LENGTH),
     label = statusLabelOf(status, origin, attempts, lastHttpCode),
+    deliveries = deliveries.map { it.toChip() },
 )
 
 class MainViewModel(
     smsRepository: SmsRepository,
     private val settings: SettingsRepository,
     private val healthChecker: HealthChecker,
+    destinationRepository: DestinationRepository,
 ) : ViewModel() {
 
     private val issues = MutableStateFlow<Set<HealthIssue>>(emptySet())
@@ -78,8 +104,25 @@ class MainViewModel(
         filter.value = f
     }
 
-    // Query, filter and the hide-text setting travel together so the main combine stays at five flows.
-    private val view = combine(query, filter, settings.hideText) { q, f, hide -> Triple(q, f, hide) }
+    private val destinationFilter = MutableStateFlow<Long?>(null)
+
+    fun setDestinationFilter(id: Long?) {
+        destinationFilter.value = id
+    }
+
+    private class Controls(val query: String, val filter: StatusFilter, val hideText: Boolean, val destinationFilter: Long?)
+
+    private class Deliveries(val bySms: Map<Long, List<DeliveryEntity>>, val destinations: List<DestinationEntity>)
+
+    // Everything but the SMS list, the sweep time, the issues and the pause switch travels in these two groups
+    // so the main combine stays at five flows.
+    private val controls = combine(query, filter, settings.hideText, destinationFilter) { q, f, hide, d ->
+        Controls(q, f, hide, d)
+    }
+    private val deliveries = combine(smsRepository.observeDeliveries(), destinationRepository.observeLive()) { all, live ->
+        Deliveries(all.groupBy { it.smsId }, live)
+    }
+    private val view = combine(controls, deliveries) { c, d -> c to d }
 
     // Filtering happens in memory: the list is already bounded by the retention setting.
     val state: StateFlow<MainUiState> = combine(
@@ -88,7 +131,7 @@ class MainViewModel(
         issues,
         settings.forwardingEnabled,
         view,
-    ) { all, lastSweepAt, currentIssues, forwarding, (q, f, hide) ->
+    ) { all, lastSweepAt, currentIssues, forwarding, (c, d) ->
         MainUiState(
             issues = currentIssues,
             lastSweepAt = lastSweepAt,
@@ -96,12 +139,18 @@ class MainViewModel(
             queued = all.count { it.status == SmsStatus.QUEUED },
             errors = all.count { it.status == SmsStatus.ERROR },
             rows = all
-                .filter { matchesFilter(it.status, f) && SmsSearch.matches(it.sender, it.body, q) }
-                .map { it.toRowUi() },
+                .filter {
+                    matchesFilter(it.status, c.filter) && SmsSearch.matches(it.sender, it.body, c.query) &&
+                        (c.destinationFilter == null ||
+                            d.bySms[it.id].orEmpty().any { delivery -> delivery.destinationId == c.destinationFilter })
+                }
+                .map { it.toRowUi(d.bySms[it.id].orEmpty()) },
             paused = !forwarding,
-            query = q,
-            filter = f,
-            hideText = hide,
+            query = c.query,
+            filter = c.filter,
+            hideText = c.hideText,
+            destinations = d.destinations.map { it.id to it.name },
+            destinationFilter = c.destinationFilter,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -134,9 +183,10 @@ class MainViewModel(
         private val smsRepository: SmsRepository,
         private val settings: SettingsRepository,
         private val healthChecker: HealthChecker,
+        private val destinationRepository: DestinationRepository,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            MainViewModel(smsRepository, settings, healthChecker) as T
+            MainViewModel(smsRepository, settings, healthChecker, destinationRepository) as T
     }
 }

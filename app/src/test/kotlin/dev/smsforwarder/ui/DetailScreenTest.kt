@@ -14,6 +14,13 @@ import org.junit.Assert.assertEquals
 import dev.smsforwarder.R
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsStatus
+import dev.smsforwarder.core.DeliveryStatus
+import dev.smsforwarder.core.HttpMethod
+import dev.smsforwarder.core.SuccessPolicy
+import dev.smsforwarder.core.TemplateKind
+import dev.smsforwarder.data.AttemptEntity
+import dev.smsforwarder.data.DeliveryEntity
+import dev.smsforwarder.data.DestinationEntity
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.ui.detail.DetailScreen
 import dev.smsforwarder.ui.detail.DetailUiState
@@ -63,7 +70,7 @@ class DetailScreenTest {
         compose.onNodeWithText(retry).assertDoesNotExist()
     }
 
-    private fun str(id: Int): String = RuntimeEnvironment.getApplication().getString(id)
+    private fun str(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
 
     @Test fun deleteAsksForConfirmationAndOnlyConfirmCallsOnDelete() {
         var deleted = 0
@@ -104,5 +111,48 @@ class DetailScreenTest {
         compose.onNodeWithText("OPERADOR: Se ha comprado", substring = true).assertDoesNotExist()
         compose.onNodeWithText(str(R.string.detail_show_text)).performScrollTo().performClick()
         compose.onNodeWithText("OPERADOR: Se ha comprado", substring = true).assertExists()
+    }
+
+    private fun destination(id: Long, name: String) = DestinationEntity(
+        id = id, name = name, enabled = true, template = TemplateKind.STANDARD_JSON, method = HttpMethod.POST,
+        bodyTemplate = null, bodyIsJson = true, publicHeaders = "[]",
+        successPolicy = SuccessPolicy.ANY_2XX, createdAt = 1L,
+    )
+
+    @Test fun showsDeliveriesAndResend() {
+        var resent: Long? = null
+        val deliveries = listOf(
+            DeliveryEntity(id = 10, smsId = 1, destinationId = 1, destinationName = "Main", status = DeliveryStatus.SENT, lastHttpCode = 204),
+            DeliveryEntity(id = 11, smsId = 1, destinationId = 2, destinationName = "T2", status = DeliveryStatus.QUEUED),
+        )
+        val attempts = listOf(AttemptEntity(id = 1, smsId = 1, at = 1_800_000_000_000L, httpCode = 204, error = null, deliveryId = 10))
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(
+                    state = DetailUiState(
+                        sms(SmsStatus.QUEUED), attempts, deliveries = deliveries,
+                        destinations = listOf(destination(1, "Main"), destination(2, "T2")),
+                    ),
+                    onRetry = {}, onDelete = {}, onBack = {},
+                    onResendTo = { resent = it },
+                )
+            }
+        }
+        compose.onNodeWithText(str(R.string.delivery_sent, "Main", 204)).performScrollTo().assertExists()
+        compose.onNodeWithText(str(R.string.delivery_queued, "T2")).performScrollTo().assertExists()
+        compose.onNodeWithText("Main · ", substring = true).performScrollTo().assertExists()
+
+        compose.onNodeWithText(str(R.string.detail_resend_to)).performScrollTo().performClick()
+        compose.onNode(hasText("T2") and hasAnyAncestor(isDialog())).performClick()
+        compose.runOnIdle { assertEquals(2L, resent) }
+    }
+
+    @Test fun resendHiddenWithoutDestinations() {
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(state = DetailUiState(sms(SmsStatus.SENT), emptyList()), onRetry = {}, onDelete = {}, onBack = {})
+            }
+        }
+        compose.onNodeWithText(str(R.string.detail_resend_to)).assertDoesNotExist()
     }
 }

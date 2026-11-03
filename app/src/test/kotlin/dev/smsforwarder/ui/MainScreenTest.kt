@@ -10,6 +10,8 @@ import dev.smsforwarder.R
 import dev.smsforwarder.core.StatusKind
 import dev.smsforwarder.core.StatusLabel
 import dev.smsforwarder.health.HealthIssue
+import dev.smsforwarder.core.DeliveryStatus
+import dev.smsforwarder.ui.main.DeliveryChipUi
 import dev.smsforwarder.ui.main.MainScreen
 import dev.smsforwarder.ui.main.MainUiState
 import dev.smsforwarder.ui.main.RowUi
@@ -118,5 +120,48 @@ class MainScreenTest {
     @Test fun emptyResultOfASearchSaysNoMatch() {
         show(state().copy(query = "zzz"))
         compose.onNodeWithText(str(R.string.main_no_results)).assertIsDisplayed()
+    }
+
+    private fun chipRow(vararg chips: DeliveryChipUi) = RowUi(
+        id = 1, sender = "AAA", subId = null, receivedAt = 1_800_000_000_000L, preview = "TEST",
+        label = StatusLabel(StatusKind.QUEUED, 1, null), deliveries = chips.toList(),
+    )
+
+    @Test fun rowRendersDeliveryLine() {
+        val row = chipRow(
+            DeliveryChipUi("Main", DeliveryStatus.SENT, 204, false),
+            DeliveryChipUi("T2", DeliveryStatus.QUEUED, null, false),
+        )
+        show(state(rows = listOf(row)))
+        compose.onNodeWithText(str(R.string.delivery_sent, "Main", 204) + " · " + str(R.string.delivery_queued, "T2"))
+            .assertExists()
+    }
+
+    @Test fun deliveryLineCoversErrorConfigAndCanceled() {
+        val row = chipRow(
+            DeliveryChipUi("A", DeliveryStatus.ERROR, 403, false),
+            DeliveryChipUi("B", DeliveryStatus.ERROR, null, true),
+            DeliveryChipUi("C", DeliveryStatus.CANCELED, null, false),
+        )
+        show(state(rows = listOf(row)))
+        compose.onNodeWithText(
+            listOf(str(R.string.delivery_error, "A", 403), str(R.string.delivery_config, "B"), str(R.string.delivery_canceled, "C"))
+                .joinToString(" · "),
+        ).assertExists()
+    }
+
+    @Test fun destinationChipsFilter() {
+        var picked: Long? = -1L
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                MainScreen(
+                    state = state().copy(destinations = listOf(1L to "Main", 2L to "T2")),
+                    onOpenIssue = {}, onSweepNow = {}, onOpen = {},
+                    onDestinationFilterChange = { picked = it },
+                )
+            }
+        }
+        compose.onNodeWithText("T2").performClick()
+        compose.runOnIdle { assertEquals(2L, picked) }
     }
 }

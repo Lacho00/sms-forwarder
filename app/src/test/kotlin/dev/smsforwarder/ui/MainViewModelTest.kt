@@ -2,6 +2,11 @@ package dev.smsforwarder.ui
 
 import androidx.room.Room
 import dev.smsforwarder.core.Clock
+import dev.smsforwarder.core.DeliveryStatus
+import dev.smsforwarder.core.HttpMethod
+import dev.smsforwarder.core.SuccessPolicy
+import dev.smsforwarder.core.TemplateKind
+import dev.smsforwarder.data.DestinationEntity
 import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
@@ -68,7 +73,7 @@ class MainViewModelTest {
         errorId = add("SENDERONE", "Code 2222", now - 2_000)
         otherSenderId = add("SENDERTWO", "Code 3333", now - 1_000)
         sms.recordAttemptForSms(errorId, SendOutcome.Rejected(400, null))
-        vm = MainViewModel(sms, settings, HealthChecker(context, sms, repos.destinations, repos.rules, settings))
+        vm = MainViewModel(sms, settings, HealthChecker(context, sms, repos.destinations, repos.rules, settings), repos.destinations)
     }
 
     @After fun tearDown() {
@@ -116,5 +121,62 @@ class MainViewModelTest {
     @Test fun hideTextFollowsTheSetting() {
         runBlocking { settings.setHideText(true) }
         assertEquals(true, await { it.hideText }.hideText)
+    }
+
+    private fun addDestination(name: String): Long = runBlocking {
+        db.destinationDao().insert(
+            DestinationEntity(
+                name = name, enabled = true, template = TemplateKind.STANDARD_JSON, method = HttpMethod.POST,
+                bodyTemplate = null, bodyIsJson = true, publicHeaders = "[]",
+                successPolicy = SuccessPolicy.ANY_2XX, createdAt = 1L,
+            ),
+        )
+    }
+
+    @Test fun rowShowsPerDestinationStatus() {
+        val second = addDestination("T2")
+        val id = runBlocking {
+            val sid = (sms.ingest(SmsRecord("SENDERFOUR", "Code 4444", now, null, null), SmsOrigin.RECEIVER, setOf(1L, second)) as IngestResult.Inserted).id
+            sms.recordAttempt(sms.deliveriesOf(sid).first().id, SendOutcome.Accepted(204))
+            sid
+        }
+        val s = await { st -> st.rows.firstOrNull { it.id == id }?.deliveries?.size == 2 }
+        val chips = s.rows.first { it.id == id }.deliveries
+        assertEquals(listOf("Primary", "T2"), chips.map { it.destinationName })
+        assertEquals(listOf(DeliveryStatus.SENT, DeliveryStatus.QUEUED), chips.map { it.status })
+        assertEquals(listOf<Int?>(204, null), chips.map { it.httpCode })
+        assertEquals(listOf(false, false), chips.map { it.configError })
+    }
+
+    @Test fun configErrorFlagged() {
+        val id = runBlocking {
+            val sid = (sms.ingest(SmsRecord("SENDERFIVE", "Code 5555", now, null, null), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+            sms.recordAttempt(sms.deliveriesOf(sid).first().id, SendOutcome.Invalid("url"))
+            sid
+        }
+        val s = await { st -> st.rows.firstOrNull { it.id == id }?.deliveries?.firstOrNull()?.status == DeliveryStatus.ERROR }
+        assertEquals(true, s.rows.first { it.id == id }.deliveries.single().configError)
+    }
+
+    @Test fun destinationFilterKeepsOnlyMatching() {
+        val second = addDestination("T2")
+        runBlocking {
+            sms.resendTo(queuedId, second)
+            sms.resendTo(errorId, second)
+        }
+        vm.setDestinationFilter(second)
+        val s = await { it.destinationFilter == second && it.rows.size == 2 }
+        assertEquals(setOf(queuedId, errorId), s.rows.map { it.id }.toSet())
+        assertEquals(listOf("Primary", "T2"), s.destinations.map { it.second })
+    }
+
+    @Test fun destinationFilterLeavesCountersAlone() {
+        val second = addDestination("T2")
+        runBlocking { sms.resendTo(queuedId, second) }
+        val before = await { it.destinations.size == 2 }
+        vm.setDestinationFilter(second)
+        val s = await { it.destinationFilter == second && it.rows.size == 1 }
+        assertEquals(before.queued, s.queued)
+        assertEquals(before.errors, s.errors)
     }
 }

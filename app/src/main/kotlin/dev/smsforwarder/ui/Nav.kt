@@ -187,6 +187,7 @@ fun AppNavHost(
                     searchOpen = searchOpen,
                     onQueryChange = mainViewModel::setQuery,
                     onFilterChange = mainViewModel::setFilter,
+                    onDestinationFilterChange = mainViewModel::setDestinationFilter,
                 )
             }
         }
@@ -196,6 +197,7 @@ fun AppNavHost(
             DetailScreen(
                 state = state,
                 onRetry = { vm.retry() },
+                onResendTo = { vm.resendTo(it) },
                 onDelete = {
                     vm.delete()
                     back()

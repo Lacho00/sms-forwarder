@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import dev.smsforwarder.core.StatusLabel
 import dev.smsforwarder.core.statusLabelOf
 import dev.smsforwarder.data.AttemptEntity
+import dev.smsforwarder.data.DeliveryEntity
+import dev.smsforwarder.data.DestinationEntity
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +24,9 @@ data class DetailUiState(
     val attempts: List<AttemptEntity>,
     val loaded: Boolean = true,
     val hideText: Boolean = false,
+    val deliveries: List<DeliveryEntity> = emptyList(),
+    /** Live destinations, the targets of "resend to a destination". */
+    val destinations: List<DestinationEntity> = emptyList(),
 ) {
     val label: StatusLabel?
         get() = sms?.let { statusLabelOf(it.status, it.origin, it.attempts, it.lastHttpCode) }
@@ -33,13 +38,18 @@ class DetailViewModel(
     private val enqueueSend: (Long) -> Unit,
     hideText: Flow<Boolean> = flowOf(false),
     private val cancelSend: (Long) -> Unit = {},
+    destinations: Flow<List<DestinationEntity>> = flowOf(emptyList()),
 ) : ViewModel() {
 
     val state: StateFlow<DetailUiState> = combine(
         smsRepository.observe(smsId),
         smsRepository.observeAttempts(smsId),
         hideText,
-    ) { sms, attempts, hide -> DetailUiState(sms, attempts, hideText = hide) }
+        smsRepository.observeDeliveriesOf(smsId),
+        destinations,
+    ) { sms, attempts, hide, deliveries, live ->
+        DetailUiState(sms, attempts, hideText = hide, deliveries = deliveries, destinations = live)
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -50,6 +60,14 @@ class DetailViewModel(
     fun retry() {
         viewModelScope.launch {
             smsRepository.requeue(smsId)
+            enqueueSend(smsId)
+        }
+    }
+
+    /** Queues the SMS again for one destination and starts a send right away. */
+    fun resendTo(destinationId: Long) {
+        viewModelScope.launch {
+            smsRepository.resendTo(smsId, destinationId)
             enqueueSend(smsId)
         }
     }
@@ -68,9 +86,10 @@ class DetailViewModel(
         private val enqueueSend: (Long) -> Unit,
         private val hideText: Flow<Boolean> = flowOf(false),
         private val cancelSend: (Long) -> Unit = {},
+        private val destinations: Flow<List<DestinationEntity>> = flowOf(emptyList()),
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            DetailViewModel(smsId, smsRepository, enqueueSend, hideText, cancelSend) as T
+            DetailViewModel(smsId, smsRepository, enqueueSend, hideText, cancelSend, destinations) as T
     }
 }
