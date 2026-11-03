@@ -1,6 +1,7 @@
 package dev.smsforwarder
 
 import android.content.Context
+import android.os.Build
 import androidx.room.Room
 import dev.smsforwarder.core.NotifyKind
 import dev.smsforwarder.core.SystemClock
@@ -21,6 +22,7 @@ import dev.smsforwarder.data.SmsRepository
 import dev.smsforwarder.health.HealthChecker
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.net.DeliveryClient
+import dev.smsforwarder.net.DestinationTester
 import dev.smsforwarder.net.IngestClient
 import dev.smsforwarder.net.defaultHttpClient
 import dev.smsforwarder.notify.Notifier
@@ -43,6 +45,9 @@ class AppGraph(context: Context) {
     private val httpClient = defaultHttpClient()
     val ingestClient = IngestClient(httpClient)
     val deliveryClient = DeliveryClient(httpClient)
+    val destinationTester by lazy {
+        DestinationTester(deliveryClient, secretsProxy, context.getString(R.string.destination_test_body), Build.MODEL, clock)
+    }
 
     /** Forwards to whichever store is current, so a test swap after the first use still takes effect. */
     private val secretsProxy = object : DestinationSecretStore {

@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">SMS Forwarder</string>
     <string name="destination_primary_name">Principal</string>
+    <string name="destination_test_body">prueba</string>
     <string name="forwarding_paused">Reenvío en pausa</string>
     <string name="about_title">Acerca de</string>
     <string name="notif_channel_alerts">Avisos</string>
