@@ -257,6 +257,16 @@ class SmsRepositoryTest {
     }
 
 
+    @Test fun queuedIdsIncludesErrorSmsWithQueuedDelivery() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
+        val (a, _) = db.deliveryDao().forSms(id)
+        repo.recordAttempt(a.id, SendOutcome.Rejected(400, null))
+        assertEquals(SmsStatus.ERROR, repo.get(id)!!.status)
+        assertEquals(listOf(id), repo.queuedIds())
+        db.destinationDao().update(db.destinationDao().get(2L)!!.copy(deletedAt = now))
+        assertTrue(repo.queuedIds().isEmpty())
+    }
+
     @Test fun softDeleteHidesRowFromEveryListButKeepsItForDedup() = runBlocking {
         val t = now - 10_000L
         val queued = (repo.ingest(record(t, "queued $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id

@@ -176,7 +176,8 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
     /** Hides the row from the app. It is kept so ingest still finds it and the sweep does not re-forward the SMS. */
     suspend fun softDelete(id: Long) = dao.softDelete(id, clock.now())
 
-    suspend fun queuedIds(): List<Long> = dao.idsWithStatus(SmsStatus.QUEUED)
+    /** SMS with a QUEUED delivery to a live destination, whatever the SMS aggregate says. */
+    suspend fun queuedIds(): List<Long> = deliveries.smsIdsWithStatus(DeliveryStatus.QUEUED)
 
     /** QUEUED deliveries of the SMS, whatever the SMS aggregate says. */
     suspend fun pendingDeliveries(smsId: Long): List<DeliveryEntity> = deliveries.pendingForSms(smsId)
