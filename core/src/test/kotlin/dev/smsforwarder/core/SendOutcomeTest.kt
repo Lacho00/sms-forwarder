@@ -6,8 +6,8 @@ import kotlin.test.assertTrue
 
 class SendOutcomeTest {
     @Test fun classify200and2xxAccepted() {
-        assertEquals(SendOutcome.Accepted, classify(200, ""))
-        assertEquals(SendOutcome.Accepted, classify(204, null))
+        assertEquals(SendOutcome.Accepted(200), classify(200, ""))
+        assertEquals(SendOutcome.Accepted(204), classify(204, null))
     }
 
     @Test fun classify401Rejected() =

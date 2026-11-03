@@ -1,7 +1,9 @@
 package dev.smsforwarder.data
 
 import androidx.room.withTransaction
+import dev.smsforwarder.core.CONFIG_ERROR_PREFIX
 import dev.smsforwarder.core.Clock
+import dev.smsforwarder.core.DeliveryState
 import dev.smsforwarder.core.DeliveryStatus
 import dev.smsforwarder.core.QueuePolicy
 import dev.smsforwarder.core.Retention
@@ -12,6 +14,7 @@ import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.core.aggregateStatus
+import dev.smsforwarder.core.httpCode
 import dev.smsforwarder.core.isAuthRejection
 import kotlinx.coroutines.flow.Flow
 
@@ -96,18 +99,20 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
     suspend fun recordAttempt(deliveryId: Long, outcome: SendOutcome) {
         db.withTransaction {
             val delivery = deliveries.get(deliveryId) ?: return@withTransaction
-            if (delivery.status == DeliveryStatus.SENT) return@withTransaction
+            if (delivery.status == DeliveryStatus.SENT || delivery.status == DeliveryStatus.CANCELED) return@withTransaction
             val sms = dao.get(delivery.smsId) ?: return@withTransaction
             val now = clock.now()
-            val (httpCode, error) = when (outcome) {
-                SendOutcome.Accepted -> 200 to null
-                is SendOutcome.Retry -> outcome.httpCode to outcome.reason
-                is SendOutcome.Rejected -> outcome.httpCode to outcome.errorCode
+            val httpCode = outcome.httpCode
+            val error = when (outcome) {
+                is SendOutcome.Accepted -> null
+                is SendOutcome.Retry -> outcome.reason
+                is SendOutcome.Rejected -> outcome.errorCode
+                is SendOutcome.Invalid -> CONFIG_ERROR_PREFIX + outcome.reason
             }
             val status = when (outcome) {
-                SendOutcome.Accepted -> DeliveryStatus.SENT
+                is SendOutcome.Accepted -> DeliveryStatus.SENT
                 is SendOutcome.Retry -> DeliveryStatus.QUEUED
-                is SendOutcome.Rejected -> DeliveryStatus.ERROR
+                is SendOutcome.Rejected, is SendOutcome.Invalid -> DeliveryStatus.ERROR
             }
             dao.insertAttempt(
                 AttemptEntity(smsId = sms.id, at = now, httpCode = httpCode, error = error, deliveryId = deliveryId),
@@ -196,12 +201,21 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
         dao.deleteOlderThan(SmsStatus.SENT, cutoff)
     }
 
-    // 401 rows are covered by the token notification, so they are left out here.
+    // Judged per delivery: 401/403 rows are covered by the token notification, and paused, deleted or
+    // canceled deliveries do not count.
     suspend fun stuckToNotify(stuckAfterMs: Long = QueuePolicy.STUCK_AFTER_MS): List<SmsEntity> {
         val now = clock.now()
-        return dao.unsentNotNotified().filter {
-            !(it.status == SmsStatus.ERROR && it.lastHttpCode == 401) &&
-                QueuePolicy.isStuck(it.status, it.lastHttpCode, it.firstSeenAt, now, stuckAfterMs)
+        return dao.unsentNotNotified().filter { sms ->
+            val states = deliveries.forSms(sms.id).map { d ->
+                val destination = d.destinationId?.let { destinations.get(it) }
+                DeliveryState(
+                    d.status,
+                    d.lastHttpCode,
+                    d.lastError,
+                    live = destination != null && destination.deletedAt == null && destination.enabled,
+                )
+            }
+            QueuePolicy.isStuck(states, sms.firstSeenAt, now, stuckAfterMs)
         }
     }
 

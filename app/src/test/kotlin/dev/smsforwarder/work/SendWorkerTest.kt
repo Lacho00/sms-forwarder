@@ -313,4 +313,18 @@ class SendWorkerTest {
         context, graph.destinationRepository, graph.ruleRepository, graph.smsRepository, { },
         java.io.File(context.cacheDir, "settings-${java.util.UUID.randomUUID()}.preferences_pb"),
     )
+
+    @Test fun renderFailureRecordedOnce() = runBlocking {
+        val id = insertSms()
+        val destination = graph.destinationRepository.get(1L)!!
+        graph.db.destinationDao().update(destination.copy(publicHeaders = "[[\"X-Bad\",\"caf\u00e9\"]]"))
+        assertEquals(ListenableWorker.Result.success(), run(id))
+        val delivery = graph.smsRepository.deliveriesOf(id).single()
+        assertEquals(DeliveryStatus.ERROR, delivery.status)
+        assertEquals("config_request", delivery.lastError)
+        assertEquals(1, delivery.attempts)
+        assertEquals(0, server.requestCount)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        assertNotNull(shadowOf(manager).getNotification(Notifier.STUCK_TAG, id.toInt()))
+    }
 }

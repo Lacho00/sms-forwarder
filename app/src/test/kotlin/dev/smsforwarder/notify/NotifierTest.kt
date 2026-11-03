@@ -54,15 +54,15 @@ class NotifierTest {
 
     @Test fun tokenRejectedIsOneNotificationPerDestination() {
         val notifier = Notifier(context, utc)
-        notifier.tokenRejected(1L, 1)
-        notifier.tokenRejected(1L, 3)
-        notifier.tokenRejected(2L, 5)
+        notifier.tokenRejected(1L, "Main", 1)
+        notifier.tokenRejected(1L, "Main", 3)
+        notifier.tokenRejected(2L, "Other", 5)
         val all = shadowOf(manager).allNotifications
         assertEquals(2, all.size)
         val first = shadowOf(manager).getNotification(Notifier.TOKEN_TAG, 1)
         assertNotNull(first)
         assertNotNull(shadowOf(manager).getNotification(Notifier.TOKEN_TAG, 2))
-        assertTrue(text(first).contains(context.getString(R.string.notif_token_rejected_text, 3)))
+        assertTrue(text(first).contains(context.getString(R.string.notif_token_rejected_text, "Main", 3)))
     }
 
     @Test fun legacyUntaggedTokenAlertIsCancelled() {
@@ -71,7 +71,7 @@ class NotifierTest {
             Notifier.LEGACY_ID_TOKEN_REJECTED,
             Notification.Builder(context, Notifier.CHANNEL_ID).setSmallIcon(android.R.drawable.stat_notify_error).build(),
         )
-        notifier.tokenRejected(1L, 1)
+        notifier.tokenRejected(1L, "Main", 1)
         notifier.cancelLegacyTokenRejected()
         assertEquals(null, shadowOf(manager).getNotification(null, Notifier.LEGACY_ID_TOKEN_REJECTED))
         assertNotNull(shadowOf(manager).getNotification(Notifier.TOKEN_TAG, 1))
@@ -92,5 +92,20 @@ class NotifierTest {
         val shown = text(n)
         assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_title)))
         assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_rejected, "OPERADOR", "08:00", 400)))
+    }
+
+    @Test fun tokenRejectedNamesDestination() {
+        Notifier(context, utc).tokenRejected(7L, "Main", 3)
+        val shown = text(shadowOf(manager).getNotification(Notifier.TOKEN_TAG, 7))
+        assertTrue(shown, shown.contains(context.getString(R.string.notif_token_rejected_text, "Main", 3)))
+        Notifier(context, utc).cancelTokenRejected(7L)
+        assertEquals(null, shadowOf(manager).getNotification(Notifier.TOKEN_TAG, 7))
+    }
+
+    @Test fun configErrorNamesSenderAndDestination() {
+        val item = entity(6, 1_800_000_000_000L).copy(status = SmsStatus.ERROR)
+        Notifier(context, utc).configError(item, "Main")
+        val shown = text(shadowOf(manager).getNotification(Notifier.STUCK_TAG, 6))
+        assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_config, "OPERADOR", "08:00", "Main")))
     }
 }

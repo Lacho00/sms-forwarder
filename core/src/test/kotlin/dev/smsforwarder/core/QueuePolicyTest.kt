@@ -36,4 +36,23 @@ class QueuePolicyTest {
         assertEquals(StatusKind.SENT, statusLabelOf(SmsStatus.SENT, SmsOrigin.RECEIVER, 1, 200).kind)
         assertEquals(StatusLabel(StatusKind.ERROR, 3, 401), statusLabelOf(SmsStatus.ERROR, SmsOrigin.RECEIVER, 3, 401))
     }
+
+    private val h6 = 6 * 3_600_000L
+
+    @Test fun queuedDeliveryUnderErrorAggregateIsStuck() {
+        val ds = listOf(
+            DeliveryState(DeliveryStatus.ERROR, 401, null, true),
+            DeliveryState(DeliveryStatus.QUEUED, null, null, true),
+        )
+        assertTrue(QueuePolicy.isStuck(ds, 0, 7 * 3_600_000L, h6))
+    }
+
+    @Test fun pausedOrCanceledNotStuck() {
+        val late = 7 * 3_600_000L
+        assertFalse(QueuePolicy.isStuck(listOf(DeliveryState(DeliveryStatus.QUEUED, null, null, false)), 0, late, h6))
+        assertFalse(QueuePolicy.isStuck(listOf(DeliveryState(DeliveryStatus.CANCELED, null, null, true)), 0, late, h6))
+        assertFalse(QueuePolicy.isStuck(listOf(DeliveryState(DeliveryStatus.ERROR, 403, null, true)), 0, late, h6))
+        assertTrue(QueuePolicy.isStuck(listOf(DeliveryState(DeliveryStatus.ERROR, 400, null, true)), 0, 1, h6))
+        assertTrue(QueuePolicy.isStuck(listOf(DeliveryState(DeliveryStatus.ERROR, null, "config_template", true)), 0, 1, h6))
+    }
 }

@@ -91,13 +91,27 @@ class Notifier(context: Context, private val zone: ZoneId = ZoneId.systemDefault
     }
 
     /** One notification per destination: a new count replaces the previous one for the same destination. */
-    fun tokenRejected(destinationId: Long, waiting: Int) {
+    fun tokenRejected(destinationId: Long, destinationName: String, waiting: Int) {
         val res = localized()
         post(
             destinationId.toInt(),
             res.getString(R.string.notif_token_rejected_title),
-            res.getString(R.string.notif_token_rejected_text, waiting),
+            res.getString(R.string.notif_token_rejected_text, destinationName, waiting),
             TOKEN_TAG,
+        )
+    }
+
+    /** Drops the token alert of a destination that no longer exists. */
+    fun cancelTokenRejected(destinationId: Long) = manager.cancel(TOKEN_TAG, destinationId.toInt())
+
+    /** The destination cannot build a valid request: shown at once, per SMS, like a 400. */
+    fun configError(item: SmsEntity, destinationName: String) {
+        val res = localized()
+        post(
+            item.id.toInt(),
+            res.getString(R.string.notif_stuck_title),
+            res.getString(R.string.notif_stuck_config, item.sender, time(item.receivedAt), destinationName),
+            STUCK_TAG,
         )
     }
 

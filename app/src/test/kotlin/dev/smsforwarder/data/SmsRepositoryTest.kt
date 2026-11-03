@@ -91,7 +91,7 @@ class SmsRepositoryTest {
 
     @Test fun recordAttemptAcceptedSetsSent() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttemptForSms(id, SendOutcome.Accepted)
+        repo.recordAttemptForSms(id, SendOutcome.Accepted(200))
         val sms = repo.get(id)!!
         assertEquals(SmsStatus.SENT, sms.status)
         assertEquals(200, sms.lastHttpCode)
@@ -150,7 +150,7 @@ class SmsRepositoryTest {
         val error = (repo.ingest(record(old, "error $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         val sent = (repo.ingest(record(old, "sent $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         repo.recordAttemptForSms(error, SendOutcome.Rejected(400, null))
-        repo.recordAttemptForSms(sent, SendOutcome.Accepted)
+        repo.recordAttemptForSms(sent, SendOutcome.Accepted(200))
         Triple(queued, error, sent)
     }
 
@@ -184,7 +184,7 @@ class SmsRepositoryTest {
             val e = (repo.ingest(record(old, "error $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
             val s = (repo.ingest(record(old, "sent $body"), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
             repo.recordAttemptForSms(e, SendOutcome.Rejected(400, null))
-            repo.recordAttemptForSms(s, SendOutcome.Accepted)
+            repo.recordAttemptForSms(s, SendOutcome.Accepted(200))
             Triple(q, e, s)
         }
 
@@ -210,13 +210,13 @@ class SmsRepositoryTest {
     @Test fun lateResultDoesNotUndoSent() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
         val (a, b) = db.deliveryDao().forSms(id)
-        repo.recordAttempt(a.id, SendOutcome.Accepted)
+        repo.recordAttempt(a.id, SendOutcome.Accepted(200))
         repo.recordAttempt(a.id, SendOutcome.Retry(null, "network"))
         repo.recordAttempt(a.id, SendOutcome.Rejected(401, null))
         assertEquals(DeliveryStatus.SENT, db.deliveryDao().get(a.id)!!.status)
         assertEquals(1, db.deliveryDao().get(a.id)!!.attempts)
         assertEquals(SmsStatus.QUEUED, repo.get(id)!!.status)
-        repo.recordAttempt(b.id, SendOutcome.Accepted)
+        repo.recordAttempt(b.id, SendOutcome.Accepted(200))
         assertEquals(SmsStatus.SENT, repo.get(id)!!.status)
         assertNotNull(repo.get(id)!!.sentAt)
         assertEquals(2, repo.get(id)!!.attempts)
@@ -226,7 +226,7 @@ class SmsRepositoryTest {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
         val (a, b) = db.deliveryDao().forSms(id)
         repo.recordAttempt(a.id, SendOutcome.Retry(500, "http_500"))
-        repo.recordAttempt(b.id, SendOutcome.Accepted)
+        repo.recordAttempt(b.id, SendOutcome.Accepted(200))
         repo.recordAttempt(a.id, SendOutcome.Rejected(400, "bad"))
         val attempts = repo.observeAttempts(id).first()
         assertEquals(3, attempts.size)
@@ -242,14 +242,14 @@ class SmsRepositoryTest {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
         val (a, b) = db.deliveryDao().forSms(id)
         db.destinationDao().update(db.destinationDao().get(1L)!!.copy(deletedAt = now))
-        repo.recordAttempt(b.id, SendOutcome.Accepted)
+        repo.recordAttempt(b.id, SendOutcome.Accepted(200))
         assertEquals(SmsStatus.SENT, repo.get(id)!!.status)
         assertEquals(DeliveryStatus.QUEUED, db.deliveryDao().get(a.id)!!.status)
     }
 
     @Test fun lateRetryDoesNotUndoSent() = runBlocking {
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttemptForSms(id, SendOutcome.Accepted)
+        repo.recordAttemptForSms(id, SendOutcome.Accepted(200))
         repo.recordAttemptForSms(id, SendOutcome.Retry(null, "network"))
         repo.requeue(id)
         assertEquals(SmsStatus.SENT, repo.get(id)!!.status)
@@ -354,7 +354,7 @@ class SmsRepositoryTest {
     @Test fun purgeOldKeepsSentRowSeenRecentlyEvenWithOldCarrierTime() = runBlocking {
         val old = now - 40 * 86_400_000L
         val id = (repo.ingest(record(old, "sent $body"), SmsOrigin.SWEEP, setOf(1L)) as IngestResult.Inserted).id
-        repo.recordAttemptForSms(id, SendOutcome.Accepted)
+        repo.recordAttemptForSms(id, SendOutcome.Accepted(200))
         repo.purgeOld(Retention.D30)
         assertNotNull(repo.get(id))
     }
@@ -387,5 +387,34 @@ class SmsRepositoryTest {
         db.destinationDao().update(db.destinationDao().get(1L)!!.copy(deletedAt = now))
         val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
         assertEquals(listOf(2L), db.deliveryDao().forSms(id).map { it.destinationId })
+    }
+
+    @Test fun acceptedStoresRealCode() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        repo.recordAttemptForSms(id, SendOutcome.Accepted(204))
+        assertEquals(204, repo.deliveriesOf(id).single().lastHttpCode)
+        assertEquals(204, repo.get(id)!!.lastHttpCode)
+    }
+
+    @Test fun invalidIsTerminalWithAttempt() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        repo.recordAttemptForSms(id, SendOutcome.Invalid("template"))
+        val delivery = repo.deliveriesOf(id).single()
+        assertEquals(DeliveryStatus.ERROR, delivery.status)
+        assertEquals("config_template", delivery.lastError)
+        assertEquals(null, delivery.lastHttpCode)
+        assertEquals(SmsStatus.ERROR, repo.get(id)!!.status)
+        val attempts = repo.observeAttempts(id).first()
+        assertEquals(1, attempts.size)
+        assertEquals(null, attempts.single().httpCode)
+    }
+
+    @Test fun stuckSeesQueuedDeliveryUnderError() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L, 2L)) as IngestResult.Inserted).id
+        val (a, _) = repo.deliveriesOf(id)
+        repo.recordAttempt(a.id, SendOutcome.Rejected(401, null))
+        assertTrue(repo.stuckToNotify(6 * 3_600_000L).isEmpty())
+        now += 7 * 3_600_000L
+        assertEquals(listOf(id), repo.stuckToNotify(6 * 3_600_000L).map { it.id })
     }
 }

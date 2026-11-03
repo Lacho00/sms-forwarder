@@ -66,15 +66,24 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             if (destination == null || destination.deletedAt != null || !destination.enabled) return false
             // No secrets yet (or a transient Keystore failure): keep it queued and back off.
             val secrets = graph.destinationRepository.secrets(destination.id) ?: return true
-            val spec = DestinationSpec(
-                method = destination.method,
-                url = secrets.url,
-                headers = destination.publicHeaderList() + secrets.headers,
-                body = destination.bodyTemplate,
-                bodyIsJson = destination.bodyIsJson,
-            )
-            val vars = SmsVars(sms.sender, sms.body, sms.receivedAt, SimSlots.slotOf(applicationContext, sms.subId), Build.MODEL)
-            graph.deliveryClient.send(Templates.render(spec, vars), destination.successPolicy)
+            // A destination that cannot be rendered never will until it is edited: record it, do not retry.
+            val rendered = try {
+                val spec = DestinationSpec(
+                    method = destination.method,
+                    url = secrets.url,
+                    headers = destination.publicHeaderList() + secrets.headers,
+                    body = destination.bodyTemplate,
+                    bodyIsJson = destination.bodyIsJson,
+                )
+                val vars = SmsVars(sms.sender, sms.body, sms.receivedAt, SimSlots.slotOf(applicationContext, sms.subId), Build.MODEL)
+                Templates.render(spec, vars)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            if (rendered == null) SendOutcome.Invalid("template")
+            else graph.deliveryClient.send(rendered, destination.successPolicy)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -89,6 +98,7 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             return true
         }
         if (outcome is SendOutcome.Rejected) notifyRejected(graph, sms.id, delivery, outcome)
+        if (outcome is SendOutcome.Invalid) notifyConfigError(graph, sms.id, delivery)
         return outcome is SendOutcome.Retry
     }
 
@@ -103,12 +113,27 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 isAuthRejection(outcome.httpCode) -> {
                     val destinationId = delivery.destinationId ?: return
                     val waiting = repo.idsAuthRejected(destinationId).size
-                    if (waiting > 0) graph.notifier.tokenRejected(destinationId, waiting)
+                    if (waiting > 0) graph.notifier.tokenRejected(destinationId, delivery.destinationName, waiting)
                 }
                 outcome.httpCode == 400 -> repo.get(smsId)?.takeIf { it.status == SmsStatus.ERROR }?.let {
                     graph.notifier.rejected(it)
                     repo.markStuckNotified(smsId)
                 }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The result is already stored; a failed notification must not retry the send.
+        }
+    }
+
+    private suspend fun notifyConfigError(graph: AppGraph, smsId: Long, delivery: DeliveryEntity) {
+        try {
+            val repo = graph.smsRepository
+            if (repo.delivery(delivery.id)?.status != DeliveryStatus.ERROR) return
+            repo.get(smsId)?.takeIf { it.status == SmsStatus.ERROR }?.let {
+                graph.notifier.configError(it, delivery.destinationName)
+                repo.markStuckNotified(smsId)
             }
         } catch (e: CancellationException) {
             throw e

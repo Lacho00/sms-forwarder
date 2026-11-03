@@ -36,7 +36,7 @@ class DeliveryClientTest {
     @Test fun postsRenderedRequest() = runBlocking {
         server.enqueue(MockResponse.Builder().code(204).build())
         val outcome = client.send(request(), SuccessPolicy.ANY_2XX)
-        assertEquals(SendOutcome.Accepted, outcome)
+        assertEquals(SendOutcome.Accepted(204), outcome)
 
         val received = server.takeRequest()
         assertEquals("POST", received.method)
@@ -54,7 +54,7 @@ class DeliveryClientTest {
 
     @Test fun getHasNoBody() = runBlocking {
         server.enqueue(MockResponse.Builder().code(200).build())
-        assertEquals(SendOutcome.Accepted, client.send(request(HttpMethod.GET, null), SuccessPolicy.ANY_2XX))
+        assertEquals(SendOutcome.Accepted(200), client.send(request(HttpMethod.GET, null), SuccessPolicy.ANY_2XX))
         assertEquals("GET", server.takeRequest().method)
     }
 
@@ -63,8 +63,14 @@ class DeliveryClientTest {
         assertEquals(SendOutcome.Rejected(403, "forbidden"), client.send(request(), SuccessPolicy.ANY_2XX))
     }
 
-    @Test fun malformedUrlIsRetryNotCrash() = runBlocking {
+    @Test fun malformedUrlIsInvalidNotCrash() = runBlocking {
         val bad = request().copy(url = "not a url")
-        assertEquals(SendOutcome.Retry(null, "network"), client.send(bad, SuccessPolicy.ANY_2XX))
+        assertEquals(SendOutcome.Invalid("request"), client.send(bad, SuccessPolicy.ANY_2XX))
+    }
+
+    @Test fun malformedHeaderIsInvalid() = runBlocking {
+        val bad = request().copy(headers = listOf("X-Bad" to "caf\u00e9"))
+        assertEquals(SendOutcome.Invalid("request"), client.send(bad, SuccessPolicy.ANY_2XX))
+        assertEquals(0, server.requestCount)
     }
 }

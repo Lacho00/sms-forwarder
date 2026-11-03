@@ -39,8 +39,8 @@ class DeliveryClient(private val http: OkHttpClient) {
         } catch (e: IOException) {
             classifyDelivery(null, null, policy)
         } catch (e: IllegalArgumentException) {
-            // A malformed URL or header can never succeed, but it must not crash the worker.
-            classifyDelivery(null, null, policy)
+            // A malformed URL or header can never succeed until the destination is edited.
+            SendOutcome.Invalid("request")
         }
     }
 

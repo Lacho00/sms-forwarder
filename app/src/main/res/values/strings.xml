@@ -34,7 +34,7 @@
     <string name="issue_autostart_off">Autostart is off</string>
     <string name="issue_autostart_unknown">Autostart cannot be checked</string>
     <string name="issue_miui_sms_blocked">MIUI blocks reading SMS</string>
-    <string name="issue_token_rejected">Token rejected by the Worker</string>
+    <string name="issue_token_rejected">A destination rejected its token</string>
     <string name="issue_not_configured">URL and token not set up</string>
     <string name="issue_no_senders">No senders configured</string>
     <string name="issue_migration_failed">Settings import failed. Forwarding is paused until it succeeds.</string>
@@ -125,7 +125,8 @@
     <string name="notif_stuck_rejected">The SMS from %1$s received at %2$s was rejected (Error %3$d).</string>
     <string name="notif_health_title">Check the configuration</string>
     <string name="notif_token_rejected_title">Token rejected</string>
-    <string name="notif_token_rejected_text">Token rejected: %d SMS waiting</string>
+    <string name="notif_token_rejected_text">Token rejected at %1$s: %2$d SMS waiting</string>
+    <string name="notif_stuck_config">%1$s (%2$s) was not sent: %3$s is misconfigured</string>
     <string name="notif_issue_sms_permission">The SMS permission is missing.</string>
     <string name="notif_issue_notification_permission">Notifications are turned off.</string>
     <string name="notif_issue_battery_optimized">Battery is optimized for this app.</string>

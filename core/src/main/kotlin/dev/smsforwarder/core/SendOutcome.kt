@@ -6,10 +6,26 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 sealed interface SendOutcome {
-    data object Accepted : SendOutcome
+    data class Accepted(val httpCode: Int) : SendOutcome
     data class Retry(val httpCode: Int?, val reason: String) : SendOutcome
     data class Rejected(val httpCode: Int, val errorCode: String?) : SendOutcome
+    /** The destination itself cannot produce a valid request (template or URL/header): terminal until it is edited. */
+    data class Invalid(val reason: String) : SendOutcome
 }
+
+/** The HTTP status that produced this outcome; null for a network error or a configuration error. */
+val SendOutcome.httpCode: Int?
+    get() = when (this) {
+        is SendOutcome.Accepted -> httpCode
+        is SendOutcome.Retry -> httpCode
+        is SendOutcome.Rejected -> httpCode
+        is SendOutcome.Invalid -> null
+    }
+
+/** `lastError` of a delivery that failed for a configuration reason carries this prefix. */
+const val CONFIG_ERROR_PREFIX = "config_"
+
+fun isConfigError(lastError: String?): Boolean = lastError?.startsWith(CONFIG_ERROR_PREFIX) == true
 
 enum class ConnectionTestResult { OK, BAD_TOKEN, UNREACHABLE }
 

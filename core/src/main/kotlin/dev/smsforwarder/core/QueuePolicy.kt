@@ -4,6 +4,9 @@ import kotlin.math.max
 
 enum class SmsStatus { QUEUED, SENT, ERROR }
 
+/** What the stuck check needs of one delivery; [live] = its destination exists and is enabled. */
+data class DeliveryState(val status: DeliveryStatus, val lastHttpCode: Int?, val lastError: String?, val live: Boolean)
+
 enum class SmsOrigin { RECEIVER, SWEEP, MANUAL }
 
 object QueuePolicy {
@@ -23,6 +26,19 @@ object QueuePolicy {
         SmsStatus.ERROR -> lastHttpCode == 400 || lastHttpCode == 401
         SmsStatus.QUEUED -> now - firstSeenAt > stuckAfterMs
     }
+
+    /**
+     * Stuck by deliveries: a live destination still QUEUED past the deadline, or an ERROR 400 / configuration
+     * error. 401/403 are covered by the token alert; paused, deleted and canceled deliveries do not count.
+     */
+    fun isStuck(deliveries: List<DeliveryState>, firstSeenAt: Long, now: Long, stuckAfterMs: Long): Boolean =
+        deliveries.any {
+            it.live && when (it.status) {
+                DeliveryStatus.QUEUED -> now - firstSeenAt > stuckAfterMs
+                DeliveryStatus.ERROR -> it.lastHttpCode == 400 || isConfigError(it.lastError)
+                DeliveryStatus.SENT, DeliveryStatus.CANCELED -> false
+            }
+        }
 
     fun retentionCutoff(now: Long): Long = now - RETENTION_MS
 

@@ -6,8 +6,8 @@ import kotlin.test.assertTrue
 
 class DeliveryPolicyTest {
     @Test fun any2xxAccepts() {
-        for (c in listOf(200, 201, 204)) assertEquals(SendOutcome.Accepted, classifyDelivery(c, null, SuccessPolicy.ANY_2XX))
-        assertEquals(SendOutcome.Accepted, classifyDelivery(200, null, SuccessPolicy.STATUS_200))
+        for (c in listOf(200, 201, 204)) assertEquals(SendOutcome.Accepted(c), classifyDelivery(c, null, SuccessPolicy.ANY_2XX))
+        assertEquals(SendOutcome.Accepted(200), classifyDelivery(200, null, SuccessPolicy.STATUS_200))
         assertEquals(SendOutcome.Retry(201, "http_201"), classifyDelivery(201, null, SuccessPolicy.STATUS_200))
     }
 
@@ -32,5 +32,18 @@ class DeliveryPolicyTest {
         assertEquals(SmsStatus.ERROR, aggregateStatus(listOf(s, e, q)))
         assertEquals(SmsStatus.SENT, aggregateStatus(listOf(s, s)))
         assertEquals(SmsStatus.QUEUED, aggregateStatus(emptyList()))
+    }
+
+    @Test fun acceptedCarriesCode() {
+        assertEquals(SendOutcome.Accepted(204), classifyDelivery(204, null, SuccessPolicy.ANY_2XX))
+    }
+
+    @Test fun canceledIgnoredInAggregate() {
+        val s = DeliveryStatus.SENT
+        val q = DeliveryStatus.QUEUED
+        val c = DeliveryStatus.CANCELED
+        assertEquals(SmsStatus.SENT, aggregateStatus(listOf(s, c)))
+        assertEquals(SmsStatus.QUEUED, aggregateStatus(listOf(q, c)))
+        assertEquals(SmsStatus.ERROR, aggregateStatus(listOf(c)))
     }
 }
