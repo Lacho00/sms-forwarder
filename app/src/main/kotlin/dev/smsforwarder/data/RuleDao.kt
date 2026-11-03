@@ -4,12 +4,43 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RuleDao {
     @Insert
     suspend fun insert(rule: RuleEntity): Long
+
+    @Update
+    suspend fun update(rule: RuleEntity)
+
+    @Query("DELETE FROM rule WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("DELETE FROM rule_destination WHERE ruleId = :ruleId")
+    suspend fun deleteLinks(ruleId: Long)
+
+    @Query("DELETE FROM rule_destination WHERE ruleId = :ruleId AND destinationId = :destinationId")
+    suspend fun deleteLink(ruleId: Long, destinationId: Long)
+
+    @Query("SELECT COUNT(*) FROM rule_destination WHERE ruleId = :ruleId")
+    suspend fun linkCount(ruleId: Long): Int
+
+    @Transaction
+    @Query("SELECT * FROM rule ORDER BY id ASC")
+    fun observeAllWithDestinations(): Flow<List<RuleWithDestinations>>
+
+    @Transaction
+    @Query("SELECT * FROM rule WHERE id = :id")
+    suspend fun getWithDestinations(id: Long): RuleWithDestinations?
+
+    /** Ids of the sender-only exact rules for [pattern] that point at [destinationId]. */
+    @Query(
+        "SELECT id FROM rule WHERE senderMode = 'EXACT' AND senderPattern = :pattern AND bodyMode IS NULL " +
+            "AND id IN (SELECT ruleId FROM rule_destination WHERE destinationId = :destinationId)",
+    )
+    suspend fun exactIdsForDestination(pattern: String, destinationId: Long): List<Long>
 
     @Insert
     suspend fun insertLinks(links: List<RuleDestinationEntity>)
@@ -25,13 +56,6 @@ interface RuleDao {
     /** Patterns of every sender-only exact rule, enabled or not; the 1.1 import uses it to skip the ones that exist. */
     @Query("SELECT senderPattern FROM rule WHERE senderMode = 'EXACT' AND bodyMode IS NULL")
     suspend fun exactSenderOnlyPatterns(): List<String>
-
-    /** Removes the sender-only exact rules for [pattern] that point at [destinationId]. */
-    @Query(
-        "DELETE FROM rule WHERE senderMode = 'EXACT' AND senderPattern = :pattern AND bodyMode IS NULL " +
-            "AND id IN (SELECT ruleId FROM rule_destination WHERE destinationId = :destinationId)",
-    )
-    suspend fun deleteExactForDestination(pattern: String, destinationId: Long): Int
 
     @Query("DELETE FROM rule_destination WHERE destinationId = :destinationId")
     suspend fun deleteLinksTo(destinationId: Long)
