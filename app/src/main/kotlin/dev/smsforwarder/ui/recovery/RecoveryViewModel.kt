@@ -46,8 +46,8 @@ class RecoveryViewModel(
     private val ruleRepository: RuleRepository,
     private val context: Context,
     private val clock: Clock,
-    private val enqueue: (Long) -> Unit,
     private val awaitImport: suspend () -> Boolean = { true },
+    private val enqueue: (Long) -> Unit,
 ) : ViewModel() {
 
     private val _candidates = MutableStateFlow<List<RecoveryItem>>(emptyList())
@@ -157,11 +157,11 @@ class RecoveryViewModel(
         private val ruleRepository: RuleRepository,
         private val context: Context,
         private val clock: Clock,
-        private val enqueue: (Long) -> Unit,
         private val awaitImport: suspend () -> Boolean = { true },
+        private val enqueue: (Long) -> Unit,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            RecoveryViewModel(reader, smsRepository, ruleRepository, context, clock, enqueue, awaitImport) as T
+            RecoveryViewModel(reader, smsRepository, ruleRepository, context, clock, awaitImport, enqueue) as T
     }
 }

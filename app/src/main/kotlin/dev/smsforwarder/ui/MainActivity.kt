@@ -78,9 +78,8 @@ class MainActivity : ComponentActivity() {
                 g.ruleRepository,
                 app,
                 clock,
-                { id -> WorkScheduler.enqueueSend(app, id, replace = true) },
                 { g.legacyImport.run() },
-            ),
+            ) { id -> WorkScheduler.enqueueSend(app, id, replace = true) },
         )[RecoveryViewModel::class.java]
         settingsViewModel = ViewModelProvider(
             this,
