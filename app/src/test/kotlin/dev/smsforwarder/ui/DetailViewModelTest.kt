@@ -118,4 +118,16 @@ class DetailViewModelTest {
         val s = await { it.deliveries.size == 2 && it.deliveries.all { d -> d.status != DeliveryStatus.QUEUED } }
         assertEquals(null, s.label!!.httpCode)
     }
+
+    @Test fun waitingAggregateNeverShowsASentCode() {
+        runBlocking {
+            sms.resendTo(smsId, 2L)
+            val byDestination = sms.deliveriesOf(smsId).associateBy { it.destinationId }
+            sms.recordAttempt(byDestination[1L]!!.id, SendOutcome.Retry(500, "http_500"))
+            sms.recordAttempt(byDestination[2L]!!.id, SendOutcome.Accepted(200))
+        }
+        val s = await { it.deliveries.size == 2 && it.deliveries.any { d -> d.status == DeliveryStatus.SENT } }
+        assertEquals(SmsStatus.QUEUED, s.sms!!.status)
+        assertEquals(500, s.label!!.httpCode)
+    }
 }

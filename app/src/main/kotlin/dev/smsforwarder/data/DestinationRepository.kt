@@ -112,11 +112,21 @@ class DestinationRepository(
         }
     }
 
-    /** Pauses or resumes; resuming returns the SMS with a QUEUED delivery here for the caller to schedule. */
+    /**
+     * Pauses or resumes. Resuming also puts this destination's 401/403 and configuration errors back to QUEUED (the
+     * token may have been fixed while paused, as [update] does) and returns every SMS with a QUEUED delivery here for
+     * the caller to schedule. Pausing leaves errors alone.
+     */
     suspend fun setEnabled(id: Long, enabled: Boolean): List<Long> = db.withTransaction {
         val entity = dao.get(id)?.takeIf { it.deletedAt == null } ?: return@withTransaction emptyList()
         if (entity.enabled != enabled) dao.update(entity.copy(enabled = enabled))
-        if (enabled) deliveries.smsIdsQueuedFor(id) else emptyList()
+        if (enabled) {
+            sms.requeueAuthErrors(id)
+            sms.requeueConfigErrors(id)
+            deliveries.smsIdsQueuedFor(id)
+        } else {
+            emptyList()
+        }
     }
 
     /** QUEUED plus ERROR deliveries here, for the delete confirmation. */
@@ -190,6 +200,9 @@ class DestinationRepository(
     }
 
     suspend fun get(id: Long): DestinationEntity? = dao.get(id)
+
+    /** Ids of the live, enabled destinations: one read for a whole batch. */
+    suspend fun activeIds(): Set<Long> = dao.activeIds().toSet()
 
     suspend fun secrets(id: Long): DestinationSecrets? = secretStore.get(id)
 }

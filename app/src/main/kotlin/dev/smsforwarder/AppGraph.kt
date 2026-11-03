@@ -74,6 +74,9 @@ class AppGraph(context: Context) {
         )
     }
 
+    /** Whether forwarding is on; a seam so a test can make the read fail. */
+    var forwardingEnabled: suspend () -> Boolean = { settings.isForwardingEnabled() }
+
     private var legacyImportOrNull: LegacyImport? = null
 
     /** Built on first use; a test can assign its own with fake stores. */

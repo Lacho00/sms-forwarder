@@ -44,7 +44,7 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
         val pending = try {
             // Paused: leave the SMS untouched; resuming and every sweep queue it again.
-            if (!graph.settings.isForwardingEnabled()) return Result.success()
+            if (!graph.forwardingEnabled()) return Result.success()
             // The aggregate can read ERROR while another delivery is still QUEUED, so look at the deliveries.
             repo.pendingDeliveries(id)
         } catch (e: CancellationException) {
@@ -62,7 +62,18 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         for (pass in 0 until MAX_PASSES) {
             if (batch.isEmpty()) break
             // Forwarding paused while this run was sending: stop, resuming and every sweep queue it again.
-            if (pass > 0 && !forwardingEnabled(graph)) break
+            if (pass > 0) {
+                val enabled = try {
+                    graph.forwardingEnabled()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Cannot tell: try again later instead of stopping quietly with deliveries still queued.
+                    retryNeeded = true
+                    break
+                }
+                if (!enabled) break
+            }
             val results = supervisorScope {
                 batch.map { delivery -> async { sendOne(graph, sms, delivery) } }.awaitAll()
             }
@@ -71,7 +82,8 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             batch = try {
                 // Skip what is waiting for a retry and what belongs to a destination that is still paused or gone;
                 // a destination resumed during the run is picked up here.
-                repo.pendingDeliveries(id).filter { it.id !in retried && sendable(graph, it) }
+                val active = graph.destinationRepository.activeIds()
+                repo.pendingDeliveries(id).filter { it.id !in retried && it.destinationId in active }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -79,19 +91,6 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             }
         }
         return if (retryNeeded) Result.retry() else Result.success()
-    }
-
-    private suspend fun forwardingEnabled(graph: AppGraph): Boolean = try {
-        graph.settings.isForwardingEnabled()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        false
-    }
-
-    private suspend fun sendable(graph: AppGraph, delivery: DeliveryEntity): Boolean {
-        val destination = delivery.destinationId?.let { graph.destinationRepository.get(it) } ?: return false
-        return destination.deletedAt == null && destination.enabled
     }
 
     /** Returns true when this delivery should be tried again later. */
@@ -145,8 +144,6 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         return outcome is SendOutcome.Retry
     }
 
-    // A 401/403 means the token is wrong for every SMS to that destination, so one shared notification per
-    // destination; a 400 is per SMS.
     private suspend fun changedSince(graph: AppGraph, used: Pair<DestinationEntity, DestinationSecrets>?): Boolean {
         if (used == null) return false
         return try {
@@ -159,6 +156,8 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
     }
 
+    // A 401/403 means the token is wrong for every SMS to that destination, so one shared notification per
+    // destination; a 400 is per SMS.
     private suspend fun notifyRejected(graph: AppGraph, smsId: Long, delivery: DeliveryEntity, outcome: SendOutcome.Rejected) {
         try {
             val repo = graph.smsRepository

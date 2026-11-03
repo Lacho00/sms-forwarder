@@ -75,12 +75,14 @@ internal fun DeliveryEntity.toChip() = DeliveryChipUi(
 )
 
 /**
- * The code beside an error status comes from a delivery that failed: the SMS keeps the latest attempt's code, which
- * can be another destination's 200. Without deliveries to look at, the stored code stays.
+ * The code beside a status comes from a delivery that did not succeed: the SMS keeps the latest attempt's code, which
+ * can be another destination's 200. A failed (ERROR) delivery wins over a waiting one; a SENT delivery never counts.
+ * A SENT aggregate, or no deliveries to look at, keeps the stored code.
  */
 internal fun shownCode(sms: SmsEntity, deliveries: List<DeliveryEntity>): Int? {
-    if (sms.status != SmsStatus.ERROR || deliveries.isEmpty()) return sms.lastHttpCode
-    return deliveries.firstOrNull { it.status == DeliveryStatus.ERROR && it.lastHttpCode != null }?.lastHttpCode
+    if (sms.status == SmsStatus.SENT || deliveries.isEmpty()) return sms.lastHttpCode
+    val unsent = deliveries.filter { it.status != DeliveryStatus.SENT && it.lastHttpCode != null }
+    return (unsent.firstOrNull { it.status == DeliveryStatus.ERROR } ?: unsent.lastOrNull())?.lastHttpCode
 }
 
 internal fun SmsEntity.toRowUi(deliveries: List<DeliveryEntity> = emptyList()) = RowUi(

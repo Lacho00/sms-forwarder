@@ -24,6 +24,10 @@ interface DestinationDao {
     @Query("SELECT * FROM destination WHERE deletedAt IS NULL AND template = 'STANDARD_JSON' ORDER BY id ASC LIMIT 1")
     suspend fun primary(): DestinationEntity?
 
+    /** Ids of the destinations that can send now: not deleted and not paused. */
+    @Query("SELECT id FROM destination WHERE deletedAt IS NULL AND enabled = 1")
+    suspend fun activeIds(): List<Long>
+
     /** Destinations not deleted, paused ones included, by id. */
     @Query("SELECT * FROM destination WHERE deletedAt IS NULL ORDER BY id ASC")
     fun observeLive(): Flow<List<DestinationEntity>>

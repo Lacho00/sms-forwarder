@@ -241,4 +241,19 @@ class DestinationRepositoryTest {
         assertEquals(DeliveryStatus.ERROR, sms.deliveriesOf(a).single().status)
         assertEquals(SmsStatus.ERROR, sms.get(a)!!.status)
     }
+
+    @Test fun resumeRequeuesAuthAndConfigErrors() = runBlocking {
+        val id = repo.create(custom("One"))
+        val a = ingest(id)
+        val b = ingest(id)
+        sms.recordAttempt(sms.deliveriesOf(a).single().id, SendOutcome.Rejected(403, null))
+        sms.recordAttempt(sms.deliveriesOf(b).single().id, SendOutcome.Invalid("template"))
+        repo.setEnabled(id, false)
+
+        val ids = repo.setEnabled(id, true)
+
+        assertEquals(setOf(a, b), ids.toSet())
+        assertEquals(DeliveryStatus.QUEUED, sms.deliveriesOf(a).single().status)
+        assertEquals(DeliveryStatus.QUEUED, sms.deliveriesOf(b).single().status)
+    }
 }

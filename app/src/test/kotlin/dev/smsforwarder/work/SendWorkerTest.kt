@@ -422,4 +422,32 @@ class SendWorkerTest {
         assertEquals(1, server.requestCount)
         assertEquals(DeliveryStatus.QUEUED, graph.smsRepository.deliveriesOf(id).first { it.destinationId == other }.status)
     }
+
+    @Test fun forwardingReadFailureBetweenPassesRetries() = runBlocking {
+        val id = insertSms()
+        val other = graph.db.destinationDao().insert(
+            DestinationEntity(
+                name = "T2", enabled = true, template = TemplateKind.STANDARD_JSON, method = HttpMethod.POST,
+                bodyTemplate = null, bodyIsJson = true, publicHeaders = "[]",
+                successPolicy = SuccessPolicy.ANY_2XX, createdAt = 1L,
+            ),
+        )
+        graph.destinationSecretStore.set(other, DestinationSecrets(server.url("/second").toString(), emptyList()))
+        var reads = 0
+        graph.forwardingEnabled = {
+            if (++reads > 1) throw java.io.IOException("datastore") else true
+        }
+        try {
+            server.dispatcher = object : mockwebserver3.Dispatcher() {
+                override fun dispatch(request: mockwebserver3.RecordedRequest): MockResponse {
+                    runBlocking { graph.smsRepository.resendTo(id, other) }
+                    return MockResponse.Builder().code(200).build()
+                }
+            }
+            assertEquals(ListenableWorker.Result.retry(), run(id))
+            assertEquals(1, server.requestCount)
+        } finally {
+            graph.forwardingEnabled = { graph.settings.isForwardingEnabled() }
+        }
+    }
 }
