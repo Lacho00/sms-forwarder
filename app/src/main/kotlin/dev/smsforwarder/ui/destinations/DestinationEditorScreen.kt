@@ -293,7 +293,8 @@ private fun HeadersSection(state: DestinationEditorState, vm: DestinationEditorV
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.setHeaders(headers.filterIndexed { i, _ -> i != index }) }) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.destination_header_remove))
+                val who = h.name.ifBlank { stringResource(R.string.destination_header_fallback_name, index + 1) }
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.destination_header_remove, who))
             }
         }
         val keeps = h.secret && h.stored && h.value.isEmpty() && h.storedName == h.name

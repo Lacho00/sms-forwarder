@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -111,15 +110,15 @@ fun AppNavHost(
     recoveryViewModel: RecoveryViewModel,
     settingsViewModel: SettingsViewModel,
     destinationsViewModel: DestinationsViewModel,
-    /** Builds the editor's ViewModel; the second argument is unique per opening so a finished editor is never reused. */
-    destinationEditorViewModel: (DestinationTarget, Int) -> DestinationEditorViewModel,
+    destinationEditorViewModel: (DestinationTarget) -> DestinationEditorViewModel,
     onOpenSystemIssue: (HealthIssue) -> Unit,
     onSweepNow: () -> Unit,
 ) {
     var stack by rememberSaveable { mutableStateOf(startRoute) }
     // Kept here, not in the Home branch, so opening an SMS and coming back keeps the search field next to its query.
     var searchOpen by rememberSaveable { mutableStateOf(false) }
-    var editorSeq by rememberSaveable { mutableIntStateOf(0) }
+    // The route whose editor was reset on open; cleared when the editor is left.
+    var editorReady by rememberSaveable { mutableStateOf<String?>(null) }
     val routes = stack.split(STACK_SEPARATOR)
     val current = routes.last()
 
@@ -228,24 +227,35 @@ fun AppNavHost(
             ) { padding ->
                 DestinationsScreen(
                     rows = rows,
-                    onOpen = { id ->
-                        editorSeq++
-                        navigate(Routes.destination(id))
-                    },
-                    onAdd = {
-                        editorSeq++
-                        navigate(Routes.destination(null))
-                    },
+                    onOpen = { id -> navigate(Routes.destination(id)) },
+                    onAdd = { navigate(Routes.destination(null)) },
                     onToggle = destinationsViewModel::setEnabled,
                     padding = padding,
                 )
             }
         }
         destinationTarget != null -> {
-            val seq = editorSeq
-            val vm = remember(destinationTarget, seq) { destinationEditorViewModel(destinationTarget, seq) }
+            val vm = remember(destinationTarget) { destinationEditorViewModel(destinationTarget) }
             val state by vm.state.collectAsState()
-            DestinationEditorScreen(state = state, vm = vm, onBack = back)
+            // A fresh editor on every open (a rotation keeps the marker, so the form survives it), and nothing
+            // typed stays in the ViewModel once the editor is left.
+            LaunchedEffect(current) {
+                if (editorReady != current) {
+                    vm.reset()
+                    editorReady = current
+                }
+            }
+            val leave: () -> Unit = {
+                vm.reset()
+                editorReady = null
+                back()
+            }
+            BackHandler { leave() }
+            DestinationEditorScreen(state = state, vm = vm, onBack = leave)
+        }
+        current.startsWith("destination/") -> {
+            // A route that names no destination: go back instead of falling through to onboarding.
+            LaunchedEffect(current) { if (routes.size > 1) back() else stack = Routes.MAIN }
         }
         current == Routes.ABOUT -> {
             val context = LocalContext.current

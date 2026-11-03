@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 import dev.smsforwarder.core.TemplateKind
@@ -59,12 +61,19 @@ fun DestinationsScreen(
                 modifier = Modifier.align(Alignment.Center).padding(16.dp),
             )
         } else {
-            LazyColumn(Modifier.fillMaxSize()) {
+            // Room below the last row for the FAB (56dp) and its 16dp margins.
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(rows, key = { it.id }) { row ->
                     ListItem(
                         headlineContent = { Text(row.name) },
                         supportingContent = { Text(supportingLine(row)) },
-                        trailingContent = { Switch(checked = row.enabled, onCheckedChange = { onToggle(row.id, it) }) },
+                        trailingContent = {
+                            Switch(
+                                checked = row.enabled,
+                                onCheckedChange = { onToggle(row.id, it) },
+                                modifier = Modifier.semantics { contentDescription = row.name },
+                            )
+                        },
                         modifier = Modifier.clickable { onOpen(row.id) },
                     )
                     HorizontalDivider()

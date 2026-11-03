@@ -97,6 +97,32 @@ class DestinationEditorViewModelTest {
 
     private fun liveCount() = runBlocking { repos.destinations.observeLive().first().size }
 
+    @Test fun resetAfterDoneMakesTheEditorUsableAgain() = runBlocking {
+        val id = repos.destinations.create(draft("One", HeaderDraft("X-Key", "hush", secret = true)))
+        val edit = loaded(id)
+        edit.setName("Renamed")
+        edit.save()
+        edit.await { it.done }
+        edit.reset()
+        edit.await { it.loaded }
+        assertFalse(edit.state.value.done)
+        assertEquals("Renamed", edit.state.value.name)
+        assertEquals("", edit.state.value.url)
+
+        val create = vm()
+        create.chooseTemplate(TemplateKind.CUSTOM)
+        create.setUrl("https://h.example/typed-secret")
+        create.setName("Two")
+        create.save()
+        create.await { it.done }
+        create.reset()
+        create.await { it.loaded }
+        assertFalse(create.state.value.done)
+        assertEquals("", create.state.value.url)
+        assertEquals("", create.state.value.name)
+        assertEquals(PresetFields(), create.state.value.preset)
+    }
+
     @Test fun telegramPresetFillsForm() {
         val vm = vm()
         vm.chooseTemplate(TemplateKind.TELEGRAM)

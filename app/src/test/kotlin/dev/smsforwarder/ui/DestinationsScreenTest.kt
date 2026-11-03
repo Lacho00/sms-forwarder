@@ -1,6 +1,8 @@
 package dev.smsforwarder.ui
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -71,5 +73,16 @@ class DestinationsScreenTest {
         compose.onNodeWithText("Alpha").performClick()
         assertEquals(1, added)
         assertEquals(listOf(1L), opened)
+    }
+
+    @Test fun rowSwitchIsLabelledWithTheName() {
+        show(listOf(DestinationRowUi(1, "Alpha", TemplateKind.CUSTOM, enabled = true, queued = 0, errors = 0)))
+        val sw = compose.onNode(
+            hasContentDescription("Alpha") and isToggleable(),
+            useUnmergedTree = true,
+        )
+        sw.assertExists()
+        sw.performClick()
+        assertEquals(listOf(1L to false), toggled)
     }
 }

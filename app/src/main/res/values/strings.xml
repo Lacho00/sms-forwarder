@@ -235,7 +235,8 @@
     <string name="destination_header_name">Name</string>
     <string name="destination_header_value">Value</string>
     <string name="destination_header_secret">Secret</string>
-    <string name="destination_header_remove">Remove header</string>
+    <string name="destination_header_remove">Remove header %1$s</string>
+    <string name="destination_header_fallback_name">header %1$d</string>
     <string name="destination_header_add">Add header</string>
     <string name="destination_body">Body</string>
     <string name="destination_body_json">JSON</string>

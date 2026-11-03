@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -22,6 +23,7 @@ import dev.smsforwarder.net.DestinationTester
 import dev.smsforwarder.ui.destinations.DestinationEditorScreen
 import dev.smsforwarder.ui.destinations.DestinationEditorState
 import dev.smsforwarder.ui.destinations.DestinationEditorViewModel
+import dev.smsforwarder.ui.destinations.HeaderRowUi
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
 import kotlinx.coroutines.CoroutineScope
@@ -122,5 +124,16 @@ class DestinationEditorScreenTest {
         compose.waitForIdle()
         compose.onNodeWithText(app.getString(R.string.destination_error_name_empty)).assertExists()
         assertTrue(!vm.state.value.done)
+    }
+
+    @Test fun headerRemoveButtonsNameTheirHeader() {
+        val state = DestinationEditorState(
+            loaded = true,
+            headers = listOf(HeaderRowUi("X-Key", "", false, false), HeaderRowUi("", "", false, false)),
+        )
+        show(vm(null), state)
+        compose.onNodeWithContentDescription(app.getString(R.string.destination_header_remove, "X-Key")).assertExists()
+        val fallback = app.getString(R.string.destination_header_fallback_name, 2)
+        compose.onNodeWithContentDescription(app.getString(R.string.destination_header_remove, fallback)).assertExists()
     }
 }

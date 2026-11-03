@@ -93,11 +93,30 @@ class DestinationEditorViewModel(
     private var testJob: Job? = null
     private var generation = 0
 
+    private var loadJob: Job? = null
+
     init {
+        load()
+    }
+
+    /**
+     * Back to a pristine editor for this target: reloads from the repository and drops everything typed (URL, preset
+     * token, header values), the test result, the delete confirmation and any done/failed flag. Called on every open
+     * and when leaving, so a secret typed once does not stay in memory.
+     */
+    fun reset() {
+        generation++
+        testJob?.cancel()
+        loadJob?.cancel()
+        _state.value = DestinationEditorState(isNew = id == null)
+        load()
+    }
+
+    private fun load() {
         if (id == null) {
             _state.update { it.copy(loaded = true) }
         } else {
-            launch {
+            loadJob = launch {
                 val e = try {
                     repo.editable(id)
                 } catch (c: CancellationException) {

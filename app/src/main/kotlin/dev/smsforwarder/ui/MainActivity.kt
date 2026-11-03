@@ -18,7 +18,6 @@ import dev.smsforwarder.AppGraph
 import dev.smsforwarder.SmsForwarderApp
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.health.MiuiIntents
-import dev.smsforwarder.core.TemplateKind
 import dev.smsforwarder.ui.destinations.DestinationEditorViewModel
 import dev.smsforwarder.ui.destinations.DestinationsViewModel
 import dev.smsforwarder.ui.destinations.templateLabelRes
@@ -155,12 +154,11 @@ class MainActivity : ComponentActivity() {
         ).get("detail-$id", DetailViewModel::class.java)
     }
 
-    private fun destinationEditorViewModel(target: DestinationTarget, seq: Int): DestinationEditorViewModel {
-        // Locals only: the factory lambdas must not capture this activity. The strings come from the
-        // activity's (already localized) resources, read now.
+    private fun destinationEditorViewModel(target: DestinationTarget): DestinationEditorViewModel {
+        // Locals only: the factory lambdas must not capture this activity. Default names are read when needed,
+        // in the language saved at that moment.
         val app = applicationContext
         val g = graph
-        val names = TemplateKind.entries.associateWith { getString(templateLabelRes(it)) }
         val id = (target as? DestinationTarget.Edit)?.id
         return ViewModelProvider(
             this,
@@ -169,9 +167,9 @@ class MainActivity : ComponentActivity() {
                 g.destinationRepository,
                 g.destinationTester,
                 enqueue = { ids -> ids.forEach { WorkScheduler.enqueueSend(app, it) } },
-                defaultName = { kind -> names.getValue(kind) },
+                defaultName = { kind -> Localized.wrap(app, Localized.savedTag(app)).getString(templateLabelRes(kind)) },
             ),
-        ).get("destination-${id ?: "new"}-$seq", DestinationEditorViewModel::class.java)
+        ).get("destination-${id ?: "new"}", DestinationEditorViewModel::class.java)
     }
 
     private fun openSystemIssue(issue: HealthIssue) {
