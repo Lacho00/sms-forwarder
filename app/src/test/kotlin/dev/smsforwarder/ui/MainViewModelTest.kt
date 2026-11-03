@@ -62,6 +62,7 @@ class MainViewModelTest {
         val file = File(context.cacheDir, "main-vm-${UUID.randomUUID()}.preferences_pb")
         repos = TestRepos(db)
         settings = SettingsRepository(context, repos.destinations, repos.rules, sms, scheduler = {}, storeFile = file)
+        repos.destinations.ensurePrimary()
         queuedId = add("SENDERONE", "Code 1111", now - 3_000)
         errorId = add("SENDERONE", "Code 2222", now - 2_000)
         otherSenderId = add("SENDERTWO", "Code 3333", now - 1_000)

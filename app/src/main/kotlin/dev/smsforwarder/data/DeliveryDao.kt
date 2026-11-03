@@ -29,7 +29,6 @@ interface DeliveryDao {
 
     @Query(
         "SELECT DISTINCT d.smsId FROM delivery d JOIN sms s ON s.id = d.smsId " +
-            "JOIN destination t ON t.id = d.destinationId AND t.deletedAt IS NULL " +
             "WHERE d.status = :status AND s.deletedAt IS NULL ORDER BY s.receivedAt ASC",
     )
     suspend fun smsIdsWithStatus(status: DeliveryStatus): List<Long>
@@ -45,6 +44,7 @@ interface DeliveryDao {
     /** SMS ids with an ERROR delivery to any destination that the endpoint rejected with 401 or 403. */
     @Query(
         "SELECT DISTINCT d.smsId FROM delivery d JOIN sms s ON s.id = d.smsId " +
+            "JOIN destination t ON t.id = d.destinationId AND t.deletedAt IS NULL " +
             "WHERE d.status = 'ERROR' AND d.lastHttpCode IN (401, 403) " +
             "AND s.deletedAt IS NULL ORDER BY s.receivedAt ASC",
     )
