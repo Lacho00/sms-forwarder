@@ -17,6 +17,7 @@ import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -57,7 +58,7 @@ class DestinationTesterTest {
         assertEquals("POST", req.method)
         assertEquals("{}", req.body!!.utf8())
         assertEquals("Bearer tok", req.headers["Authorization"])
-        assertTrue(!req.body!!.utf8().contains("TEST"))
+        assertFalse(req.body!!.utf8().contains("TEST"))
     }
 
     @Test fun customSendsSampleSms() = runBlocking {
@@ -105,8 +106,43 @@ class DestinationTesterTest {
     @Test fun nothingRecorded() = runBlocking {
         server.enqueue(MockResponse.Builder().code(200).build())
         tester().test(DestinationPresets.custom("C").copy(url = url()), null)
+        // The no-DB guarantee is structural: the tester takes no DAO. These checks guard the wiring around it.
+        assertEquals(1, server.requestCount)
         assertEquals(0, db.query("SELECT COUNT(*) FROM attempt", null).use { it.moveToFirst(); it.getInt(0) })
         assertEquals(0, db.query("SELECT COUNT(*) FROM delivery", null).use { it.moveToFirst(); it.getInt(0) })
         assertEquals(0, db.query("SELECT COUNT(*) FROM sms", null).use { it.moveToFirst(); it.getInt(0) })
+    }
+
+    @Test fun standard401IsBadToken() = runBlocking {
+        server.enqueue(MockResponse.Builder().code(401).build())
+        val result = tester().test(DestinationPresets.standardJson("Main", url(), "tok"), null)
+        assertEquals(TestVerdict.BAD_TOKEN, result.verdict)
+        assertEquals(401, result.httpCode)
+    }
+
+    @Test fun custom404IsFailed() = runBlocking {
+        server.enqueue(MockResponse.Builder().code(404).build())
+        val result = tester().test(DestinationPresets.custom("C").copy(url = url()), null)
+        assertEquals(TestVerdict.FAILED, result.verdict)
+        assertEquals(404, result.httpCode)
+    }
+
+    @Test fun nothingStoredAndNoUrlSendsNothing() = runBlocking {
+        val result = tester().test(DestinationPresets.custom("C").copy(url = null), 9L)
+        assertEquals(TestVerdict.FAILED, result.verdict)
+        assertNull(result.httpCode)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test fun blankValuesFallBackToStored() = runBlocking {
+        secrets.map[7L] = DestinationSecrets(url("/stored"), listOf("Authorization" to "Bearer stored"))
+        server.enqueue(MockResponse.Builder().code(400).build())
+        val draft = DestinationPresets.standardJson("Main", "https://h.example", "x").copy(
+            url = "  ", headers = listOf(HeaderDraft("Authorization", " ", secret = true)),
+        )
+        tester().test(draft, 7L)
+        val req = server.takeRequest()
+        assertEquals("/stored", req.url.encodedPath)
+        assertEquals("Bearer stored", req.headers["Authorization"])
     }
 }
