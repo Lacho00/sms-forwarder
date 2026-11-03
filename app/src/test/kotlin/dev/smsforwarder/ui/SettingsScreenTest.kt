@@ -77,6 +77,12 @@ class SettingsScreenTest {
         db.close()
     }
 
+    @Test fun noSendersGroup() {
+        showGroups()
+        compose.onAllNodesWithText("Senders").assertCountEquals(0)
+        compose.onAllNodesWithText("Remitentes").assertCountEquals(0)
+    }
+
     @Test fun noConnectionGroup() {
         showGroups()
         compose.onAllNodesWithText(str(R.string.field_worker_url)).assertCountEquals(0)
@@ -89,11 +95,8 @@ class SettingsScreenTest {
         compose.setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {
                 SettingsScreen(
-                    senders = emptyList(),
                     prefs = prefs,
                     actions = actions,
-                    onAddSender = {},
-                    onRemoveSender = {},
                     onOpenRecovery = onRecovery,
                     onOpenSystemIssue = onSystem,
                 )
@@ -101,10 +104,9 @@ class SettingsScreenTest {
         }
     }
 
-    @Test fun showsSixGroupHeadersInSpecOrder() {
+    @Test fun showsFiveGroupHeadersInSpecOrder() {
         showGroups()
         val ids = listOf(
-            R.string.settings_senders,
             R.string.settings_group_forwarding,
             R.string.settings_group_history,
             R.string.settings_group_notifications,
@@ -113,7 +115,7 @@ class SettingsScreenTest {
         )
         val ys = ids.map { compose.onNodeWithText(str(it)).fetchSemanticsNode().positionInRoot.y }
         assertEquals(ys.sorted(), ys)
-        assertEquals(6, ys.toSet().size)
+        assertEquals(5, ys.toSet().size)
     }
 
     @Test fun maintenanceButtonsCallTheirCallbacks() {

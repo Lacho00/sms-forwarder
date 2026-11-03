@@ -26,7 +26,7 @@ import androidx.compose.ui.res.stringResource
 import dev.smsforwarder.R
 
 /**
- * Frame for the two top-level screens: top bar with an overflow menu, bottom bar with Home, Destinations and Settings.
+ * Frame for the top-level screens: top bar with an overflow menu, bottom bar with Home, Rules, Destinations and Settings.
  * [actions] are placed before the overflow button.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,6 +68,12 @@ fun AppShell(
                     onClick = { onTab(Routes.MAIN) },
                     icon = { Icon(Icons.Filled.Home, contentDescription = null) },
                     label = { Text(stringResource(R.string.tab_home)) },
+                )
+                NavigationBarItem(
+                    selected = current == Routes.RULES,
+                    onClick = { onTab(Routes.RULES) },
+                    icon = { Icon(painterResource(R.drawable.ic_tab_rules), contentDescription = null) },
+                    label = { Text(stringResource(R.string.tab_rules)) },
                 )
                 NavigationBarItem(
                     selected = current == Routes.DESTINATIONS,

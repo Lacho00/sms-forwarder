@@ -26,6 +26,8 @@ import dev.smsforwarder.sms.ContentInboxReader
 import dev.smsforwarder.ui.main.MainViewModel
 import dev.smsforwarder.ui.onboarding.OnboardingViewModel
 import dev.smsforwarder.ui.recovery.RecoveryViewModel
+import dev.smsforwarder.ui.rules.RuleEditorViewModel
+import dev.smsforwarder.ui.rules.RulesViewModel
 import dev.smsforwarder.ui.settings.SettingsViewModel
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
@@ -38,6 +40,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var recoveryViewModel: RecoveryViewModel
     private lateinit var settingsViewModel: SettingsViewModel
     private lateinit var destinationsViewModel: DestinationsViewModel
+    private lateinit var rulesViewModel: RulesViewModel
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(Localized.wrap(newBase, Localized.savedTag(newBase)))
@@ -97,6 +100,10 @@ class MainActivity : ComponentActivity() {
             this,
             DestinationsViewModel.Factory(g.destinationRepository) { ids -> ids.forEach { WorkScheduler.enqueueSend(app, it) } },
         )[DestinationsViewModel::class.java]
+        rulesViewModel = ViewModelProvider(
+            this,
+            RulesViewModel.Factory(g.ruleRepository),
+        )[RulesViewModel::class.java]
         // Collected here, not in the ViewModel: after a recreation this is the activity that is alive.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -123,6 +130,8 @@ class MainActivity : ComponentActivity() {
                         settingsViewModel = settingsViewModel,
                         destinationsViewModel = destinationsViewModel,
                         destinationEditorViewModel = this::destinationEditorViewModel,
+                        rulesViewModel = rulesViewModel,
+                        ruleEditorViewModel = this::ruleEditorViewModel,
                         onOpenSystemIssue = this::openSystemIssue,
                         onSweepNow = { WorkScheduler.sweepNow(applicationContext) },
                     )
@@ -170,6 +179,16 @@ class MainActivity : ComponentActivity() {
                 defaultName = { kind -> Localized.wrap(app, Localized.savedTag(app)).getString(templateLabelRes(kind)) },
             ),
         ).get("destination-${id ?: "new"}", DestinationEditorViewModel::class.java)
+    }
+
+    private fun ruleEditorViewModel(target: RuleTarget): RuleEditorViewModel {
+        // Locals only: the factory lambdas must not capture this activity.
+        val g = graph
+        val id = (target as? RuleTarget.Edit)?.id
+        return ViewModelProvider(
+            this,
+            RuleEditorViewModel.Factory(id, g.ruleRepository, g.destinationRepository),
+        ).get("rule-${id ?: "new"}", RuleEditorViewModel::class.java)
     }
 
     private fun openSystemIssue(issue: HealthIssue) {

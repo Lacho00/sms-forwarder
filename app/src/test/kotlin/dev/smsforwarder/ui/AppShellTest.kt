@@ -46,6 +46,20 @@ class AppShellTest {
         compose.onNodeWithText(str(R.string.tab_settings)).assertIsDisplayed()
     }
 
+    @Test fun fourTabsInSpecOrder() {
+        show()
+        val ids = listOf(R.string.tab_home, R.string.tab_rules, R.string.tab_destinations, R.string.tab_settings)
+        val xs = ids.map { compose.onNodeWithText(str(it)).fetchSemanticsNode().positionInRoot.x }
+        assertEquals(xs.sorted(), xs)
+        assertEquals(4, xs.toSet().size)
+    }
+
+    @Test fun rulesTabReportsRulesRoute() {
+        show()
+        compose.onNodeWithText(str(R.string.tab_rules)).assertExists().performClick()
+        assertEquals(listOf(Routes.RULES), tabs)
+    }
+
     @Test fun destinationsTabShown() {
         show()
         compose.onNodeWithText(str(R.string.tab_destinations)).assertIsDisplayed().performClick()
@@ -67,7 +81,7 @@ class AppShellTest {
 
     @Test fun onlyTopLevelScreensAreTabs() {
         listOf(Routes.MAIN, Routes.SETTINGS, Routes.DESTINATIONS, Routes.RULES).forEach { assertTrue(it, Routes.isTab(it)) }
-        listOf(Routes.ONBOARDING, Routes.RECOVERY, Routes.ABOUT, Routes.detail(3), Routes.destination(null), Routes.destination(7)).forEach {
+        listOf(Routes.ONBOARDING, Routes.RECOVERY, Routes.ABOUT, Routes.detail(3), Routes.destination(null), Routes.destination(7), Routes.rule(null), Routes.rule(7)).forEach {
             assertFalse(it, Routes.isTab(it))
         }
     }
@@ -76,5 +90,6 @@ class AppShellTest {
         assertEquals("main", stackForTab(Routes.MAIN))
         assertEquals("main|settings", stackForTab(Routes.SETTINGS))
         assertEquals("main|destinations", stackForTab(Routes.DESTINATIONS))
+        assertEquals("main|rules", stackForTab(Routes.RULES))
     }
 }

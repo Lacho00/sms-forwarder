@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Every preference the settings screen shows besides the sender list. */
+/** Every preference the settings screen shows. */
 data class SettingsPrefs(
     val forwarding: Boolean = true,
     val sweepInterval: SweepInterval = SweepInterval.M15,
@@ -44,7 +44,6 @@ class SettingsViewModel(
     private val languageChangedChannel = Channel<Unit>(Channel.CONFLATED)
     val languageChanged: Flow<Unit> = languageChangedChannel.receiveAsFlow()
 
-    val senders: Flow<List<String>> = settings.senders
     val themeMode: Flow<ThemeMode> = settings.themeMode
 
     private val notifyFlow: Flow<Map<NotifyKind, Boolean>> =
@@ -81,10 +80,6 @@ class SettingsViewModel(
     private fun launch(block: suspend () -> Unit) {
         (scope ?: viewModelScope).launch { block() }
     }
-
-    fun addSender(text: String) = launch { settings.addSender(text) }
-
-    fun removeSender(sender: String) = launch { settings.removeSender(sender) }
 
     fun setTheme(mode: ThemeMode) = launch { settings.setThemeMode(mode) }
 

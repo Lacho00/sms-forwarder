@@ -11,20 +11,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -62,15 +55,12 @@ class SettingsActions(
 )
 
 /**
- * Groups, in order: senders, forwarding, history, notifications, appearance, maintenance.
+ * Groups, in order: forwarding, history, notifications, appearance, maintenance.
  */
 @Composable
 fun SettingsScreen(
-    senders: List<String>,
     prefs: SettingsPrefs,
     actions: SettingsActions,
-    onAddSender: (String) -> Unit,
-    onRemoveSender: (String) -> Unit,
     onOpenRecovery: () -> Unit,
     onOpenSystemIssue: (HealthIssue) -> Unit,
     padding: PaddingValues = PaddingValues(),
@@ -83,9 +73,6 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        SendersSection(senders, onAddSender, onRemoveSender)
-
-        HorizontalDivider()
         Text(stringResource(R.string.settings_group_forwarding), style = MaterialTheme.typography.titleMedium)
         SwitchRow(stringResource(R.string.settings_forward_sms), prefs.forwarding, actions.setForwarding)
         Text(stringResource(R.string.settings_forward_sms_hint), style = MaterialTheme.typography.bodySmall)
@@ -204,44 +191,5 @@ private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
     ) {
         Text(label, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = null)
-    }
-}
-
-@Composable
-private fun SendersSection(
-    senders: List<String>,
-    onAdd: (String) -> Unit,
-    onRemove: (String) -> Unit,
-) {
-    var draft by rememberSaveable { mutableStateOf("") }
-    Text(stringResource(R.string.settings_senders), style = MaterialTheme.typography.titleMedium)
-    if (senders.isEmpty()) {
-        Text(stringResource(R.string.settings_no_senders), style = MaterialTheme.typography.bodySmall)
-    }
-    senders.forEach { sender ->
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(sender)
-            TextButton(onClick = { onRemove(sender) }) { Text(stringResource(R.string.action_remove)) }
-        }
-    }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = draft,
-            onValueChange = { draft = it },
-            label = { Text(stringResource(R.string.settings_new_sender)) },
-            singleLine = true,
-            modifier = Modifier.weight(1f),
-        )
-        Button(
-            onClick = {
-                onAdd(draft)
-                draft = ""
-            },
-            enabled = draft.isNotBlank(),
-        ) { Text(stringResource(R.string.action_add)) }
     }
 }

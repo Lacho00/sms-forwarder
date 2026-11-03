@@ -20,11 +20,18 @@ class NavTest {
         assertNull(Routes.destinationTarget("destination/abc"))
     }
 
+    @Test fun ruleRoutesRoundTrip() {
+        assertEquals(RuleTarget.New, Routes.ruleTarget(Routes.rule(null)))
+        assertEquals(RuleTarget.Edit(7), Routes.ruleTarget(Routes.rule(7)))
+        assertNull(Routes.ruleTarget("rules"))
+        assertNull(Routes.ruleTarget("rule/abc"))
+        assertNull(Routes.ruleTarget("destination/3"))
+    }
+
     @Test fun issueTargets() {
         assertEquals(Routes.DESTINATIONS, issueTarget(HealthIssue.TOKEN_REJECTED))
         assertEquals(Routes.DESTINATIONS, issueTarget(HealthIssue.NOT_CONFIGURED))
-        // Until the Rules tab exists (task 8) this still opens Settings.
-        assertEquals(Routes.SETTINGS, issueTarget(HealthIssue.NO_RULES))
+        assertEquals(Routes.RULES, issueTarget(HealthIssue.NO_RULES))
         assertNull(issueTarget(HealthIssue.SMS_PERMISSION))
     }
 }

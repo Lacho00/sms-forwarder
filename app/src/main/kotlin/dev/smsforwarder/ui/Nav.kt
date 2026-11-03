@@ -40,6 +40,10 @@ import dev.smsforwarder.ui.onboarding.OnboardingScreen
 import dev.smsforwarder.ui.onboarding.OnboardingViewModel
 import dev.smsforwarder.ui.recovery.RecoveryScreen
 import dev.smsforwarder.ui.recovery.RecoveryViewModel
+import dev.smsforwarder.ui.rules.RuleEditorScreen
+import dev.smsforwarder.ui.rules.RuleEditorViewModel
+import dev.smsforwarder.ui.rules.RulesScreen
+import dev.smsforwarder.ui.rules.RulesViewModel
 import dev.smsforwarder.ui.settings.SettingsActions
 import dev.smsforwarder.ui.settings.SettingsScreen
 import dev.smsforwarder.ui.settings.SettingsViewModel
@@ -71,6 +75,17 @@ object Routes {
         return rest.toLongOrNull()?.let { DestinationTarget.Edit(it) }
     }
 
+    /** `rule/new` to create, `rule/<id>` to edit. */
+    fun rule(id: Long?): String = if (id == null) "rule/new" else "rule/$id"
+
+    /** The editor target of a `rule/...` route, or null if [route] is another route. */
+    fun ruleTarget(route: String): RuleTarget? {
+        if (!route.startsWith("rule/")) return null
+        val rest = route.removePrefix("rule/")
+        if (rest == "new") return RuleTarget.New
+        return rest.toLongOrNull()?.let { RuleTarget.Edit(it) }
+    }
+
     /** Returns the id of a `detail/{id}` route, or null if [route] is another route. */
     fun detailId(route: String): Long? =
         if (route.startsWith("detail/")) route.removePrefix("detail/").toLongOrNull() else null
@@ -81,13 +96,15 @@ sealed interface DestinationTarget {
     data class Edit(val id: Long) : DestinationTarget
 }
 
-/**
- * Where a warning is fixed: an in-app tab, or null for a system screen. Until the Rules tab exists (task 8),
- * NO_RULES still points to Settings.
- */
+sealed interface RuleTarget {
+    data object New : RuleTarget
+    data class Edit(val id: Long) : RuleTarget
+}
+
+/** Where a warning is fixed: an in-app tab, or null for a system screen. */
 internal fun issueTarget(issue: HealthIssue): String? = when (issue) {
     HealthIssue.TOKEN_REJECTED, HealthIssue.NOT_CONFIGURED -> Routes.DESTINATIONS
-    HealthIssue.NO_RULES -> Routes.SETTINGS
+    HealthIssue.NO_RULES -> Routes.RULES
     else -> null
 }
 
@@ -111,6 +128,8 @@ fun AppNavHost(
     settingsViewModel: SettingsViewModel,
     destinationsViewModel: DestinationsViewModel,
     destinationEditorViewModel: (DestinationTarget) -> DestinationEditorViewModel,
+    rulesViewModel: RulesViewModel,
+    ruleEditorViewModel: (RuleTarget) -> RuleEditorViewModel,
     onOpenSystemIssue: (HealthIssue) -> Unit,
     onSweepNow: () -> Unit,
 ) {
@@ -132,6 +151,7 @@ fun AppNavHost(
 
     val detailId = Routes.detailId(current)
     val destinationTarget = Routes.destinationTarget(current)
+    val ruleTarget = Routes.ruleTarget(current)
     when {
         current == Routes.MAIN -> {
             val state by mainViewModel.state.collectAsState()
@@ -184,7 +204,6 @@ fun AppNavHost(
             )
         }
         current == Routes.SETTINGS -> {
-            val senders by settingsViewModel.senders.collectAsState(initial = emptyList())
             val prefs by settingsViewModel.prefs.collectAsState()
             val actions = remember(settingsViewModel) {
                 SettingsActions(
@@ -206,13 +225,27 @@ fun AppNavHost(
                 onAbout = { navigate(Routes.ABOUT) },
             ) { padding ->
                 SettingsScreen(
-                    senders = senders,
                     prefs = prefs,
                     actions = actions,
-                    onAddSender = settingsViewModel::addSender,
-                    onRemoveSender = settingsViewModel::removeSender,
                     onOpenRecovery = { navigate(Routes.RECOVERY) },
                     onOpenSystemIssue = onOpenSystemIssue,
+                    padding = padding,
+                )
+            }
+        }
+        current == Routes.RULES -> {
+            val rows by rulesViewModel.rows.collectAsState()
+            AppShell(
+                current = current,
+                title = stringResource(R.string.tab_rules),
+                onTab = onTab,
+                onAbout = { navigate(Routes.ABOUT) },
+            ) { padding ->
+                RulesScreen(
+                    rows = rows,
+                    onOpen = { id -> navigate(Routes.rule(id)) },
+                    onAdd = { navigate(Routes.rule(null)) },
+                    onToggle = rulesViewModel::setEnabled,
                     padding = padding,
                 )
             }
@@ -252,6 +285,28 @@ fun AppNavHost(
             }
             BackHandler { leave() }
             DestinationEditorScreen(state = state, vm = vm, onBack = leave)
+        }
+        ruleTarget != null -> {
+            val vm = remember(ruleTarget) { ruleEditorViewModel(ruleTarget) }
+            val state by vm.state.collectAsState()
+            // Same as the destination editor: fresh on every open, nothing kept once left.
+            LaunchedEffect(current) {
+                if (editorReady != current) {
+                    vm.reset()
+                    editorReady = current
+                }
+            }
+            val leave: () -> Unit = {
+                vm.reset()
+                editorReady = null
+                back()
+            }
+            BackHandler { leave() }
+            RuleEditorScreen(state = state, vm = vm, onBack = leave)
+        }
+        current.startsWith("rule/") -> {
+            // A route that names no rule: go back instead of falling through to onboarding.
+            LaunchedEffect(current) { if (routes.size > 1) back() else stack = Routes.MAIN }
         }
         current.startsWith("destination/") -> {
             // A route that names no destination: go back instead of falling through to onboarding.
