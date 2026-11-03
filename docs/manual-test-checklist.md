@@ -48,3 +48,28 @@ Se instala la APK de la Release de la rama sobre la 1.1.0 real, sin desinstalar 
 La APK de la Release no es depurable, así que no se puede copiar la base de datos antes de actualizar.
 La red de seguridad son las pruebas de migración (T3) y de importación (T5). Quien instala confirma
 antes que acepta ese riesgo.
+
+## v1.3.0
+
+- [ ] Crear un destino de cada plantilla (JSON estándar, Telegram, ntfy, personalizado) y pulsar Probar:
+      el JSON estándar con cuerpo `{}` responde 400 (correcto); Telegram y ntfy reciben el SMS de prueba.
+- [ ] El SMS de prueba no aparece en Inicio ni deja intentos.
+- [ ] Un destino caído junto a otro que funciona: el SMS llega al que funciona y el caído no lo retrasa.
+- [ ] Pausar un destino con SMS en cola: no se envían; al reanudar se envían enseguida y el otro
+      destino, ya enviado, no repite.
+- [ ] Pausar un destino que tiene entregas en error: siguen en error, no vuelven a "en cola".
+- [ ] Borrar un destino con SMS en cola: el aviso indica el número de SMS, las entregas quedan
+      canceladas y no hay aviso de atascado.
+- [ ] Regla regex con `(?i)` y otra con filtro de texto "contiene".
+- [ ] Regla con filtro "no contiene": un SMS que contiene el texto se descarta y otro del mismo
+      remitente que no lo contiene se reenvía.
+- [ ] Regla con SIM 2 en un teléfono de una SIM: no reenvía nada.
+- [ ] Editar el token de un destino con 401: el SMS se reenvía.
+- [ ] Reanudar un destino en pausa tras corregir su token (tenía 401/403): sus SMS vuelven a la cola
+      y se envían.
+- [ ] Detalle: "Reenviar a un destino" manda el SMS al destino elegido, también a uno que ya lo recibió.
+- [ ] Detalle: el código HTTP solo aparece si procede de una entrega que falla; con un destino en 200 y
+      otro en 403 no sale "Error 200".
+- [ ] Inicio: los chips de destino filtran la lista y cada fila muestra el estado por destino.
+- [ ] Cambiar el idioma con un editor abierto no pierde la pantalla.
+- [ ] Actualizar de 1.2.0 a 1.3.0 (`adb install -r`) no pierde destinos, reglas ni historial.
