@@ -3,6 +3,7 @@
     <string name="app_name">SMS Forwarder</string>
     <string name="destination_primary_name">Main</string>
     <string name="destination_test_body">test</string>
+    <string name="destination_load_failed">Couldn\'t read this destination\'s saved settings.</string>
     <string name="forwarding_paused">Forwarding paused</string>
     <string name="about_title">About</string>
     <string name="notif_channel_alerts">Alerts</string>

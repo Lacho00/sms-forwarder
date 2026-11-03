@@ -8,6 +8,7 @@ import dev.smsforwarder.core.DestinationError
 import dev.smsforwarder.core.DestinationPresets
 import dev.smsforwarder.core.HeaderDraft
 import dev.smsforwarder.core.SendOutcome
+import dev.smsforwarder.core.TestVerdict
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.core.TemplateKind
@@ -16,7 +17,7 @@ import dev.smsforwarder.data.IngestResult
 import dev.smsforwarder.data.TestRepos
 import dev.smsforwarder.net.DeliveryClient
 import dev.smsforwarder.net.DestinationTester
-import dev.smsforwarder.net.defaultHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
 import dev.smsforwarder.ui.destinations.DestinationEditorViewModel
 import dev.smsforwarder.ui.destinations.HeaderRowUi
 import dev.smsforwarder.ui.destinations.PresetFields
@@ -59,10 +60,17 @@ class DestinationEditorViewModelTest {
 
     private fun defaultName(k: TemplateKind) = "Name-$k"
 
+    private var gate: java.util.concurrent.CountDownLatch? = null
+    private val canned = okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
+        gate?.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
+            .code(200).message("OK").body("".toResponseBody(null)).build()
+    }.build()
+
     private fun vm(id: Long? = null) = DestinationEditorViewModel(
         id, repos.destinations,
         DestinationTester(
-            DeliveryClient(defaultHttpClient()), repos.secrets, app.getString(R.string.destination_test_body),
+            DeliveryClient(canned), repos.secrets, app.getString(R.string.destination_test_body),
             "device-x", clock,
         ),
         { enqueued += it }, ::defaultName, CoroutineScope(Dispatchers.Unconfined),
@@ -206,7 +214,7 @@ class DestinationEditorViewModelTest {
 
     @Test fun deleteAsksWithPendingCount() = runBlocking {
         val id = repos.destinations.create(draft("One"))
-        repeat(3) { ingest(id) }
+        val smsIds = List(3) { ingest(id) }
         val vm = loaded(id)
         vm.requestDelete()
         vm.await { it.deletePending != null }
@@ -218,7 +226,76 @@ class DestinationEditorViewModelTest {
         vm.requestDelete()
         vm.await { it.deletePending != null }
         vm.confirmDelete()
+        vm.confirmDelete()
         vm.await { it.done }
+        assertTrue(repos.sms.deliveriesOf(smsIds[0]).all { it.status == DeliveryStatus.CANCELED })
         assertEquals(0, liveCount())
+    }
+
+    @Test fun validFormTestIsOk() {
+        val vm = vm()
+        vm.chooseTemplate(TemplateKind.CUSTOM)
+        vm.setUrl("https://h.example/t")
+        vm.test()
+        vm.await { it.test != null }
+        assertEquals(TestVerdict.OK, vm.state.value.test!!.verdict)
+        assertFalse(vm.state.value.busy)
+    }
+
+    @Test fun staleTestResultIsDiscarded() {
+        gate = java.util.concurrent.CountDownLatch(1)
+        val vm = vm()
+        vm.chooseTemplate(TemplateKind.CUSTOM)
+        vm.setUrl("https://h.example/t")
+        vm.test()
+        assertTrue(vm.state.value.busy)
+        vm.setName("Changed")
+        assertFalse(vm.state.value.busy)
+        gate!!.countDown()
+        Thread.sleep(500)
+        assertNull(vm.state.value.test)
+        assertFalse(vm.state.value.busy)
+    }
+
+    @Test fun keystoreFailureInTestIsFailedNotCrash() = runBlocking {
+        val id = repos.destinations.create(draft("One"))
+        val vm = loaded(id)
+        repos.secrets.failOnGet = true
+        vm.test()
+        vm.await { it.test != null }
+        assertEquals(TestVerdict.FAILED, vm.state.value.test!!.verdict)
+        assertFalse(vm.state.value.busy)
+    }
+
+    @Test fun loadFailureIsNotDeleted() = runBlocking {
+        val id = repos.destinations.create(draft("One"))
+        repos.secrets.failOnGet = true
+        val vm = vm(id)
+        vm.await { it.loaded }
+        assertTrue(vm.state.value.loadFailed)
+        assertFalse(vm.state.value.done)
+    }
+
+    @Test fun renamedStoredSecretHeaderNeedsAValue() = runBlocking {
+        val id = repos.destinations.create(draft("One", HeaderDraft("X-Key", "tok-secret-1", true)))
+        val vm = loaded(id)
+        val row = vm.state.value.headers.first { it.secret }
+        vm.setHeaders(listOf(row.copy(name = "X-Other")))
+        vm.save()
+        assertTrue(DestinationError.HEADER_VALUE_INVALID in vm.state.value.errors)
+        assertFalse(vm.state.value.done)
+        vm.test()
+        assertTrue(DestinationError.HEADER_VALUE_INVALID in vm.state.value.errors)
+        assertEquals(listOf("X-Key" to "tok-secret-1"), repos.secrets.map.getValue(id).headers)
+    }
+
+    @Test fun newSecretHeaderWithoutValueIsRejected() {
+        val vm = vm()
+        vm.chooseTemplate(TemplateKind.CUSTOM)
+        vm.setUrl("https://h.example/x")
+        vm.setHeaders(listOf(HeaderRowUi("X-Key", "", secret = true, stored = false)))
+        vm.save()
+        assertTrue(DestinationError.HEADER_VALUE_INVALID in vm.state.value.errors)
+        assertFalse(vm.state.value.done)
     }
 }
