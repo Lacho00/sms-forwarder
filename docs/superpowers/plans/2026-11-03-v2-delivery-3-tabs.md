@@ -14,6 +14,8 @@
 
 ## Decisiones de este plan (se anotan en la spec en la T10; las marcadas ⚠ se confirman con el usuario antes de la T1)
 
+**Confirmadas por el usuario el 2026-11-03:** las ocho marcadas ⚠. Preguntas abiertas resueltas: "Reenviar a un destino" admite un destino que ya recibió el SMS; los SMS con todas sus entregas `CANCELED` se purgan con la retención normal; cómo muestra Inicio las entregas canceladas o con error de configuración se consulta al usuario en la T9.
+
 - ⚠ **Borrar un destino:** sus entregas `QUEUED` y `ERROR` pasan a `CANCELED` (nuevo `DeliveryStatus`); las `SENT` se quedan con su nombre. `aggregateStatus` ignora `CANCELED`; un SMS cuyas entregas son todas `CANCELED` queda en `ERROR` con `lastError = "destination_deleted"`, sin aviso de atascado, y se puede reenviar a otro destino. Las reglas pierden el enlace a ese destino; una regla sin destinos se queda pero no cuenta como activa y su fila avisa.
 - ⚠ **Errores de configuración** (plantilla que no se puede pintar, URL o cabecera que OkHttp rechaza): nuevo `SendOutcome.Invalid(reason)`, terminal. Se registra un intento con `httpCode = null` y `error = "config_<reason>"`, la entrega queda `ERROR`, avisa como un 400 (texto propio) y vuelve a la cola al guardar el destino. Hoy se reintenta sin fin y sin intento visible.
 - ⚠ **Barrido y trabajos en vuelo:** `kickQueued` reemplaza (`REPLACE`) el trabajo `send-<id>` solo si no está `RUNNING`; si está corriendo, lo deja. Motivo: `REPLACE` cancela un envío a medias y, con varios destinos, puede duplicar el SMS en el que ya respondió. `KEEP` a secas dejaría un SMS esperando el backoff (hasta horas) tras reanudar.
