@@ -94,5 +94,11 @@ tasks.withType<Test>().configureEach {
     maxParallelForks = (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
     maxHeapSize = "1g"
     // Screenshots are rendered on demand: ./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotsTest'
-    if (!project.hasProperty("screenshots")) filter.excludeTestsMatching("*ScreenshotsTest")
+    if (project.hasProperty("screenshots")) {
+        // Always render again: never UP-TO-DATE or FROM-CACHE, so the PNGs are really written.
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+    } else {
+        filter.excludeTestsMatching("*ScreenshotsTest")
+    }
 }
