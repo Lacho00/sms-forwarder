@@ -278,8 +278,8 @@ internal fun <T> decodeSecret(
     decrypt: (ByteArray, ByteArray) -> ByteArray,
     ivB64: String,
     blobB64: String,
-    parse: (String) -> T,
     isKeystoreFault: (Throwable) -> Boolean = ::isAndroidKeystoreFault,
+    parse: (String) -> T,
 ): T {
     val plain = try {
         String(decrypt(Base64.decode(ivB64, Base64.NO_WRAP), Base64.decode(blobB64, Base64.NO_WRAP)), Charsets.UTF_8)

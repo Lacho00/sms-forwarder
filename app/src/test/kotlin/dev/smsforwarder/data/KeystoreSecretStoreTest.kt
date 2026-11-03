@@ -99,7 +99,7 @@ class KeystoreSecretStoreTest {
     private class FakeKsFault : Exception("ks")
 
     private fun classify(e: Exception): Class<*> = try {
-        decodeSecret({ _, _ -> throw e }, "AAAA", "AAAA", { it }, { it is FakeKsFault })
+        decodeSecret({ _, _ -> throw e }, "AAAA", "AAAA", { it is FakeKsFault }, { it })
         Nothing::class.java
     } catch (t: Exception) {
         t.javaClass
