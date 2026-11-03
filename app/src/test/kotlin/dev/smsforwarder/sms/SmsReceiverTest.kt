@@ -81,6 +81,27 @@ class SmsReceiverTest {
         assertTrue(enqueued.isEmpty())
     }
 
+    @Test fun smsIsNotRoutedWhileTheLegacyImportIsInSafeMode() = runBlocking {
+        graph.destinationRepository.savePrimaryCredentials(Credentials("https://example.invalid/ingest", "test-token"))
+        graph.settings.setOnboardingDone()
+        graph.settings.addSender("OPERADOR")
+        val failing = dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }
+        val legacy = object : SecretStore {
+            override suspend fun get() = Credentials("https://example.invalid/ingest", "test-token")
+            override suspend fun set(c: Credentials) = Unit
+        }
+        val unmarked = dev.smsforwarder.data.SettingsRepository(
+            context, graph.destinationRepository, graph.ruleRepository, graph.smsRepository, { },
+            java.io.File(context.cacheDir, "settings-${java.util.UUID.randomUUID()}.preferences_pb"),
+        )
+        graph.legacyImport = dev.smsforwarder.data.LegacyImport(graph.db, legacy, failing, unmarked)
+
+        receiver.process(context, smsIntent("OPERADOR", part1, part2))
+
+        assertTrue(graph.smsRepository.observeAll().first().isEmpty())
+        assertTrue(enqueued.isEmpty())
+    }
+
     @Test fun ignoredBeforeOnboarding() = runBlocking {
         graph.settings.addSender("OPERADOR")
 

@@ -47,6 +47,7 @@ class RecoveryViewModel(
     private val context: Context,
     private val clock: Clock,
     private val enqueue: (Long) -> Unit,
+    private val awaitImport: suspend () -> Boolean = { true },
 ) : ViewModel() {
 
     private val _candidates = MutableStateFlow<List<RecoveryItem>>(emptyList())
@@ -82,6 +83,12 @@ class RecoveryViewModel(
             return
         }
         _unreadable.value = false
+        // Safe mode (1.1 settings not imported yet): no rules to match against, so show nothing.
+        if (!awaitImport()) {
+            records = emptyMap()
+            _candidates.value = emptyList()
+            return
+        }
         val rules = ruleRepository.activeRules()
         val found = LinkedHashMap<String, SmsRecord>()
         rows.filter { row ->
@@ -151,9 +158,10 @@ class RecoveryViewModel(
         private val context: Context,
         private val clock: Clock,
         private val enqueue: (Long) -> Unit,
+        private val awaitImport: suspend () -> Boolean = { true },
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            RecoveryViewModel(reader, smsRepository, ruleRepository, context, clock, enqueue) as T
+            RecoveryViewModel(reader, smsRepository, ruleRepository, context, clock, enqueue, awaitImport) as T
     }
 }

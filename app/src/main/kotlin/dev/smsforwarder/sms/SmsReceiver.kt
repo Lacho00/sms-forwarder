@@ -51,6 +51,10 @@ class SmsReceiver : BroadcastReceiver() {
         val graph = (context.applicationContext as SmsForwarderApp).graph
         if (!graph.settings.onboardingDone.first()) return
 
+        // The startup import may still be running on the first SMS after an upgrade from 1.1; routing before
+        // it finishes would see no rules. In safe mode the sweep recovers the SMS later.
+        if (!graph.legacyImport.run()) return
+
         val sender = messages.first().displayOriginatingAddress.orEmpty()
         val body = joinParts(messages.map { it.messageBody.orEmpty() })
         val subId = intent.getIntExtra(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX, -1).takeIf { it >= 0 }
