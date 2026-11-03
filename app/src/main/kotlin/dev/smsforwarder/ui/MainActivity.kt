@@ -18,6 +18,10 @@ import dev.smsforwarder.AppGraph
 import dev.smsforwarder.SmsForwarderApp
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.health.MiuiIntents
+import dev.smsforwarder.core.TemplateKind
+import dev.smsforwarder.ui.destinations.DestinationEditorViewModel
+import dev.smsforwarder.ui.destinations.DestinationsViewModel
+import dev.smsforwarder.ui.destinations.templateLabelRes
 import dev.smsforwarder.ui.detail.DetailViewModel
 import dev.smsforwarder.sms.ContentInboxReader
 import dev.smsforwarder.ui.main.MainViewModel
@@ -34,6 +38,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var onboardingViewModel: OnboardingViewModel
     private lateinit var recoveryViewModel: RecoveryViewModel
     private lateinit var settingsViewModel: SettingsViewModel
+    private lateinit var destinationsViewModel: DestinationsViewModel
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(Localized.wrap(newBase, Localized.savedTag(newBase)))
@@ -50,7 +55,6 @@ class MainActivity : ComponentActivity() {
         val repository = g.smsRepository
         val clock = g.clock
         val ingestClient = g.ingestClient
-        val destinations = g.destinationRepository
         // The saved period is read off the main thread; if it cannot be read, keep the default so the job survives.
         lifecycleScope.launch {
             val interval = try {
@@ -85,13 +89,15 @@ class MainActivity : ComponentActivity() {
             this,
             SettingsViewModel.Factory(
                 settings,
-                testConnection = { ingestClient.testConnection(it) },
-                loadSaved = { destinations.primaryCredentials() },
                 onSweepIntervalChanged = { interval ->
                     WorkScheduler.schedulePeriodicSweep(app, interval, update = true)
                 },
             ),
         )[SettingsViewModel::class.java]
+        destinationsViewModel = ViewModelProvider(
+            this,
+            DestinationsViewModel.Factory(g.destinationRepository) { ids -> ids.forEach { WorkScheduler.enqueueSend(app, it) } },
+        )[DestinationsViewModel::class.java]
         // Collected here, not in the ViewModel: after a recreation this is the activity that is alive.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -116,6 +122,8 @@ class MainActivity : ComponentActivity() {
                         onboardingViewModel = onboardingViewModel,
                         recoveryViewModel = recoveryViewModel,
                         settingsViewModel = settingsViewModel,
+                        destinationsViewModel = destinationsViewModel,
+                        destinationEditorViewModel = this::destinationEditorViewModel,
                         onOpenSystemIssue = this::openSystemIssue,
                         onSweepNow = { WorkScheduler.sweepNow(applicationContext) },
                     )
@@ -145,6 +153,25 @@ class MainActivity : ComponentActivity() {
                 cancelSend = { smsId -> WorkScheduler.cancelSend(app, smsId) },
             ),
         ).get("detail-$id", DetailViewModel::class.java)
+    }
+
+    private fun destinationEditorViewModel(target: DestinationTarget, seq: Int): DestinationEditorViewModel {
+        // Locals only: the factory lambdas must not capture this activity. The strings come from the
+        // activity's (already localized) resources, read now.
+        val app = applicationContext
+        val g = graph
+        val names = TemplateKind.entries.associateWith { getString(templateLabelRes(it)) }
+        val id = (target as? DestinationTarget.Edit)?.id
+        return ViewModelProvider(
+            this,
+            DestinationEditorViewModel.Factory(
+                id,
+                g.destinationRepository,
+                g.destinationTester,
+                enqueue = { ids -> ids.forEach { WorkScheduler.enqueueSend(app, it) } },
+                defaultName = { kind -> names.getValue(kind) },
+            ),
+        ).get("destination-${id ?: "new"}-$seq", DestinationEditorViewModel::class.java)
     }
 
     private fun openSystemIssue(issue: HealthIssue) {

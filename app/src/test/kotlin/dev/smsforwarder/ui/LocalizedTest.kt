@@ -82,12 +82,12 @@ class LocalizedTest {
         runBlocking { graph.settings.setOnboardingDone() }
         // The test runs in English until the language is switched below.
         compose.onNodeWithText(context.getString(R.string.tab_settings)).performClick()
-        compose.onNodeWithTag("field_url").assertExists()
+        compose.onNodeWithText(context.getString(R.string.settings_group_forwarding)).assertExists()
 
         runBlocking { graph.settings.setLanguage(Language.ES) }
         compose.activityRule.scenario.recreate()
 
-        compose.onNodeWithTag("field_url").assertExists()
+        compose.onNodeWithText(Localized.wrap(context, "es").getString(R.string.settings_group_forwarding)).assertExists()
         compose.onNodeWithText(Localized.wrap(context, "es").getString(R.string.tab_home)).assertExists()
         compose.activity.let { activity ->
             assertEquals(

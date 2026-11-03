@@ -56,9 +56,6 @@ class SettingsViewModelTest {
 
     private fun vm() = SettingsViewModel(
         settings = settings,
-        testConnection = { ConnectionTestResult.OK },
-        loadSaved = { null },
-        saveCredentials = {},
         scope = CoroutineScope(Dispatchers.Unconfined),
         onSweepIntervalChanged = { sweeps += it },
     )

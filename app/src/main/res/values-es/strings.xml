@@ -63,9 +63,6 @@
     <string name="origin_sweep">Barrido de la bandeja</string>
     <string name="origin_manual">Recuperación manual</string>
     <string name="attempt_no_response">sin respuesta</string>
-    <string name="settings_worker_connection">Conexión con el Worker</string>
-    <string name="settings_credentials_hidden">Por seguridad la URL y el token guardados no se muestran. Escribe valores nuevos para sustituirlos.</string>
-    <string name="settings_save_credentials">Guardar credenciales</string>
     <string name="settings_senders">Remitentes</string>
     <string name="settings_no_senders">No hay remitentes: la app no reenviará nada.</string>
     <string name="settings_new_sender">Nuevo remitente</string>
@@ -73,13 +70,6 @@
     <string name="theme_system">Sistema</string>
     <string name="theme_light">Claro</string>
     <string name="theme_dark">Oscuro</string>
-    <string name="settings_msg_saved">Credenciales guardadas</string>
-    <string name="settings_msg_save_failed">No se pudieron guardar las credenciales</string>
-    <string name="settings_msg_need_both">Escribe la URL y el token para probarlos</string>
-    <string name="settings_msg_need_credentials">Escribe la URL y el token para probarlos, o guarda unas credenciales antes</string>
-    <string name="settings_msg_conn_ok">Conexión correcta: URL y token válidos</string>
-    <string name="settings_msg_bad_token">Token rechazado (401)</string>
-    <string name="settings_msg_unreachable">No se pudo conectar: revisa la URL y la red</string>
     <string name="onboarding_progress">Paso %1$d de %2$d · %3$s</string>
     <string name="onboarding_step_cutover">App anterior</string>
     <string name="onboarding_step_permissions">Permisos</string>
@@ -207,4 +197,65 @@
         <item>OkHttp (Apache-2.0)</item>
         <item>kotlinx.serialization (Apache-2.0)</item>
     </string-array>
+    <string name="tab_destinations">Destinos</string>
+    <string name="destinations_empty">Aún no hay destinos. Toca + para añadir uno.</string>
+    <string name="destination_add">Añadir destino</string>
+    <string name="destination_paused">En pausa</string>
+    <plurals name="destination_queued_count">
+        <item quantity="one">%d en cola</item>
+        <item quantity="other">%d en cola</item>
+    </plurals>
+    <plurals name="destination_error_count">
+        <item quantity="one">%d error</item>
+        <item quantity="other">%d errores</item>
+    </plurals>
+    <string name="template_standard_json">JSON estándar</string>
+    <string name="template_telegram">Telegram</string>
+    <string name="template_ntfy">ntfy</string>
+    <string name="template_custom">Personalizado</string>
+    <string name="destination_new_title">Nuevo destino</string>
+    <string name="destination_edit_title">Editar destino</string>
+    <string name="destination_delete">Borrar destino</string>
+    <string name="destination_delete_title">¿Borrar este destino?</string>
+    <plurals name="destination_delete_confirm">
+        <item quantity="one">Se cancelará %d entrega pendiente. Los SMS ya enviados no cambian.</item>
+        <item quantity="other">Se cancelarán %d entregas pendientes. Los SMS ya enviados no cambian.</item>
+    </plurals>
+    <string name="destination_template">Plantilla</string>
+    <string name="destination_preset_url">URL</string>
+    <string name="destination_preset_bot_token">Token del bot</string>
+    <string name="destination_preset_chat_id">ID del chat</string>
+    <string name="destination_preset_apply">Rellenar el formulario</string>
+    <string name="destination_name">Nombre</string>
+    <string name="destination_enabled">Activo</string>
+    <string name="destination_method">Método</string>
+    <string name="destination_url">URL</string>
+    <string name="destination_secret_kept">Guardada. Déjala vacía para conservarla.</string>
+    <string name="destination_headers">Cabeceras</string>
+    <string name="destination_header_name">Nombre</string>
+    <string name="destination_header_value">Valor</string>
+    <string name="destination_header_secret">Secreta</string>
+    <string name="destination_header_remove">Quitar cabecera</string>
+    <string name="destination_header_add">Añadir cabecera</string>
+    <string name="destination_body">Cuerpo</string>
+    <string name="destination_body_json">JSON</string>
+    <string name="destination_success_policy">Se da por enviado con</string>
+    <string name="destination_success_2xx">Cualquier respuesta 2xx</string>
+    <string name="destination_success_200">Solo 200</string>
+    <string name="destination_test">Probar</string>
+    <string name="destination_save">Guardar</string>
+    <string name="destination_save_failed">No se pudo guardar. Inténtalo de nuevo.</string>
+    <string name="destination_test_ok">Prueba correcta</string>
+    <string name="destination_test_bad_token">Rechazado: revisa el token</string>
+    <string name="destination_test_failed">El destino no aceptó la petición</string>
+    <string name="destination_test_unreachable">No se pudo conectar</string>
+    <string name="destination_error_name_empty">Escribe un nombre</string>
+    <string name="destination_error_url_missing">Escribe la URL</string>
+    <string name="destination_error_url_invalid">No es una URL válida</string>
+    <string name="destination_error_url_not_https">La URL debe empezar por https://</string>
+    <string name="destination_error_unknown_variable">El texto usa una variable desconocida</string>
+    <string name="destination_error_header_name_invalid">El nombre de una cabecera está vacío o no es válido</string>
+    <string name="destination_error_header_value_invalid">El valor de una cabecera está vacío o no es válido</string>
+    <string name="destination_error_body_not_json">El cuerpo no es JSON válido una vez rellenadas las variables</string>
+    <string name="destination_error_body_with_get">Una petición GET no puede llevar cuerpo</string>
 </resources>

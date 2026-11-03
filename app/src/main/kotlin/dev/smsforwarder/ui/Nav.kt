@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -30,6 +31,10 @@ import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.ui.about.AboutScreen
 import dev.smsforwarder.ui.detail.DetailScreen
 import dev.smsforwarder.ui.detail.DetailViewModel
+import dev.smsforwarder.ui.destinations.DestinationEditorScreen
+import dev.smsforwarder.ui.destinations.DestinationEditorViewModel
+import dev.smsforwarder.ui.destinations.DestinationsScreen
+import dev.smsforwarder.ui.destinations.DestinationsViewModel
 import dev.smsforwarder.ui.main.MainScreen
 import dev.smsforwarder.ui.main.MainViewModel
 import dev.smsforwarder.ui.onboarding.OnboardingScreen
@@ -48,29 +53,50 @@ object Routes {
     const val SETTINGS = "settings"
     const val RECOVERY = "recovery"
     const val ABOUT = "about"
+    const val DESTINATIONS = "destinations"
+    const val RULES = "rules"
 
     /** Top-level screens: the only ones wrapped by [AppShell]. */
-    fun isTab(route: String): Boolean = route == MAIN || route == SETTINGS
+    fun isTab(route: String): Boolean = route == MAIN || route == SETTINGS || route == DESTINATIONS || route == RULES
 
     fun detail(id: Long): String = "detail/$id"
+
+    /** `destination/new` to create, `destination/<id>` to edit. */
+    fun destination(id: Long?): String = if (id == null) "destination/new" else "destination/$id"
+
+    /** The editor target of a `destination/...` route, or null if [route] is another route. */
+    fun destinationTarget(route: String): DestinationTarget? {
+        if (!route.startsWith("destination/")) return null
+        val rest = route.removePrefix("destination/")
+        if (rest == "new") return DestinationTarget.New
+        return rest.toLongOrNull()?.let { DestinationTarget.Edit(it) }
+    }
 
     /** Returns the id of a `detail/{id}` route, or null if [route] is another route. */
     fun detailId(route: String): Long? =
         if (route.startsWith("detail/")) route.removePrefix("detail/").toLongOrNull() else null
 }
 
-// Warnings that are fixed inside the app instead of in a system screen.
-private val IN_APP_ISSUES = setOf(
-    HealthIssue.TOKEN_REJECTED,
-    HealthIssue.NOT_CONFIGURED,
-    HealthIssue.NO_RULES,
-)
+sealed interface DestinationTarget {
+    data object New : DestinationTarget
+    data class Edit(val id: Long) : DestinationTarget
+}
+
+/**
+ * Where a warning is fixed: an in-app tab, or null for a system screen. Until the Rules tab exists (task 8),
+ * NO_RULES still points to Settings.
+ */
+internal fun issueTarget(issue: HealthIssue): String? = when (issue) {
+    HealthIssue.TOKEN_REJECTED, HealthIssue.NOT_CONFIGURED -> Routes.DESTINATIONS
+    HealthIssue.NO_RULES -> Routes.SETTINGS
+    else -> null
+}
 
 private const val STACK_SEPARATOR = "|"
 
-/** Selecting a tab pins the stack to `main` or `main|settings`; it never pushes on top of what is there. */
+/** Selecting a tab pins the stack to `main` or `main|<tab>`; it never pushes on top of what is there. */
 internal fun stackForTab(tab: String): String =
-    if (tab == Routes.SETTINGS) Routes.MAIN + STACK_SEPARATOR + Routes.SETTINGS else Routes.MAIN
+    if (tab == Routes.MAIN) Routes.MAIN else Routes.MAIN + STACK_SEPARATOR + tab
 
 /**
  * Minimal navigation: the back stack is a list of route strings kept in a single saveable String.
@@ -84,12 +110,16 @@ fun AppNavHost(
     onboardingViewModel: OnboardingViewModel,
     recoveryViewModel: RecoveryViewModel,
     settingsViewModel: SettingsViewModel,
+    destinationsViewModel: DestinationsViewModel,
+    /** Builds the editor's ViewModel; the second argument is unique per opening so a finished editor is never reused. */
+    destinationEditorViewModel: (DestinationTarget, Int) -> DestinationEditorViewModel,
     onOpenSystemIssue: (HealthIssue) -> Unit,
     onSweepNow: () -> Unit,
 ) {
     var stack by rememberSaveable { mutableStateOf(startRoute) }
     // Kept here, not in the Home branch, so opening an SMS and coming back keeps the search field next to its query.
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var editorSeq by rememberSaveable { mutableIntStateOf(0) }
     val routes = stack.split(STACK_SEPARATOR)
     val current = routes.last()
 
@@ -102,6 +132,7 @@ fun AppNavHost(
     val onTab: (String) -> Unit = { tab -> stack = stackForTab(tab) }
 
     val detailId = Routes.detailId(current)
+    val destinationTarget = Routes.destinationTarget(current)
     when {
         current == Routes.MAIN -> {
             val state by mainViewModel.state.collectAsState()
@@ -128,7 +159,8 @@ fun AppNavHost(
                 MainScreen(
                     state = state,
                     onOpenIssue = { issue ->
-                        if (issue in IN_APP_ISSUES) onTab(Routes.SETTINGS) else onOpenSystemIssue(issue)
+                        val target = issueTarget(issue)
+                        if (target != null) onTab(target) else onOpenSystemIssue(issue)
                     },
                     onSweepNow = onSweepNow,
                     onOpen = { id -> navigate(Routes.detail(id)) },
@@ -153,7 +185,6 @@ fun AppNavHost(
             )
         }
         current == Routes.SETTINGS -> {
-            val form by settingsViewModel.form.collectAsState()
             val senders by settingsViewModel.senders.collectAsState(initial = emptyList())
             val prefs by settingsViewModel.prefs.collectAsState()
             val actions = remember(settingsViewModel) {
@@ -176,14 +207,9 @@ fun AppNavHost(
                 onAbout = { navigate(Routes.ABOUT) },
             ) { padding ->
                 SettingsScreen(
-                    form = form,
                     senders = senders,
                     prefs = prefs,
                     actions = actions,
-                    onUrlChange = settingsViewModel::setUrl,
-                    onTokenChange = settingsViewModel::setToken,
-                    onSave = settingsViewModel::save,
-                    onTest = settingsViewModel::test,
                     onAddSender = settingsViewModel::addSender,
                     onRemoveSender = settingsViewModel::removeSender,
                     onOpenRecovery = { navigate(Routes.RECOVERY) },
@@ -191,6 +217,35 @@ fun AppNavHost(
                     padding = padding,
                 )
             }
+        }
+        current == Routes.DESTINATIONS -> {
+            val rows by destinationsViewModel.rows.collectAsState()
+            AppShell(
+                current = current,
+                title = stringResource(R.string.tab_destinations),
+                onTab = onTab,
+                onAbout = { navigate(Routes.ABOUT) },
+            ) { padding ->
+                DestinationsScreen(
+                    rows = rows,
+                    onOpen = { id ->
+                        editorSeq++
+                        navigate(Routes.destination(id))
+                    },
+                    onAdd = {
+                        editorSeq++
+                        navigate(Routes.destination(null))
+                    },
+                    onToggle = destinationsViewModel::setEnabled,
+                    padding = padding,
+                )
+            }
+        }
+        destinationTarget != null -> {
+            val seq = editorSeq
+            val vm = remember(destinationTarget, seq) { destinationEditorViewModel(destinationTarget, seq) }
+            val state by vm.state.collectAsState()
+            DestinationEditorScreen(state = state, vm = vm, onBack = back)
         }
         current == Routes.ABOUT -> {
             val context = LocalContext.current

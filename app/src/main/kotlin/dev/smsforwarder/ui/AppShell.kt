@@ -21,11 +21,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import dev.smsforwarder.R
 
 /**
- * Frame for the two top-level screens: top bar with an overflow menu, bottom bar with Home and Settings.
+ * Frame for the two top-level screens: top bar with an overflow menu, bottom bar with Home, Destinations and Settings.
  * [actions] are placed before the overflow button.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,6 +68,12 @@ fun AppShell(
                     onClick = { onTab(Routes.MAIN) },
                     icon = { Icon(Icons.Filled.Home, contentDescription = null) },
                     label = { Text(stringResource(R.string.tab_home)) },
+                )
+                NavigationBarItem(
+                    selected = current == Routes.DESTINATIONS,
+                    onClick = { onTab(Routes.DESTINATIONS) },
+                    icon = { Icon(painterResource(R.drawable.ic_tab_destinations), contentDescription = null) },
+                    label = { Text(stringResource(R.string.tab_destinations)) },
                 )
                 NavigationBarItem(
                     selected = current == Routes.SETTINGS,

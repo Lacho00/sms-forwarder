@@ -63,9 +63,6 @@
     <string name="origin_sweep">Inbox sweep</string>
     <string name="origin_manual">Manual recovery</string>
     <string name="attempt_no_response">no response</string>
-    <string name="settings_worker_connection">Worker connection</string>
-    <string name="settings_credentials_hidden">For security, the saved URL and token are not shown. Type new values to replace them.</string>
-    <string name="settings_save_credentials">Save credentials</string>
     <string name="settings_senders">Senders</string>
     <string name="settings_no_senders">No senders: the app will not forward anything.</string>
     <string name="settings_new_sender">New sender</string>
@@ -73,13 +70,6 @@
     <string name="theme_system">System</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
-    <string name="settings_msg_saved">Credentials saved</string>
-    <string name="settings_msg_save_failed">Could not save the credentials</string>
-    <string name="settings_msg_need_both">Enter the URL and token to test them</string>
-    <string name="settings_msg_need_credentials">Enter the URL and token to test them, or save credentials first</string>
-    <string name="settings_msg_conn_ok">Connection OK: valid URL and token</string>
-    <string name="settings_msg_bad_token">Token rejected (401)</string>
-    <string name="settings_msg_unreachable">Could not connect: check the URL and the network</string>
     <string name="onboarding_progress">Step %1$d of %2$d · %3$s</string>
     <string name="onboarding_step_cutover">Previous app</string>
     <string name="onboarding_step_permissions">Permissions</string>
@@ -207,4 +197,65 @@
         <item>OkHttp (Apache-2.0)</item>
         <item>kotlinx.serialization (Apache-2.0)</item>
     </string-array>
+    <string name="tab_destinations">Destinations</string>
+    <string name="destinations_empty">No destinations yet. Tap + to add one.</string>
+    <string name="destination_add">Add destination</string>
+    <string name="destination_paused">Paused</string>
+    <plurals name="destination_queued_count">
+        <item quantity="one">%d queued</item>
+        <item quantity="other">%d queued</item>
+    </plurals>
+    <plurals name="destination_error_count">
+        <item quantity="one">%d error</item>
+        <item quantity="other">%d errors</item>
+    </plurals>
+    <string name="template_standard_json">Standard JSON</string>
+    <string name="template_telegram">Telegram</string>
+    <string name="template_ntfy">ntfy</string>
+    <string name="template_custom">Custom</string>
+    <string name="destination_new_title">New destination</string>
+    <string name="destination_edit_title">Edit destination</string>
+    <string name="destination_delete">Delete destination</string>
+    <string name="destination_delete_title">Delete this destination?</string>
+    <plurals name="destination_delete_confirm">
+        <item quantity="one">%d pending delivery will be canceled. SMS already sent are not affected.</item>
+        <item quantity="other">%d pending deliveries will be canceled. SMS already sent are not affected.</item>
+    </plurals>
+    <string name="destination_template">Template</string>
+    <string name="destination_preset_url">URL</string>
+    <string name="destination_preset_bot_token">Bot token</string>
+    <string name="destination_preset_chat_id">Chat ID</string>
+    <string name="destination_preset_apply">Fill in the form</string>
+    <string name="destination_name">Name</string>
+    <string name="destination_enabled">Enabled</string>
+    <string name="destination_method">Method</string>
+    <string name="destination_url">URL</string>
+    <string name="destination_secret_kept">Stored. Leave empty to keep it.</string>
+    <string name="destination_headers">Headers</string>
+    <string name="destination_header_name">Name</string>
+    <string name="destination_header_value">Value</string>
+    <string name="destination_header_secret">Secret</string>
+    <string name="destination_header_remove">Remove header</string>
+    <string name="destination_header_add">Add header</string>
+    <string name="destination_body">Body</string>
+    <string name="destination_body_json">JSON</string>
+    <string name="destination_success_policy">Counts as sent</string>
+    <string name="destination_success_2xx">Any 2xx response</string>
+    <string name="destination_success_200">Only 200</string>
+    <string name="destination_test">Test</string>
+    <string name="destination_save">Save</string>
+    <string name="destination_save_failed">Could not save. Try again.</string>
+    <string name="destination_test_ok">Test OK</string>
+    <string name="destination_test_bad_token">Rejected: check the token</string>
+    <string name="destination_test_failed">The destination did not accept the request</string>
+    <string name="destination_test_unreachable">Could not connect</string>
+    <string name="destination_error_name_empty">Enter a name</string>
+    <string name="destination_error_url_missing">Enter the URL</string>
+    <string name="destination_error_url_invalid">This is not a valid URL</string>
+    <string name="destination_error_url_not_https">The URL must start with https://</string>
+    <string name="destination_error_unknown_variable">The text uses an unknown variable</string>
+    <string name="destination_error_header_name_invalid">A header name is empty or not valid</string>
+    <string name="destination_error_header_value_invalid">A header value is empty or not valid</string>
+    <string name="destination_error_body_not_json">The body is not valid JSON once the variables are filled in</string>
+    <string name="destination_error_body_with_get">A GET request cannot have a body</string>
 </resources>

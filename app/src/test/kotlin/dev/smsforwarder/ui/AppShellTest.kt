@@ -46,6 +46,12 @@ class AppShellTest {
         compose.onNodeWithText(str(R.string.tab_settings)).assertIsDisplayed()
     }
 
+    @Test fun destinationsTabShown() {
+        show()
+        compose.onNodeWithText(str(R.string.tab_destinations)).assertIsDisplayed().performClick()
+        assertEquals(listOf(Routes.DESTINATIONS), tabs)
+    }
+
     @Test fun tappingSettingsTabReportsSettingsRoute() {
         show()
         compose.onNodeWithText(str(R.string.tab_settings)).performClick()
@@ -59,10 +65,9 @@ class AppShellTest {
         assertEquals(1, aboutCount)
     }
 
-    @Test fun onlyMainAndSettingsAreTabs() {
-        assertTrue(Routes.isTab(Routes.MAIN))
-        assertTrue(Routes.isTab(Routes.SETTINGS))
-        listOf(Routes.ONBOARDING, Routes.RECOVERY, Routes.ABOUT, Routes.detail(3)).forEach {
+    @Test fun onlyTopLevelScreensAreTabs() {
+        listOf(Routes.MAIN, Routes.SETTINGS, Routes.DESTINATIONS, Routes.RULES).forEach { assertTrue(it, Routes.isTab(it)) }
+        listOf(Routes.ONBOARDING, Routes.RECOVERY, Routes.ABOUT, Routes.detail(3), Routes.destination(null), Routes.destination(7)).forEach {
             assertFalse(it, Routes.isTab(it))
         }
     }
@@ -70,5 +75,6 @@ class AppShellTest {
     @Test fun selectingATabPinsTheStack() {
         assertEquals("main", stackForTab(Routes.MAIN))
         assertEquals("main|settings", stackForTab(Routes.SETTINGS))
+        assertEquals("main|destinations", stackForTab(Routes.DESTINATIONS))
     }
 }

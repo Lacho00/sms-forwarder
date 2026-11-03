@@ -77,77 +77,10 @@ class SettingsScreenTest {
         db.close()
     }
 
-    @Test fun settingsNeverShowsTokenValue() {
-        // Unconfined scope + lambdas without real I/O: save() finishes before the next assertion.
-        val vm = SettingsViewModel(
-            settings = settings,
-            testConnection = { ConnectionTestResult.OK },
-            loadSaved = { null },
-            saveCredentials = { saved += it },
-            scope = CoroutineScope(Dispatchers.Unconfined),
-        )
-        compose.setContent {
-            SmsForwarderTheme(ThemeMode.SYSTEM) {
-                val form by vm.form.collectAsState()
-                SettingsScreen(
-                    form = form,
-                    senders = emptyList(),
-                    prefs = SettingsPrefs(),
-                    actions = actions,
-                    onUrlChange = vm::setUrl,
-                    onTokenChange = vm::setToken,
-                    onSave = vm::save,
-                    onTest = vm::test,
-                    onAddSender = {},
-                    onRemoveSender = {},
-                    onOpenRecovery = {},
-                    onOpenSystemIssue = {},
-                )
-            }
-        }
-
-        compose.onNodeWithTag("field_url").performTextInput("https://example.com/ingest")
-        compose.onNodeWithTag("field_token").performTextInput("test-token")
-        compose.onNodeWithText(RuntimeEnvironment.getApplication().getString(R.string.settings_save_credentials)).performClick()
-        compose.waitForIdle()
-
-        assertEquals("test-token", saved.single().token)
-        compose.onAllNodes(hasText("test-token", substring = true), useUnmergedTree = true)
-            .assertCountEquals(0)
-    }
-
-    private fun vmFor(tested: MutableList<Credentials>, savedCreds: Credentials?) = SettingsViewModel(
-        settings = settings,
-        testConnection = { tested += it; ConnectionTestResult.OK },
-        loadSaved = { savedCreds },
-        saveCredentials = {},
-        scope = CoroutineScope(Dispatchers.Unconfined),
-    )
-
-    @Test fun settingsTestWithOnlyOneFieldTypedDoesNotUseSavedCredentials() {
-        val tested = mutableListOf<Credentials>()
-        val vm = vmFor(tested, Credentials("https://saved.example.com/ingest", "saved-token"))
-
-        vm.setUrl("https://example.com/ingest")
-        vm.test()
-        assertEquals(R.string.settings_msg_need_both, vm.form.value.message)
-
-        vm.setUrl("")
-        vm.setToken("typed-token")
-        vm.test()
-        assertEquals(R.string.settings_msg_need_both, vm.form.value.message)
-
-        assertTrue(tested.isEmpty())
-    }
-
-    @Test fun settingsTestWithEmptyFieldsUsesSavedCredentials() {
-        val tested = mutableListOf<Credentials>()
-        val saved = Credentials("https://saved.example.com/ingest", "saved-token")
-        val vm = vmFor(tested, saved)
-
-        vm.test()
-
-        assertEquals(listOf(saved), tested)
+    @Test fun noConnectionGroup() {
+        showGroups()
+        compose.onAllNodesWithText(str(R.string.field_worker_url)).assertCountEquals(0)
+        compose.onAllNodesWithText(str(R.string.field_token)).assertCountEquals(0)
     }
 
     private fun str(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
@@ -156,14 +89,9 @@ class SettingsScreenTest {
         compose.setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {
                 SettingsScreen(
-                    form = dev.smsforwarder.ui.settings.SettingsForm(),
                     senders = emptyList(),
                     prefs = prefs,
                     actions = actions,
-                    onUrlChange = {},
-                    onTokenChange = {},
-                    onSave = {},
-                    onTest = {},
                     onAddSender = {},
                     onRemoveSender = {},
                     onOpenRecovery = onRecovery,
@@ -173,10 +101,9 @@ class SettingsScreenTest {
         }
     }
 
-    @Test fun showsSevenGroupHeadersInSpecOrder() {
+    @Test fun showsSixGroupHeadersInSpecOrder() {
         showGroups()
         val ids = listOf(
-            R.string.settings_worker_connection,
             R.string.settings_senders,
             R.string.settings_group_forwarding,
             R.string.settings_group_history,
@@ -186,7 +113,7 @@ class SettingsScreenTest {
         )
         val ys = ids.map { compose.onNodeWithText(str(it)).fetchSemanticsNode().positionInRoot.y }
         assertEquals(ys.sorted(), ys)
-        assertEquals(7, ys.toSet().size)
+        assertEquals(6, ys.toSet().size)
     }
 
     @Test fun maintenanceButtonsCallTheirCallbacks() {
