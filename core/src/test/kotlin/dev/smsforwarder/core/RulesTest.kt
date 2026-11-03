@@ -29,6 +29,20 @@ class RulesTest {
         assertEquals(emptySet(), dests(sms("ABCD"), r))
     }
 
+    @Test fun notContainsExcludesMatchingBody() {
+        val r = rule(bodyMode = BodyMode.NOT_CONTAINS, bodyPattern = "login")
+        assertEquals(emptySet(), dests(sms(body = "New LOGIN from device"), r))
+    }
+
+    @Test fun notContainsPassesOtherBody() {
+        val r = rule(bodyMode = BodyMode.NOT_CONTAINS, bodyPattern = "login")
+        assertEquals(setOf(1L), dests(sms(body = "Payment of 5"), r))
+    }
+
+    @Test fun notContainsEmptyPatternNeverMatches() {
+        assertEquals(emptySet(), dests(sms(), rule(bodyMode = BodyMode.NOT_CONTAINS, bodyPattern = "")))
+    }
+
     @Test fun containsNormalizes() {
         assertEquals(setOf(1L), dests(sms("MY BANK"), rule(mode = SenderMode.CONTAINS, pattern = "bank")))
     }

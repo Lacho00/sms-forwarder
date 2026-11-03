@@ -17,6 +17,12 @@ class DraftsTest {
         headers: List<HeaderDraft> = emptyList(),
     ) = DestinationPresets.custom("C").copy(url = url, body = body, bodyIsJson = json, method = method, headers = headers)
 
+    @Test fun notContainsEmptyPatternInvalid() {
+        val ok = RuleDraft("R", true, SenderMode.CONTAINS, "AAA", BodyMode.NOT_CONTAINS, "", SimMatch.ANY, setOf(1L))
+        assertTrue(RuleError.BODY_EMPTY in validateRule(ok))
+        assertTrue(validateRule(ok.copy(bodyPattern = "x")).isEmpty())
+    }
+
     @Test fun httpUrlRejected() {
         assertTrue(DestinationError.URL_NOT_HTTPS in validateDestination(custom(url = "http://h.example"), false))
         assertFalse(DestinationError.URL_MISSING in validateDestination(custom(url = null), true))
@@ -134,6 +140,7 @@ class DraftsTest {
         val ok = RuleDraft("R", true, SenderMode.CONTAINS, "AAA", BodyMode.CONTAINS, "  ", SimMatch.ANY, setOf(1L))
         assertTrue(RuleError.BODY_EMPTY in validateRule(ok))
         assertTrue(RuleError.BODY_EMPTY in validateRule(ok.copy(bodyMode = BodyMode.REGEX)))
+        assertTrue(RuleError.BODY_EMPTY in validateRule(ok.copy(bodyMode = BodyMode.NOT_CONTAINS)))
         assertTrue(RuleError.SENDER_EMPTY in validateRule(ok.copy(senderMode = SenderMode.EXACT, senderPattern = " \t ")))
     }
 }

@@ -2,7 +2,7 @@ package dev.smsforwarder.core
 
 enum class SenderMode { EXACT, CONTAINS, REGEX }
 
-enum class BodyMode { CONTAINS, REGEX }
+enum class BodyMode { CONTAINS, NOT_CONTAINS, REGEX }
 
 enum class SimMatch { ANY, SIM1, SIM2 }
 
@@ -83,6 +83,7 @@ object RuleEngine {
         val pattern = rule.bodyPattern ?: return false
         return when (mode) {
             BodyMode.CONTAINS -> pattern.isNotEmpty() && sms.body.contains(pattern, ignoreCase = true)
+            BodyMode.NOT_CONTAINS -> pattern.isNotEmpty() && !sms.body.contains(pattern, ignoreCase = true)
             BodyMode.REGEX -> regexFind(pattern, sms.body, budgetMs)
         }
     }

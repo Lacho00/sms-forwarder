@@ -2,6 +2,7 @@ package dev.smsforwarder.data
 
 import androidx.room.Room
 import dev.smsforwarder.core.DeliveryStatus
+import dev.smsforwarder.core.BodyMode
 import dev.smsforwarder.core.DestinationPresets
 import dev.smsforwarder.core.HttpMethod
 import dev.smsforwarder.core.RuleDraft
@@ -103,6 +104,13 @@ class RuleRepositoryTest {
         val d = draft(p)
         val id = rules.create(d)
         assertEquals(d, rules.draft(id))
+    }
+
+    @Test fun notContainsPatternIsTrimmed() = runBlocking {
+        val p = repos.destinations.ensurePrimary()
+        val id = rules.create(draft(p).copy(bodyMode = BodyMode.NOT_CONTAINS, bodyPattern = "  login "))
+        assertEquals("login", rules.draft(id)!!.bodyPattern)
+        assertEquals(BodyMode.NOT_CONTAINS, rules.draft(id)!!.bodyMode)
     }
 
     @Test fun invalidRuleRejected() = runBlocking {
