@@ -9,7 +9,9 @@ import dev.smsforwarder.core.SuccessPolicy
 import dev.smsforwarder.core.TemplateKind
 import dev.smsforwarder.core.validateDestination
 import dev.smsforwarder.notify.Notifier
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -17,7 +19,7 @@ import kotlinx.serialization.json.JsonPrimitive
 data class EditableDestination(val draft: DestinationDraft, val urlStored: Boolean)
 
 /**
- * Destinations and their secrets. The "primary" is the active destination with the lowest id; the
+ * Destinations and their secrets. The "primary" is the live standard-JSON destination with the lowest id; the
  * Settings screen still edits it as "the connection". [primaryName] names it when it is created.
  */
 class DestinationRepository(
@@ -53,7 +55,8 @@ class DestinationRepository(
         try {
             secretStore.set(id, DestinationSecrets(d.url.orEmpty().trim(), secretHeaders(d.headers, emptyList())))
         } catch (e: Throwable) {
-            db.withTransaction { dao.hardDelete(id) }
+            // Also when the scope is cancelled: a live row without secrets could become the primary.
+            withContext(NonCancellable) { dao.hardDelete(id) }
             throw e
         }
         return id
@@ -98,7 +101,8 @@ class DestinationRepository(
             )
             val url = d.url?.trim() ?: stored?.url ?: throw IllegalArgumentException("invalid destination")
             secretStore.set(id, DestinationSecrets(url, secretHeaders(d.headers, stored?.headers.orEmpty())))
-            (sms.requeueAuthErrors(id) + sms.requeueConfigErrors(id)).distinct()
+            val resumed = if (!entity.enabled && d.enabled) deliveries.smsIdsQueuedFor(id) else emptyList()
+            (sms.requeueAuthErrors(id) + sms.requeueConfigErrors(id) + resumed).distinct()
         }
     }
 
@@ -123,8 +127,10 @@ class DestinationRepository(
             sms.cancelDeliveriesTo(id)
             rulesDao.deleteLinksTo(id)
         }
-        secretStore.remove(id)
-        notifier.cancelTokenRejected(id)
+        withContext(NonCancellable) {
+            secretStore.remove(id)
+            notifier.cancelTokenRejected(id)
+        }
     }
 
     /** Live destinations that an enabled rule points at and that have no stored secrets. */

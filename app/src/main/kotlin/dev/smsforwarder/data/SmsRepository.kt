@@ -201,7 +201,12 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
             dao.update(
                 sms.copy(
                     status = aggregate,
-                    lastError = if (allCanceled) DESTINATION_DELETED else sms.lastError,
+                    // A SENT aggregate carries no error, as in recordAttempt.
+                    lastError = when {
+                        allCanceled -> DESTINATION_DELETED
+                        aggregate == SmsStatus.SENT -> null
+                        else -> sms.lastError
+                    },
                     lastHttpCode = if (allCanceled) null else sms.lastHttpCode,
                     sentAt = if (aggregate == SmsStatus.SENT) sms.sentAt ?: clock.now() else sms.sentAt,
                 ),

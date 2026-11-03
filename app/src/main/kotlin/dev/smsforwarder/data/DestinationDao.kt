@@ -20,8 +20,8 @@ interface DestinationDao {
     @Query("SELECT * FROM destination WHERE id = :id")
     suspend fun get(id: Long): DestinationEntity?
 
-    /** The primary destination: lowest id not deleted, paused or not. */
-    @Query("SELECT * FROM destination WHERE deletedAt IS NULL ORDER BY id ASC LIMIT 1")
+    /** The primary destination: lowest live standard-JSON one, paused or not. */
+    @Query("SELECT * FROM destination WHERE deletedAt IS NULL AND template = 'STANDARD_JSON' ORDER BY id ASC LIMIT 1")
     suspend fun primary(): DestinationEntity?
 
     /** Destinations not deleted, paused ones included, by id. */

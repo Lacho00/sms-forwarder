@@ -169,4 +169,50 @@ class DestinationRepositoryTest {
         assertEquals(listOf(id), repo.setEnabled(d2, true))
         assertEquals(1, repo.pendingCount(d2))
     }
+
+    @Test fun createRollsBackWhenSecretsFail() = runBlocking {
+        repos.secrets.failOnSet = true
+        try {
+            repo.create(custom("One"))
+            org.junit.Assert.fail("expected failure")
+        } catch (e: java.security.GeneralSecurityException) {
+            // expected
+        }
+        assertTrue(repo.observeLive().first().isEmpty())
+    }
+
+    @Test fun enablingPausedDestinationReturnsQueuedSms() = runBlocking {
+        val (d1, d2) = twoDestinations()
+        repo.setEnabled(d2, false)
+        val id = ingest(d1, d2)
+        val draft = repo.editable(d2)!!.draft.copy(enabled = true)
+        assertEquals(listOf(id), repo.update(d2, draft))
+    }
+
+    @Test fun primarySkipsNonStandardAndDeletedDestinations() = runBlocking {
+        val standard = repo.create(DestinationPresets.standardJson("Std", "https://h.example/i", "tok"))
+        val telegram = repo.create(DestinationPresets.telegram("Tg", "123:abc", "42"))
+        assertEquals(standard, repo.primary()!!.id)
+        repo.delete(standard)
+        assertNull(repo.primary())
+        assertNull(repo.primaryCredentials())
+        val before = repo.secrets(telegram)
+        repo.savePrimaryCredentials(Credentials("https://h.example/new", "tok2"))
+        assertEquals(before, repo.secrets(telegram))
+        val newPrimary = repo.primary()!!
+        assertTrue(newPrimary.id != telegram)
+        assertEquals(dev.smsforwarder.core.TemplateKind.STANDARD_JSON, newPrimary.template)
+        assertEquals("https://h.example/new", repo.primaryCredentials()!!.url)
+    }
+
+    @Test fun cancelLeavingSentClearsStaleError() = runBlocking {
+        val (d1, d2) = twoDestinations()
+        val a = ingest(d1, d2)
+        sms.recordAttempt(sms.deliveriesOf(a).first { it.destinationId == d2 }.id, SendOutcome.Rejected(500, null))
+        sms.recordAttempt(sms.deliveriesOf(a).first { it.destinationId == d1 }.id, SendOutcome.Accepted(200))
+        repo.delete(d2)
+        val row = sms.get(a)!!
+        assertEquals(SmsStatus.SENT, row.status)
+        assertNull(row.lastError)
+    }
 }

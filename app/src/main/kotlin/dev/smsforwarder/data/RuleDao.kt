@@ -36,7 +36,7 @@ interface RuleDao {
     @Query("DELETE FROM rule_destination WHERE destinationId = :destinationId")
     suspend fun deleteLinksTo(destinationId: Long)
 
-    /** Sender-only exact patterns of the primary destination (lowest id not deleted), oldest rule first. */
+    /** Sender-only exact patterns of the primary destination (lowest live standard-JSON one), oldest rule first. */
     @Query(PRIMARY_EXACT_SENDERS)
     fun observePrimaryExactSenders(): Flow<List<String>>
 
@@ -47,4 +47,4 @@ interface RuleDao {
 private const val PRIMARY_EXACT_SENDERS =
     "SELECT senderPattern FROM rule WHERE senderMode = 'EXACT' AND bodyMode IS NULL AND id IN " +
         "(SELECT ruleId FROM rule_destination WHERE destinationId = " +
-        "(SELECT id FROM destination WHERE deletedAt IS NULL ORDER BY id ASC LIMIT 1)) ORDER BY id ASC"
+        "(SELECT id FROM destination WHERE deletedAt IS NULL AND template = 'STANDARD_JSON' ORDER BY id ASC LIMIT 1)) ORDER BY id ASC"
