@@ -31,6 +31,12 @@ interface RuleDao {
     @Query("SELECT * FROM rule ORDER BY id ASC")
     fun observeAllWithDestinations(): Flow<List<RuleWithDestinations>>
 
+    @Query("SELECT * FROM rule WHERE id = :id")
+    suspend fun get(id: Long): RuleEntity?
+
+    @Query("SELECT id FROM destination WHERE deletedAt IS NULL AND id IN (:ids)")
+    suspend fun liveDestinationIds(ids: Collection<Long>): List<Long>
+
     @Transaction
     @Query("SELECT * FROM rule WHERE id = :id")
     suspend fun getWithDestinations(id: Long): RuleWithDestinations?

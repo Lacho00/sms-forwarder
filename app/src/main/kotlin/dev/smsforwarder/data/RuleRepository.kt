@@ -1,12 +1,13 @@
 package dev.smsforwarder.data
 
 import androidx.room.withTransaction
+import dev.smsforwarder.core.BodyMode
 import dev.smsforwarder.core.Clock
+import dev.smsforwarder.core.RuleDraft
 import dev.smsforwarder.core.RuleSpec
 import dev.smsforwarder.core.SenderFilter
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
-import dev.smsforwarder.core.RuleDraft
 import dev.smsforwarder.core.validateRule
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -77,41 +78,56 @@ class RuleRepository(
         )
     }
 
-    suspend fun create(r: RuleDraft): Long {
+    suspend fun create(draft: RuleDraft): Long {
+        val r = trimmed(draft)
         require(validateRule(r).isEmpty()) { "invalid rule" }
         return db.withTransaction {
             val id = dao.insert(entity(0, r, clock.now()))
-            dao.insertLinks(r.destinationIds.sorted().map { RuleDestinationEntity(id, it) })
+            dao.insertLinks(liveLinks(id, r))
             id
         }
     }
 
-    suspend fun update(id: Long, r: RuleDraft) {
+    /** False when the rule no longer exists. */
+    suspend fun update(id: Long, draft: RuleDraft): Boolean {
+        val r = trimmed(draft)
         require(validateRule(r).isEmpty()) { "invalid rule" }
-        db.withTransaction {
-            val current = dao.getWithDestinations(id)?.rule ?: return@withTransaction
+        return db.withTransaction {
+            val current = dao.get(id) ?: return@withTransaction false
             dao.update(entity(id, r, current.createdAt))
             dao.deleteLinks(id)
-            dao.insertLinks(r.destinationIds.sorted().map { RuleDestinationEntity(id, it) })
+            dao.insertLinks(liveLinks(id, r))
+            true
         }
     }
 
-    suspend fun setEnabled(id: Long, enabled: Boolean) {
-        db.withTransaction {
-            val current = dao.getWithDestinations(id)?.rule ?: return@withTransaction
-            dao.update(current.copy(enabled = enabled))
-        }
+    /** False when the rule no longer exists. */
+    suspend fun setEnabled(id: Long, enabled: Boolean): Boolean = db.withTransaction {
+        val current = dao.get(id) ?: return@withTransaction false
+        dao.update(current.copy(enabled = enabled))
+        true
     }
+
+    /** Unknown or soft-deleted destination ids are dropped; an empty set leaves the rule inactive. */
+    private suspend fun liveLinks(ruleId: Long, r: RuleDraft): List<RuleDestinationEntity> =
+        dao.liveDestinationIds(r.destinationIds).sorted().map { RuleDestinationEntity(ruleId, it) }
+
+    /** Regex patterns keep their text: a trailing escaped space is meaningful. */
+    private fun trimmed(r: RuleDraft) = r.copy(
+        name = r.name,
+        senderPattern = if (r.senderMode == SenderMode.REGEX) r.senderPattern else r.senderPattern.trim(),
+        bodyPattern = if (r.bodyMode == BodyMode.REGEX) r.bodyPattern else r.bodyPattern?.trim(),
+    )
 
     /** Deliveries already created by the rule are untouched: they hang from the SMS and the destination, not the rule. */
     suspend fun delete(id: Long) = dao.delete(id)
 
     private fun entity(id: Long, r: RuleDraft, createdAt: Long) = RuleEntity(
         id = id,
-        name = r.name.trim(),
+        name = r.name,
         enabled = r.enabled,
         senderMode = r.senderMode,
-        senderPattern = r.senderPattern.trim(),
+        senderPattern = r.senderPattern,
         bodyMode = r.bodyMode,
         bodyPattern = if (r.bodyMode == null) null else r.bodyPattern,
         sim = r.sim,

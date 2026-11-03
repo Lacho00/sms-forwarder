@@ -3,6 +3,7 @@ package dev.smsforwarder.data
 import androidx.room.Room
 import dev.smsforwarder.core.DeliveryStatus
 import dev.smsforwarder.core.DestinationPresets
+import dev.smsforwarder.core.HttpMethod
 import dev.smsforwarder.core.RuleDraft
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
@@ -10,14 +11,14 @@ import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.core.SuccessPolicy
 import dev.smsforwarder.core.TemplateKind
-import dev.smsforwarder.core.HttpMethod
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,7 +67,7 @@ class RuleRepositoryTest {
         rules.addSender("OPERADOR")
         rules.removeSender("operador ")
         assertTrue(rules.activeRules().isEmpty())
-        assertTrue(!rules.hasActiveRules())
+        assertFalse(rules.hasActiveRules())
         assertTrue(rules.senders.first().isEmpty())
     }
 
@@ -106,12 +107,11 @@ class RuleRepositoryTest {
 
     @Test fun invalidRuleRejected() = runBlocking {
         val p = repos.destinations.ensurePrimary()
-        try {
-            rules.create(draft(p, sender = "(", mode = SenderMode.REGEX))
-            fail("expected rejection")
-        } catch (e: IllegalArgumentException) {
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { rules.create(draft(p, sender = "(", mode = SenderMode.REGEX)) }
         }
         assertTrue(rules.observeAll().first().isEmpty())
+        assertEquals(0, db.query("SELECT COUNT(*) FROM rule_destination", null).use { it.moveToFirst(); it.getInt(0) })
     }
 
     @Test fun updateReplacesDestinations() = runBlocking {
@@ -127,7 +127,7 @@ class RuleRepositoryTest {
         val id = rules.create(draft(p))
         rules.setEnabled(id, false)
         assertTrue(rules.activeRules().isEmpty())
-        assertTrue(!rules.hasActiveRules())
+        assertFalse(rules.hasActiveRules())
     }
 
     @Test fun deleteRemovesRuleAndLinks() = runBlocking {
@@ -160,5 +160,45 @@ class RuleRepositoryTest {
         val solo = rules.create(draft(p, sender = "BBB"))
         rules.removeSender("BBB")
         assertNull(rules.draft(solo))
+    }
+
+    @Test fun createDropsDeletedAndUnknownDestinations() = runBlocking {
+        val p = repos.destinations.ensurePrimary()
+        val gone = second()
+        db.destinationDao().update(db.destinationDao().get(gone)!!.copy(deletedAt = 5L))
+        val id = rules.create(draft(p, gone, 9999L))
+        assertEquals(setOf(p), rules.draft(id)!!.destinationIds)
+        assertEquals(1, db.ruleDao().linkCount(id))
+    }
+
+    @Test fun updateDropsDeletedAndUnknownDestinations() = runBlocking {
+        val p = repos.destinations.ensurePrimary()
+        val gone = second()
+        db.destinationDao().update(db.destinationDao().get(gone)!!.copy(deletedAt = 5L))
+        val id = rules.create(draft(p))
+        assertTrue(rules.update(id, draft(gone, 9999L)))
+        assertEquals(emptySet<Long>(), rules.draft(id)!!.destinationIds)
+        assertEquals(0, db.ruleDao().linkCount(id))
+    }
+
+    @Test fun regexPatternIsNotTrimmed() = runBlocking {
+        val p = repos.destinations.ensurePrimary()
+        val id = rules.create(draft(p, sender = "AAA\\ ", mode = SenderMode.REGEX))
+        assertEquals("AAA\\ ", rules.draft(id)!!.senderPattern)
+    }
+
+    @Test fun nonRegexPatternsAreTrimmed() = runBlocking {
+        val p = repos.destinations.ensurePrimary()
+        val id = rules.create(draft(p, sender = " AAA "))
+        assertEquals("AAA", rules.draft(id)!!.senderPattern)
+    }
+
+    @Test fun updateAndSetEnabledReportUnknownRule() = runBlocking {
+        val p = repos.destinations.ensurePrimary()
+        assertFalse(rules.update(4242L, draft(p)))
+        assertFalse(rules.setEnabled(4242L, false))
+        val id = rules.create(draft(p))
+        assertTrue(rules.setEnabled(id, false))
+        assertTrue(rules.update(id, draft(p)))
     }
 }
