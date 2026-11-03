@@ -26,7 +26,7 @@ data class DestinationDraft(
 }
 
 enum class DestinationError {
-    NAME_EMPTY, URL_MISSING, URL_NOT_HTTPS, UNKNOWN_VARIABLE,
+    NAME_EMPTY, URL_MISSING, URL_INVALID, URL_NOT_HTTPS, UNKNOWN_VARIABLE,
     HEADER_NAME_INVALID, HEADER_VALUE_INVALID, BODY_NOT_JSON, BODY_WITH_GET,
 }
 
@@ -51,7 +51,11 @@ fun validateDestination(d: DestinationDraft, urlStored: Boolean): Set<Destinatio
     } else {
         if (Templates.unknownVariables(url).isNotEmpty()) errors += DestinationError.UNKNOWN_VARIABLE
         val probe = fill(url) { if (it.startsWith("received_at")) "0" else "x" }
-        if (!UrlValidator.isValid(probe)) errors += DestinationError.URL_NOT_HTTPS
+        val uri = runCatching { java.net.URI(probe.trim()) }.getOrNull()
+        when {
+            uri == null || uri.scheme == null || uri.host.isNullOrEmpty() -> errors += DestinationError.URL_INVALID
+            !uri.scheme.equals("https", ignoreCase = true) -> errors += DestinationError.URL_NOT_HTTPS
+        }
     }
 
     for (h in d.headers) {
@@ -79,10 +83,11 @@ object DestinationPresets {
     )
 
     fun telegram(name: String, botToken: String, chatId: String): DestinationDraft {
-        val chat = JsonPrimitive(chatId).toString()
+        val token = botToken.filterNot { it == '{' || it == '}' }
+        val chat = JsonPrimitive(chatId.filterNot { it == '{' || it == '}' }).toString()
         return DestinationDraft(
             name = name, enabled = true, template = TemplateKind.TELEGRAM, method = HttpMethod.POST,
-            url = "https://api.telegram.org/bot$botToken/sendMessage", headers = emptyList(),
+            url = "https://api.telegram.org/bot$token/sendMessage", headers = emptyList(),
             body = "{\"chat_id\":$chat,\"text\":\"{sender}: {body}\"}", bodyIsJson = true,
             successPolicy = SuccessPolicy.ANY_2XX,
         )
@@ -127,7 +132,7 @@ fun validateRule(r: RuleDraft): Set<RuleError> {
     if (r.bodyMode != null) {
         val p = r.bodyPattern.orEmpty()
         when {
-            p.isEmpty() -> errors += RuleError.BODY_EMPTY
+            p.isBlank() -> errors += RuleError.BODY_EMPTY
             r.bodyMode == BodyMode.REGEX && !RuleEngine.validatePattern(p) -> errors += RuleError.BODY_REGEX_INVALID
         }
     }

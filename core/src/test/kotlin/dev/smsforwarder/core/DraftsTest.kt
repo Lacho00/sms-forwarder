@@ -109,4 +109,31 @@ class DraftsTest {
         assertEquals(null, v.simSlot)
         assertEquals(5L, v.receivedAt)
     }
+
+    @Test fun migrationTemplateMatchesV1Literal() {
+        assertEquals("{\"sender\":\"{sender}\",\"body\":\"{body}\",\"received_at\":{received_at}}", Templates.STANDARD_JSON_BODY)
+    }
+
+    @Test fun telegramStripsBracesAndEscapes() {
+        val d = DestinationPresets.telegram("T", "1{x}:a", "-10{body}0")
+        assertEquals("https://api.telegram.org/bot1x:a/sendMessage", d.url)
+        assertEquals("{\"chat_id\":\"-10body0\",\"text\":\"{sender}: {body}\"}", d.body)
+        val e = DestinationPresets.telegram("T", "1:a", "a\\b\nc")
+        assertEquals("a\\b\nc", Json.parseToJsonElement(e.body).jsonObject["chat_id"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun urlInvalidVersusNotHttps() {
+        assertTrue(DestinationError.URL_INVALID in validateDestination(custom(url = "not a url"), false))
+        assertTrue(DestinationError.URL_INVALID in validateDestination(custom(url = "https://"), false))
+        val r = validateDestination(custom(url = "ftp://h.example"), false)
+        assertTrue(DestinationError.URL_NOT_HTTPS in r)
+        assertFalse(DestinationError.URL_INVALID in r)
+    }
+
+    @Test fun whitespaceOnlyPatternsAreEmpty() {
+        val ok = RuleDraft("R", true, SenderMode.CONTAINS, "AAA", BodyMode.CONTAINS, "  ", SimMatch.ANY, setOf(1L))
+        assertTrue(RuleError.BODY_EMPTY in validateRule(ok))
+        assertTrue(RuleError.BODY_EMPTY in validateRule(ok.copy(bodyMode = BodyMode.REGEX)))
+        assertTrue(RuleError.SENDER_EMPTY in validateRule(ok.copy(senderMode = SenderMode.EXACT, senderPattern = " \t ")))
+    }
 }
