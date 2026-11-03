@@ -17,7 +17,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -33,10 +32,20 @@ interface SecretStore {
     suspend fun set(c: Credentials)
 }
 
-private val Context.secretsDataStore by preferencesDataStore(name = "secrets")
+internal val Context.secretsDataStore by preferencesDataStore(name = "secrets")
 
-/** AES-256-GCM key kept in the AndroidKeyStore; ciphertext and IV live in DataStore as base64. */
-class KeystoreSecretStore(context: Context) : SecretStore {
+/**
+ * AES-256-GCM key kept in the AndroidKeyStore; ciphertext and IV live in DataStore as base64.
+ *
+ * [get] deletes the blob only when it is provably unrecoverable. A transient Keystore failure
+ * throws [TransientSecretException] and keeps the blob, so the caller can retry later.
+ */
+class KeystoreSecretStore internal constructor(
+    context: Context,
+    private val decrypt: (iv: ByteArray, blob: ByteArray) -> ByteArray,
+) : SecretStore {
+    constructor(context: Context) : this(context, ::keystoreDecrypt)
+
     private val store = context.applicationContext.secretsDataStore
 
     override suspend fun get(): Credentials? {
@@ -45,18 +54,12 @@ class KeystoreSecretStore(context: Context) : SecretStore {
         val blob = prefs[BLOB_KEY]
         if (iv == null || blob == null) return null
         return try {
-            val key = existingKey() ?: throw java.security.KeyException("missing key")
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, Base64.decode(iv, Base64.NO_WRAP)))
-            val plain = String(cipher.doFinal(Base64.decode(blob, Base64.NO_WRAP)), Charsets.UTF_8)
-            val parts = plain.split(SEPARATOR, limit = 2)
-            if (parts.size != 2) throw GeneralSecurityException("corrupt blob")
-            Credentials(parts[0], parts[1])
-        } catch (e: GeneralSecurityException) {
-            // Covers AEADBadTagException, KeyPermanentlyInvalidatedException and a missing key.
-            clear()
-            null
-        } catch (e: IllegalArgumentException) {
+            decodeSecret(decrypt, iv, blob) { plain ->
+                val parts = plain.split(SEPARATOR, limit = 2)
+                require(parts.size == 2) { "corrupt blob" }
+                Credentials(parts[0], parts[1])
+            }
+        } catch (e: UnrecoverableSecretException) {
             clear()
             null
         }
@@ -151,8 +154,14 @@ fun DestinationSecrets.toCredentialsOrNull(): Credentials? {
     return Credentials(url, auth.removePrefix(BEARER_PREFIX))
 }
 
-/** Same Keystore key as [KeystoreSecretStore]; one IV and blob entry pair per destination in the `secrets` DataStore. */
-class KeystoreDestinationSecretStore(context: Context) : DestinationSecretStore {
+/** Same Keystore key as [KeystoreSecretStore]; one IV and blob entry pair per destination in the `secrets` DataStore.
+ * A transient Keystore failure on [get] throws [TransientSecretException] and keeps the entries. */
+class KeystoreDestinationSecretStore internal constructor(
+    context: Context,
+    private val decrypt: (iv: ByteArray, blob: ByteArray) -> ByteArray,
+) : DestinationSecretStore {
+    constructor(context: Context) : this(context, ::keystoreDecrypt)
+
     private val store = context.applicationContext.secretsDataStore
 
     override suspend fun get(destinationId: Long): DestinationSecrets? {
@@ -161,22 +170,8 @@ class KeystoreDestinationSecretStore(context: Context) : DestinationSecretStore 
         val blob = prefs[blobKey(destinationId)]
         if (iv == null || blob == null) return null
         return try {
-            val key = existingSecretKey() ?: throw java.security.KeyException("missing key")
-            val cipher = Cipher.getInstance(CIPHER_MODE)
-            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(CIPHER_TAG_BITS, Base64.decode(iv, Base64.NO_WRAP)))
-            val plain = String(cipher.doFinal(Base64.decode(blob, Base64.NO_WRAP)), Charsets.UTF_8)
-            DestinationSecrets.decode(plain)
-        } catch (e: GeneralSecurityException) {
-            clearIfUnchanged(destinationId, iv, blob)
-            null
-        } catch (e: IllegalArgumentException) {
-            // Also covers SerializationException.
-            clearIfUnchanged(destinationId, iv, blob)
-            null
-        } catch (e: NoSuchElementException) {
-            clearIfUnchanged(destinationId, iv, blob)
-            null
-        } catch (e: IllegalStateException) {
+            decodeSecret(decrypt, iv, blob) { DestinationSecrets.decode(it) }
+        } catch (e: UnrecoverableSecretException) {
             clearIfUnchanged(destinationId, iv, blob)
             null
         }
@@ -238,4 +233,54 @@ private fun createSecretKey(): SecretKey {
             .build(),
     )
     return generator.generateKey()
+}
+
+/** The Keystore could not be used right now (not ready after boot, provider hiccup); the blob is intact, try again later. */
+class TransientSecretException(cause: Throwable) : Exception("transient Keystore failure", cause)
+
+/** The blob can never be read again (bad tag, malformed, key gone or invalidated). */
+internal class UnrecoverableSecretException(cause: Throwable) : Exception(cause)
+
+private class MissingKeyException : java.security.KeyException("missing key")
+
+internal fun keystoreDecrypt(iv: ByteArray, blob: ByteArray): ByteArray {
+    val key = existingSecretKey() ?: throw MissingKeyException()
+    val cipher = Cipher.getInstance(CIPHER_MODE)
+    cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(CIPHER_TAG_BITS, iv))
+    return cipher.doFinal(blob)
+}
+
+private fun isUnrecoverable(e: Exception): Boolean =
+    e is javax.crypto.BadPaddingException || // includes AEADBadTagException
+        e is javax.crypto.IllegalBlockSizeException ||
+        e is android.security.keystore.KeyPermanentlyInvalidatedException ||
+        e is java.security.UnrecoverableKeyException ||
+        e is MissingKeyException ||
+        e is IllegalArgumentException // bad base64 or GCM parameters
+
+/**
+ * Decrypts and parses one stored blob. Throws [UnrecoverableSecretException] only for permanent
+ * corruption (the caller may delete), [TransientSecretException] for any other Keystore failure.
+ * Never includes secret material in an exception message.
+ */
+internal fun <T> decodeSecret(
+    decrypt: (ByteArray, ByteArray) -> ByteArray,
+    ivB64: String,
+    blobB64: String,
+    parse: (String) -> T,
+): T {
+    val plain = try {
+        String(decrypt(Base64.decode(ivB64, Base64.NO_WRAP), Base64.decode(blobB64, Base64.NO_WRAP)), Charsets.UTF_8)
+    } catch (e: Exception) {
+        throw if (isUnrecoverable(e)) UnrecoverableSecretException(e) else TransientSecretException(e)
+    }
+    return try {
+        parse(plain)
+    } catch (e: IllegalArgumentException) { // also SerializationException
+        throw UnrecoverableSecretException(e)
+    } catch (e: NoSuchElementException) {
+        throw UnrecoverableSecretException(e)
+    } catch (e: IllegalStateException) {
+        throw UnrecoverableSecretException(e)
+    }
 }

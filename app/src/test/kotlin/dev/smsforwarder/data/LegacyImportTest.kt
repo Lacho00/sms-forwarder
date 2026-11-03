@@ -155,6 +155,47 @@ class LegacyImportTest {
         assertFalse(settings.isImportFailed())
     }
 
+    @Test fun transientLegacyReadKeepsImportOpenAndLaterRunImports() = runBlocking {
+        withPrimary()
+        seedLegacySenders("AAA")
+        var healthy = false
+        val legacy = object : SecretStore {
+            override suspend fun get(): Credentials? =
+                if (healthy) creds else throw TransientSecretException(java.security.KeyStoreException("not ready"))
+            override suspend fun set(c: Credentials) = Unit
+        }
+        val secrets = FakeDestinationSecretStore()
+        val imp = LegacyImport(db, legacy, secrets, settings)
+        assertFalse(imp.run())
+        assertTrue(settings.isImportFailed())
+        assertFalse(settings.isImportDone())
+        assertEquals(0, db.ruleDao().activeWithDestinations().size)
+        assertNull(secrets.get(PRIMARY_DESTINATION_ID))
+
+        healthy = true
+        assertTrue(imp.run())
+        assertTrue(settings.isImportDone())
+        assertEquals(creds.toDestinationSecrets(), secrets.get(PRIMARY_DESTINATION_ID))
+        assertEquals(1, db.ruleDao().activeWithDestinations().size)
+    }
+
+    @Test fun transientDestinationReadDoesNotMarkDoneOrOverwrite() = runBlocking {
+        withPrimary()
+        val existing = DestinationSecrets("https://other.invalid/x", emptyList())
+        val secrets = object : DestinationSecretStore {
+            var failing = true
+            override suspend fun get(destinationId: Long): DestinationSecrets? =
+                if (failing) throw TransientSecretException(java.security.ProviderException("busy")) else existing
+            override suspend fun set(destinationId: Long, s: DestinationSecrets) = error("must not overwrite")
+            override suspend fun remove(destinationId: Long) = Unit
+        }
+        val imp = importer(creds, secrets)
+        assertFalse(imp.run())
+        assertFalse(settings.isImportDone())
+        secrets.failing = false
+        assertTrue(imp.run())
+    }
+
     @Test fun freshInstallSkips() = runBlocking {
         seedLegacySenders("AAA")
         val secrets = FakeDestinationSecretStore()

@@ -37,6 +37,8 @@ class LegacyImport(
                 settings.markImportDone()
                 return true
             }
+            // A transient Keystore error throws (blob kept) and lands in safe mode below; only a
+            // genuinely corrupt blob reads as null, and that is final.
             val credentials = legacySecrets.get()
             if (credentials != null && secrets.get(PRIMARY_DESTINATION_ID) == null) {
                 secrets.set(PRIMARY_DESTINATION_ID, credentials.toDestinationSecrets())
