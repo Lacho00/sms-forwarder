@@ -36,6 +36,9 @@ class DestinationRepository(
 
     fun observeLive(): Flow<List<DestinationEntity>> = dao.observeLive()
 
+    /** QUEUED and ERROR delivery counts per destination (visible SMS only); destinations with none are absent. */
+    fun observeCounts(): Flow<List<DestinationCounts>> = deliveries.observeCounts()
+
     /** Stores a new destination; the row is removed again if its secrets cannot be saved. */
     suspend fun create(d: DestinationDraft): Long {
         require(validateDestination(d, urlStored = false).isEmpty()) { "invalid destination" }

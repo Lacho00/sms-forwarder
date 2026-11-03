@@ -1,0 +1,267 @@
+package dev.smsforwarder.ui.destinations
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import dev.smsforwarder.core.DestinationDraft
+import dev.smsforwarder.core.DestinationError
+import dev.smsforwarder.core.DestinationPresets
+import dev.smsforwarder.core.DestinationTestResult
+import dev.smsforwarder.core.HeaderDraft
+import dev.smsforwarder.core.HttpMethod
+import dev.smsforwarder.core.SuccessPolicy
+import dev.smsforwarder.core.TemplateKind
+import dev.smsforwarder.core.validateDestination
+import dev.smsforwarder.data.DestinationRepository
+import dev.smsforwarder.net.DestinationTester
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/** What the template presets ask for: URL (standard, ntfy), token (standard, Telegram bot), chat id (Telegram). */
+data class PresetFields(val url: String = "", val token: String = "", val chatId: String = "") {
+    override fun toString(): String = "PresetFields(***)"
+}
+
+/** [value] of a stored secret header is empty and [stored] true: the real value never reaches the form. */
+data class HeaderRowUi(val name: String, val value: String, val secret: Boolean, val stored: Boolean) {
+    override fun toString(): String =
+        "HeaderRowUi(name=$name, value=${if (secret) "<hidden>" else value}, secret=$secret, stored=$stored)"
+}
+
+data class DestinationEditorState(
+    val loaded: Boolean = false,
+    val isNew: Boolean = true,
+    val template: TemplateKind = TemplateKind.CUSTOM,
+    val preset: PresetFields = PresetFields(),
+    val name: String = "",
+    val enabled: Boolean = true,
+    val method: HttpMethod = HttpMethod.POST,
+    val url: String = "",
+    val urlStored: Boolean = false,
+    val headers: List<HeaderRowUi> = emptyList(),
+    val body: String = "",
+    val bodyIsJson: Boolean = true,
+    val successPolicy: SuccessPolicy = SuccessPolicy.ANY_2XX,
+    val errors: Set<DestinationError> = emptySet(),
+    val test: DestinationTestResult? = null,
+    val busy: Boolean = false,
+    /** Pending deliveries the delete would cancel, while the confirmation is open. */
+    val deletePending: Int? = null,
+    val done: Boolean = false,
+    /** The last save did not complete (for example a Keystore failure); nothing was lost, retry. */
+    val saveFailed: Boolean = false,
+) {
+    // URL, token, headers and body can all carry secrets: none of them is printed.
+    override fun toString(): String =
+        "DestinationEditorState(loaded=$loaded, isNew=$isNew, template=$template, enabled=$enabled, " +
+            "method=$method, headers=${headers.size}, errors=$errors, busy=$busy, done=$done)"
+}
+
+/** [id] null creates. [scope] is only passed by tests; in the app it is the ViewModel scope. */
+class DestinationEditorViewModel(
+    private val id: Long?,
+    private val repo: DestinationRepository,
+    private val tester: DestinationTester,
+    private val enqueue: (List<Long>) -> Unit,
+    private val defaultName: (TemplateKind) -> String,
+    private val scope: CoroutineScope? = null,
+) : ViewModel() {
+
+    private val _state = MutableStateFlow(DestinationEditorState(isNew = id == null))
+    val state: StateFlow<DestinationEditorState> = _state.asStateFlow()
+
+    private fun launch(block: suspend () -> Unit) {
+        (scope ?: viewModelScope).launch { block() }
+    }
+
+    init {
+        if (id == null) {
+            _state.update { it.copy(loaded = true) }
+        } else {
+            launch {
+                val e = try {
+                    repo.editable(id)
+                } catch (c: CancellationException) {
+                    throw c
+                } catch (e: Exception) {
+                    null
+                }
+                if (e == null) {
+                    _state.update { it.copy(loaded = true, done = true) }
+                } else {
+                    val d = e.draft
+                    _state.update {
+                        it.copy(
+                            loaded = true, isNew = false, template = d.template, name = d.name, enabled = d.enabled,
+                            method = d.method, url = "", urlStored = e.urlStored,
+                            headers = d.headers.map { h ->
+                                HeaderRowUi(h.name, if (h.secret) "" else h.value.orEmpty(), h.secret, stored = h.secret && h.value == null)
+                            },
+                            body = d.body, bodyIsJson = d.bodyIsJson, successPolicy = d.successPolicy,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun DestinationEditorState.toDraft(): DestinationDraft = DestinationDraft(
+        name = name, enabled = enabled, template = template, method = method,
+        url = if (url.isEmpty() && urlStored) null else url,
+        headers = headers.map { h ->
+            HeaderDraft(h.name, if (h.secret && h.stored && h.value.isEmpty()) null else h.value, h.secret)
+        },
+        body = body, bodyIsJson = bodyIsJson, successPolicy = successPolicy,
+    )
+
+    private fun DestinationEditorState.validate(): Set<DestinationError> = validateDestination(toDraft(), urlStored)
+
+    /** Applies an edit; clears the last test result and refreshes shown errors once there are some. */
+    private fun edit(change: (DestinationEditorState) -> DestinationEditorState) {
+        _state.update {
+            val next = change(it).copy(test = null, saveFailed = false)
+            if (next.errors.isEmpty()) next else next.copy(errors = next.validate())
+        }
+    }
+
+    /** Only when creating; the form is the same for every template afterwards. */
+    fun chooseTemplate(k: TemplateKind) {
+        if (!_state.value.isNew) return
+        edit {
+            val renamed = it.name.isBlank() || it.name == defaultName(it.template)
+            val base = if (k == TemplateKind.CUSTOM) fromDraft(it, DestinationPresets.custom(defaultName(k))) else it
+            base.copy(
+                template = k, preset = PresetFields(), errors = emptySet(),
+                name = if (renamed) defaultName(k) else it.name,
+            )
+        }
+    }
+
+    fun setPreset(p: PresetFields) = edit { it.copy(preset = p) }
+
+    /** Fills the form from the template's preset fields. */
+    fun applyPreset() {
+        edit {
+            val p = it.preset
+            val name = it.name.ifBlank { defaultName(it.template) }
+            val draft = when (it.template) {
+                TemplateKind.STANDARD_JSON -> DestinationPresets.standardJson(name, p.url.trim(), p.token.trim())
+                TemplateKind.TELEGRAM -> DestinationPresets.telegram(name, p.token.trim(), p.chatId.trim())
+                TemplateKind.NTFY -> DestinationPresets.ntfy(name, p.url.trim())
+                TemplateKind.CUSTOM -> return@edit it
+            }
+            fromDraft(it, draft).copy(preset = PresetFields(), urlStored = false)
+        }
+    }
+
+    private fun fromDraft(s: DestinationEditorState, d: DestinationDraft) = s.copy(
+        name = d.name, method = d.method, url = d.url.orEmpty(),
+        headers = d.headers.map { h -> HeaderRowUi(h.name, h.value.orEmpty(), h.secret, stored = false) },
+        body = d.body, bodyIsJson = d.bodyIsJson, successPolicy = d.successPolicy,
+    )
+
+    fun setName(v: String) = edit { it.copy(name = v) }
+    fun setEnabled(v: Boolean) = edit { it.copy(enabled = v) }
+    fun setMethod(v: HttpMethod) = edit { it.copy(method = v) }
+    fun setUrl(v: String) = edit { it.copy(url = v) }
+    fun setHeaders(v: List<HeaderRowUi>) = edit { it.copy(headers = v) }
+    fun setBody(v: String) = edit { it.copy(body = v) }
+    fun setBodyIsJson(v: Boolean) = edit { it.copy(bodyIsJson = v) }
+    fun setSuccessPolicy(v: SuccessPolicy) = edit { it.copy(successPolicy = v) }
+
+    /** Sends a sample request with what the form holds. Blocked, with the errors shown, while the form is invalid. */
+    fun test() {
+        val s = _state.value
+        if (s.busy) return
+        val errors = s.validate()
+        if (errors.isNotEmpty()) {
+            _state.update { it.copy(errors = errors, test = null) }
+            return
+        }
+        _state.update { it.copy(busy = true, errors = emptySet(), test = null) }
+        launch {
+            try {
+                val r = tester.test(s.toDraft(), id)
+                _state.update { it.copy(test = r) }
+            } finally {
+                _state.update { it.copy(busy = false) }
+            }
+        }
+    }
+
+    fun save() {
+        val s = _state.value
+        if (s.busy || s.done) return
+        val errors = s.validate()
+        if (errors.isNotEmpty()) {
+            _state.update { it.copy(errors = errors) }
+            return
+        }
+        _state.update { it.copy(busy = true, errors = emptySet(), saveFailed = false) }
+        launch {
+            try {
+                val draft = s.toDraft()
+                val requeued = if (id == null) {
+                    repo.create(draft)
+                    emptyList()
+                } else {
+                    repo.update(id, draft)
+                }
+                if (requeued.isNotEmpty()) enqueue(requeued)
+                _state.update { it.copy(done = true) }
+            } catch (c: CancellationException) {
+                throw c
+            } catch (e: Exception) {
+                _state.update { it.copy(saveFailed = true) }
+            } finally {
+                _state.update { it.copy(busy = false) }
+            }
+        }
+    }
+
+    /** Opens the delete confirmation with the number of deliveries it would cancel. */
+    fun requestDelete() {
+        val target = id ?: return
+        launch {
+            val n = repo.pendingCount(target)
+            _state.update { it.copy(deletePending = n) }
+        }
+    }
+
+    fun confirmDelete() {
+        val target = id ?: return
+        if (_state.value.deletePending == null) return
+        _state.update { it.copy(busy = true) }
+        launch {
+            try {
+                repo.delete(target)
+                _state.update { it.copy(deletePending = null, done = true) }
+            } catch (c: CancellationException) {
+                throw c
+            } catch (e: Exception) {
+                _state.update { it.copy(deletePending = null, saveFailed = true) }
+            } finally {
+                _state.update { it.copy(busy = false) }
+            }
+        }
+    }
+
+    fun dismissDelete() = _state.update { it.copy(deletePending = null) }
+
+    class Factory(
+        private val id: Long?,
+        private val repo: DestinationRepository,
+        private val tester: DestinationTester,
+        private val enqueue: (List<Long>) -> Unit,
+        private val defaultName: (TemplateKind) -> String,
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            DestinationEditorViewModel(id, repo, tester, enqueue, defaultName) as T
+    }
+}
