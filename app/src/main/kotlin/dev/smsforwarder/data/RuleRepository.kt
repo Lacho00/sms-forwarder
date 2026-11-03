@@ -114,7 +114,7 @@ class RuleRepository(
 
     /** Regex patterns keep their text: a trailing escaped space is meaningful. */
     private fun trimmed(r: RuleDraft) = r.copy(
-        name = r.name,
+        name = r.name.trim(),
         senderPattern = if (r.senderMode == SenderMode.REGEX) r.senderPattern else r.senderPattern.trim(),
         bodyPattern = if (r.bodyMode == BodyMode.REGEX) r.bodyPattern else r.bodyPattern?.trim(),
     )
@@ -124,7 +124,7 @@ class RuleRepository(
 
     private fun entity(id: Long, r: RuleDraft, createdAt: Long) = RuleEntity(
         id = id,
-        name = r.name,
+        name = r.name.trim(),
         enabled = r.enabled,
         senderMode = r.senderMode,
         senderPattern = r.senderPattern,
