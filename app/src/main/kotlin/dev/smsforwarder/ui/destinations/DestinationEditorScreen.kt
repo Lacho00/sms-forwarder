@@ -108,7 +108,7 @@ fun DestinationEditorScreen(
                     }
                 },
                 actions = {
-                    if (!state.isNew) {
+                    if (!state.isNew && state.loaded && !state.loadFailed) {
                         IconButton(onClick = vm::requestDelete) {
                             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.destination_delete))
                         }

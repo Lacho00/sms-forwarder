@@ -57,6 +57,12 @@ class RuleEditorViewModel(
 
     private var loadJob: Job? = null
     private var listJob: Job? = null
+    private var saveJob: Job? = null
+    private var deleteJob: Job? = null
+    private var generation = 0
+
+    /** False until the destination list has emitted once; before that nothing can be told dead. */
+    @Volatile private var listEmitted = false
 
     init {
         load()
@@ -64,8 +70,12 @@ class RuleEditorViewModel(
 
     /** Back to a pristine editor for this target: reloads from the repository and drops everything typed. */
     fun reset() {
+        generation++
         loadJob?.cancel()
         listJob?.cancel()
+        saveJob?.cancel()
+        deleteJob?.cancel()
+        listEmitted = false
         _state.value = RuleEditorState(isNew = id == null)
         load()
     }
@@ -73,11 +83,14 @@ class RuleEditorViewModel(
     private fun load() {
         listJob = launch {
             try {
-                destinations.observeLive().collect { list -> _state.update { it.copy(destinations = list) } }
+                destinations.observeLive().collect { list ->
+                    listEmitted = true
+                    _state.update { it.copy(destinations = list) }
+                }
             } catch (c: CancellationException) {
                 throw c
             } catch (e: Exception) {
-                // The list stays as it was; the draft is still editable.
+                _state.update { it.copy(loaded = true, loadFailed = true) }
             }
         }
         if (id == null) {
@@ -111,6 +124,8 @@ class RuleEditorViewModel(
 
     /** Destinations deleted while the form was open are dropped before validating and saving. */
     private fun RuleEditorState.liveDraft(): RuleDraft {
+        // The repository drops dead ids inside its own transaction, so before the list is known keep them all.
+        if (!listEmitted) return draft
         val live = destinations.map { it.id }.toSet()
         return draft.copy(destinationIds = draft.destinationIds.filter { it in live }.toSet())
     }
@@ -131,16 +146,17 @@ class RuleEditorViewModel(
             return
         }
         _state.update { it.copy(busy = true, errors = emptySet(), saveFailed = false) }
-        launch {
+        val gen = generation
+        saveJob = launch {
             try {
                 if (id == null) rules.create(draft) else rules.update(id, draft)
-                _state.update { it.copy(done = true) }
+                if (gen == generation) _state.update { it.copy(done = true) }
             } catch (c: CancellationException) {
                 throw c
             } catch (e: Exception) {
-                _state.update { it.copy(saveFailed = true) }
+                if (gen == generation) _state.update { it.copy(saveFailed = true) }
             } finally {
-                _state.update { it.copy(busy = false) }
+                if (gen == generation) _state.update { it.copy(busy = false) }
             }
         }
     }
@@ -155,16 +171,17 @@ class RuleEditorViewModel(
         val s = _state.value
         if (!s.deleteAsked || s.busy || s.done) return
         _state.update { it.copy(busy = true) }
-        launch {
+        val gen = generation
+        deleteJob = launch {
             try {
                 rules.delete(target)
-                _state.update { it.copy(deleteAsked = false, done = true) }
+                if (gen == generation) _state.update { it.copy(deleteAsked = false, done = true) }
             } catch (c: CancellationException) {
                 throw c
             } catch (e: Exception) {
-                _state.update { it.copy(deleteAsked = false, saveFailed = true) }
+                if (gen == generation) _state.update { it.copy(deleteAsked = false, saveFailed = true) }
             } finally {
-                _state.update { it.copy(busy = false) }
+                if (gen == generation) _state.update { it.copy(busy = false) }
             }
         }
     }

@@ -160,6 +160,26 @@ class DestinationEditorViewModelTest {
         assertEquals(0, liveCount())
     }
 
+    @Test fun staleSaveAfterResetDoesNotCloseTheFreshEditor() {
+        val held = java.util.concurrent.CountDownLatch(1)
+        val started = java.util.concurrent.CountDownLatch(1)
+        val t = Thread { db.runInTransaction { started.countDown(); held.await(5, java.util.concurrent.TimeUnit.SECONDS) } }
+        t.start()
+        started.await()
+        val vm = vm()
+        vm.chooseTemplate(TemplateKind.CUSTOM)
+        vm.setUrl("https://h.example/x")
+        vm.setBody("{\"s\":\"{sim}\"}")
+        vm.save()
+        assertTrue(vm.state.value.busy)
+        vm.reset()
+        held.countDown()
+        t.join()
+        Thread.sleep(300)
+        assertFalse(vm.state.value.done)
+        assertFalse(vm.state.value.busy)
+    }
+
     @Test fun savesValidNewDestination() = runBlocking {
         val vm = vm()
         vm.chooseTemplate(TemplateKind.CUSTOM)

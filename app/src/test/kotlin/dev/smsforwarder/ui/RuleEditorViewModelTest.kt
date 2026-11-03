@@ -102,6 +102,36 @@ class RuleEditorViewModelTest {
         assertEquals(setOf(d), active[0].destinationIds)
     }
 
+    @Test fun staleSaveAfterResetDoesNotCloseTheFreshEditor() {
+        val d = dest("One")
+        val vm = vm()
+        vm.await { it.loaded && it.destinations.size == 1 }
+        vm.update { it.copy(name = "R", senderPattern = "AAA", destinationIds = setOf(d)) }
+        val held = java.util.concurrent.CountDownLatch(1)
+        val started = java.util.concurrent.CountDownLatch(1)
+        val t = Thread { db.runInTransaction { started.countDown(); held.await(5, java.util.concurrent.TimeUnit.SECONDS) } }
+        t.start()
+        started.await()
+        vm.save()
+        assertTrue(vm.state.value.busy)
+        vm.reset()
+        held.countDown()
+        t.join()
+        Thread.sleep(300)
+        assertFalse(vm.state.value.done)
+        assertFalse(vm.state.value.busy)
+    }
+
+    @Test fun tickedDestinationBeforeListEmitsIsNotDropped() {
+        val d = dest("One")
+        // A scope that never runs the collector: the list has not emitted when save is called.
+        val idle = RuleEditorViewModel(null, repos.rules, repos.destinations, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        idle.reset()
+        idle.update { it.copy(name = "R", senderPattern = "AAA", destinationIds = setOf(d)) }
+        idle.save()
+        assertFalse(RuleError.NO_DESTINATIONS in idle.state.value.errors)
+    }
+
     @Test fun editLoadsExisting() {
         val d = dest("One")
         val id = runBlocking {

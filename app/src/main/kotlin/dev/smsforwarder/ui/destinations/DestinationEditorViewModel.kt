@@ -93,7 +93,13 @@ class DestinationEditorViewModel(
     private var testJob: Job? = null
     private var generation = 0
 
+    /** Bumped only by [reset]: a save or delete started before it must not touch the fresh state. */
+    private var epoch = 0
+
     private var loadJob: Job? = null
+    private var saveJob: Job? = null
+    private var deleteJob: Job? = null
+    private var requestJob: Job? = null
 
     init {
         load()
@@ -106,8 +112,12 @@ class DestinationEditorViewModel(
      */
     fun reset() {
         generation++
+        epoch++
         testJob?.cancel()
         loadJob?.cancel()
+        saveJob?.cancel()
+        deleteJob?.cancel()
+        requestJob?.cancel()
         _state.value = DestinationEditorState(isNew = id == null)
         load()
     }
@@ -258,7 +268,8 @@ class DestinationEditorViewModel(
             return
         }
         _state.update { it.copy(busy = true, errors = emptySet(), saveFailed = false) }
-        launch {
+        val gen = epoch
+        saveJob = launch {
             try {
                 val draft = s.toDraft()
                 val requeued = if (id == null) {
@@ -268,13 +279,13 @@ class DestinationEditorViewModel(
                     repo.update(id, draft)
                 }
                 if (requeued.isNotEmpty()) enqueue(requeued)
-                _state.update { it.copy(done = true) }
+                if (gen == epoch) _state.update { it.copy(done = true) }
             } catch (c: CancellationException) {
                 throw c
             } catch (e: Exception) {
-                _state.update { it.copy(saveFailed = true) }
+                if (gen == epoch) _state.update { it.copy(saveFailed = true) }
             } finally {
-                _state.update { it.copy(busy = false) }
+                if (gen == epoch) _state.update { it.copy(busy = false) }
             }
         }
     }
@@ -283,14 +294,15 @@ class DestinationEditorViewModel(
     fun requestDelete() {
         val target = id ?: return
         if (_state.value.busy || _state.value.done) return
-        launch {
+        val gen = epoch
+        requestJob = launch {
             try {
                 val n = repo.pendingCount(target)
-                _state.update { it.copy(deletePending = n) }
+                if (gen == epoch) _state.update { it.copy(deletePending = n) }
             } catch (c: CancellationException) {
                 throw c
             } catch (e: Exception) {
-                _state.update { it.copy(saveFailed = true) }
+                if (gen == epoch) _state.update { it.copy(saveFailed = true) }
             }
         }
     }
@@ -300,16 +312,17 @@ class DestinationEditorViewModel(
         val s = _state.value
         if (s.deletePending == null || s.busy || s.done) return
         _state.update { it.copy(busy = true) }
-        launch {
+        val gen = epoch
+        deleteJob = launch {
             try {
                 repo.delete(target)
-                _state.update { it.copy(deletePending = null, done = true) }
+                if (gen == epoch) _state.update { it.copy(deletePending = null, done = true) }
             } catch (c: CancellationException) {
                 throw c
             } catch (e: Exception) {
-                _state.update { it.copy(deletePending = null, saveFailed = true) }
+                if (gen == epoch) _state.update { it.copy(deletePending = null, saveFailed = true) }
             } finally {
-                _state.update { it.copy(busy = false) }
+                if (gen == epoch) _state.update { it.copy(busy = false) }
             }
         }
     }

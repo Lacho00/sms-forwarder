@@ -4,6 +4,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -120,6 +121,17 @@ class RuleEditorScreenTest {
     @Test fun deleteOnlyOnExistingRules() {
         show(vm(), RuleEditorState(loaded = true, isNew = true))
         compose.onAllNodesWithText(app.getString(R.string.rule_delete)).assertCountEquals(0)
+    }
+
+    @Test fun deleteHiddenUntilLoadedAndWhenLoadFailed() {
+        show(vm(), RuleEditorState(loaded = false, isNew = false))
+        compose.onAllNodesWithText(app.getString(R.string.rule_delete)).assertCountEquals(0)
+        compose.onAllNodesWithContentDescription(app.getString(R.string.rule_delete)).assertCountEquals(0)
+    }
+
+    @Test fun deleteHiddenWhenLoadFailed() {
+        show(vm(), RuleEditorState(loaded = true, isNew = false, loadFailed = true))
+        compose.onAllNodesWithContentDescription(app.getString(R.string.rule_delete)).assertCountEquals(0)
     }
 
     @Test fun deleteDialogShown() {
