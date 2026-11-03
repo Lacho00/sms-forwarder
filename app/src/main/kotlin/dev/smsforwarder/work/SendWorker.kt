@@ -20,7 +20,7 @@ import dev.smsforwarder.sms.SimSlots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.supervisorScope
 
 /**
  * One work item per SMS (unique name `send-<smsId>`, as in 1.1.x): it sends every QUEUED delivery of the
@@ -52,7 +52,7 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
         if (pending.isEmpty()) return Result.success()
 
-        val retryNeeded = coroutineScope {
+        val retryNeeded = supervisorScope {
             pending.map { delivery -> async { sendOne(graph, sms, delivery) } }.awaitAll()
         }.any { it }
         return if (retryNeeded) Result.retry() else Result.success()
@@ -80,7 +80,14 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         } catch (e: Exception) {
             return true
         }
-        graph.smsRepository.recordAttempt(delivery.id, outcome)
+        // A failing write must not cancel the sibling sends: count it as "retry" for this delivery only.
+        try {
+            graph.smsRepository.recordAttempt(delivery.id, outcome)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return true
+        }
         if (outcome is SendOutcome.Rejected) notifyRejected(graph, sms.id, delivery, outcome)
         return outcome is SendOutcome.Retry
     }
