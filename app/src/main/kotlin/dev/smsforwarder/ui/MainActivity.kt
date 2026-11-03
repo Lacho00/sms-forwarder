@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
                 app,
                 clock,
                 { g.legacyImport.run() },
-            ) { id -> WorkScheduler.enqueueSend(app, id, replace = true) },
+            ) { id -> WorkScheduler.kickSend(app, id) },
         )[RecoveryViewModel::class.java]
         settingsViewModel = ViewModelProvider(
             this,
@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
             DetailViewModel.Factory(
                 id,
                 g.smsRepository,
-                enqueueSend = { smsId -> WorkScheduler.enqueueSend(app, smsId, replace = true) },
+                enqueueSend = { smsId -> WorkScheduler.kickSend(app, smsId) },
                 hideText = g.settings.hideText,
                 cancelSend = { smsId -> WorkScheduler.cancelSend(app, smsId) },
             ),

@@ -25,7 +25,8 @@ import java.io.File
 
 /**
  * App settings in DataStore. [storeFile] only exists so tests can use a separate file each.
- * [scheduler] kicks a send for one SMS id; it is a lambda so tests can record the ids.
+ * [scheduler] kicks a send for one SMS id, replacing a running one (new credentials); [safeScheduler] never
+ * cancels a running send (resume). Lambdas so tests can record the ids.
  */
 class SettingsRepository(
     context: Context,
@@ -34,6 +35,7 @@ class SettingsRepository(
     private val smsRepository: SmsRepository,
     private val scheduler: (Long) -> Unit,
     storeFile: File = File(context.applicationContext.filesDir, "datastore/settings.preferences_pb"),
+    private val safeScheduler: (Long) -> Unit = scheduler,
 ) {
     private val appContext = context.applicationContext
     private val store: DataStore<Preferences> = PreferenceDataStoreFactory.create { storeFile }
@@ -137,6 +139,8 @@ class SettingsRepository(
         destinations.savePrimaryCredentials(c)
         val primary = destinations.ensurePrimary()
         val unauthorized = smsRepository.requeueAuthErrors(primary)
+        // Deliberately REPLACE (not the running-safe kick): a running send still carries the old token and would
+        // record a 401 after the requeue, leaving the SMS in ERROR.
         (unauthorized + smsRepository.queuedIds()).distinct().forEach(scheduler)
     }
 
@@ -147,7 +151,7 @@ class SettingsRepository(
     /** Resuming sends every queued SMS again right away; pausing only stops the sending. */
     suspend fun setForwardingEnabled(v: Boolean) {
         store.edit { it[FORWARDING_KEY] = v }
-        if (v) smsRepository.queuedIds().forEach(scheduler)
+        if (v) smsRepository.queuedIds().forEach(safeScheduler)
     }
 
     val sweepInterval: Flow<SweepInterval> = store.data.map { readEnum(it[SWEEP_INTERVAL_KEY], SweepInterval.M15) }

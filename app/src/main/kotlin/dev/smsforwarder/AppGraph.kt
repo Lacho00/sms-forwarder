@@ -63,7 +63,9 @@ class AppGraph(context: Context) {
             destinationRepository,
             ruleRepository,
             smsRepository,
+            // New credentials replace a running send on purpose; resume must not (see SettingsRepository).
             scheduler = { id -> WorkScheduler.enqueueSend(context.applicationContext, id, replace = true) },
+            safeScheduler = { id -> WorkScheduler.kickSend(context.applicationContext, id) },
         )
     }
 

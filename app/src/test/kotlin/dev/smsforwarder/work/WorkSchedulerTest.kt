@@ -16,4 +16,6 @@ class WorkSchedulerTest {
 
     @Test fun kickAfterFinished() =
         assertEquals(ExistingWorkPolicy.REPLACE, WorkScheduler.kickPolicy(listOf(WorkInfo.State.SUCCEEDED)))
+
+    @Test fun kickSkipsWhenReadFailed() = assertNull(WorkScheduler.kickPolicy(null))
 }

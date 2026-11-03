@@ -113,7 +113,10 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 isAuthRejection(outcome.httpCode) -> {
                     val destinationId = delivery.destinationId ?: return
                     val waiting = repo.idsAuthRejected(destinationId).size
-                    if (waiting > 0) graph.notifier.tokenRejected(destinationId, delivery.destinationName, waiting)
+                    if (waiting > 0) {
+                        val name = graph.destinationRepository.get(destinationId)?.name ?: delivery.destinationName
+                        graph.notifier.tokenRejected(destinationId, name, waiting)
+                    }
                 }
                 outcome.httpCode == 400 -> repo.get(smsId)?.takeIf { it.status == SmsStatus.ERROR }?.let {
                     graph.notifier.rejected(it)
