@@ -10,7 +10,7 @@ import dev.smsforwarder.core.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -55,12 +55,14 @@ class LegacyImportTest {
     private suspend fun seedLegacySenders(vararg senders: String) {
         val context = RuntimeEnvironment.getApplication()
         val file = File(context.cacheDir, "settings-${UUID.randomUUID()}.preferences_pb")
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val job = SupervisorJob()
+        val scope = CoroutineScope(job + Dispatchers.IO)
         try {
             val seed = PreferenceDataStoreFactory.create(scope = scope) { file }
             seed.edit { it[stringPreferencesKey("senders")] = senders.joinToString("\n") }
         } finally {
-            scope.cancel()
+            // DataStore refuses a second instance on the file until the first one's scope has completed.
+            job.cancelAndJoin()
         }
         settings = settingsOver(file)
     }
