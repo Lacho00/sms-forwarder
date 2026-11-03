@@ -4,8 +4,10 @@ import androidx.room.Room
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.DeliveryStatus
 import dev.smsforwarder.core.HttpMethod
+import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
+import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.core.SuccessPolicy
 import dev.smsforwarder.core.TemplateKind
 import dev.smsforwarder.data.AppDatabase
@@ -91,5 +93,29 @@ class DetailViewModelTest {
         broken.delete()
         // Reaching here without an uncaught exception is the check; the stored state is still readable.
         assertEquals(smsId, runBlocking { sms.get(smsId)!!.id })
+    }
+
+    @Test fun errorCodeComesFromTheFailingDelivery() {
+        runBlocking {
+            sms.resendTo(smsId, 2L)
+            val byDestination = sms.deliveriesOf(smsId).associateBy { it.destinationId }
+            sms.recordAttempt(byDestination[1L]!!.id, SendOutcome.Rejected(403, null))
+            // The latest attempt is the other destination's 200, which used to leak into the aggregate label.
+            sms.recordAttempt(byDestination[2L]!!.id, SendOutcome.Accepted(200))
+        }
+        val s = await { it.deliveries.size == 2 && it.deliveries.all { d -> d.status != DeliveryStatus.QUEUED } }
+        assertEquals(SmsStatus.ERROR, s.sms!!.status)
+        assertEquals(403, s.label!!.httpCode)
+    }
+
+    @Test fun errorWithoutFailingCodeShowsNoCode() {
+        runBlocking {
+            sms.resendTo(smsId, 2L)
+            val byDestination = sms.deliveriesOf(smsId).associateBy { it.destinationId }
+            sms.recordAttempt(byDestination[1L]!!.id, SendOutcome.Invalid("template"))
+            sms.recordAttempt(byDestination[2L]!!.id, SendOutcome.Accepted(200))
+        }
+        val s = await { it.deliveries.size == 2 && it.deliveries.all { d -> d.status != DeliveryStatus.QUEUED } }
+        assertEquals(null, s.label!!.httpCode)
     }
 }

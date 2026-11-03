@@ -215,4 +215,30 @@ class DestinationRepositoryTest {
         assertEquals(SmsStatus.SENT, row.status)
         assertNull(row.lastError)
     }
+
+    @Test fun pausingKeepsAuthAndConfigErrors() = runBlocking {
+        val id = repo.create(custom("One"))
+        val a = ingest(id)
+        val b = ingest(id)
+        sms.recordAttempt(sms.deliveriesOf(a).single().id, SendOutcome.Rejected(403, null))
+        sms.recordAttempt(sms.deliveriesOf(b).single().id, SendOutcome.Invalid("template"))
+
+        val ids = repo.update(id, repo.editable(id)!!.draft.copy(enabled = false))
+
+        assertEquals(emptyList<Long>(), ids)
+        assertEquals(DeliveryStatus.ERROR, sms.deliveriesOf(a).single().status)
+        assertEquals(DeliveryStatus.ERROR, sms.deliveriesOf(b).single().status)
+        assertEquals(SmsStatus.ERROR, sms.get(a)!!.status)
+    }
+
+    @Test fun listToggleKeepsErrors() = runBlocking {
+        val id = repo.create(custom("One"))
+        val a = ingest(id)
+        sms.recordAttempt(sms.deliveriesOf(a).single().id, SendOutcome.Rejected(403, null))
+
+        assertEquals(emptyList<Long>(), repo.setEnabled(id, false))
+
+        assertEquals(DeliveryStatus.ERROR, sms.deliveriesOf(a).single().status)
+        assertEquals(SmsStatus.ERROR, sms.get(a)!!.status)
+    }
 }

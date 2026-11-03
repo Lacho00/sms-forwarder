@@ -82,7 +82,7 @@ class DestinationRepository(
 
     /**
      * Saves the edit; a null URL or secret header value keeps what is stored. Auth and configuration errors of this
-     * destination go back to QUEUED; returns those SMS ids for the caller to schedule.
+     * destination go back to QUEUED unless the saved destination is paused; returns those SMS ids for the caller to schedule.
      */
     suspend fun update(id: Long, d: DestinationDraft): List<Long> {
         val entity = dao.get(id)?.takeIf { it.deletedAt == null } ?: throw IllegalArgumentException("unknown destination")
@@ -105,7 +105,10 @@ class DestinationRepository(
             val url = d.url?.trim() ?: stored?.url ?: throw IllegalArgumentException("invalid destination")
             secretStore.set(id, DestinationSecrets(url, secretHeaders(d.headers, stored?.headers.orEmpty())))
             val resumed = if (!entity.enabled && d.enabled) deliveries.smsIdsQueuedFor(id) else emptyList()
-            (sms.requeueAuthErrors(id) + sms.requeueConfigErrors(id) + resumed).distinct()
+            // Saving a paused destination (or pausing it) leaves its errors alone: nothing would send them and
+            // they would read as "queued". They go back to the queue when it is active again.
+            val fixed = if (d.enabled) sms.requeueAuthErrors(id) + sms.requeueConfigErrors(id) else emptyList()
+            (fixed + resumed).distinct()
         }
     }
 

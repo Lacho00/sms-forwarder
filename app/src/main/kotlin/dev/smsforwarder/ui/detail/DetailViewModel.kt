@@ -10,6 +10,7 @@ import dev.smsforwarder.data.AttemptEntity
 import dev.smsforwarder.data.DeliveryEntity
 import dev.smsforwarder.data.DestinationEntity
 import dev.smsforwarder.data.SmsEntity
+import dev.smsforwarder.ui.main.shownCode
 import dev.smsforwarder.data.SmsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -31,7 +32,7 @@ data class DetailUiState(
     val destinations: List<DestinationEntity> = emptyList(),
 ) {
     val label: StatusLabel?
-        get() = sms?.let { statusLabelOf(it.status, it.origin, it.attempts, it.lastHttpCode) }
+        get() = sms?.let { statusLabelOf(it.status, it.origin, it.attempts, shownCode(it, deliveries)) }
 }
 
 class DetailViewModel(

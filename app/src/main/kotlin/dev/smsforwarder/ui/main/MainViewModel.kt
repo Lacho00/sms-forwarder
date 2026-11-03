@@ -74,13 +74,22 @@ internal fun DeliveryEntity.toChip() = DeliveryChipUi(
     configError = status == DeliveryStatus.ERROR && isConfigError(lastError),
 )
 
+/**
+ * The code beside an error status comes from a delivery that failed: the SMS keeps the latest attempt's code, which
+ * can be another destination's 200. Without deliveries to look at, the stored code stays.
+ */
+internal fun shownCode(sms: SmsEntity, deliveries: List<DeliveryEntity>): Int? {
+    if (sms.status != SmsStatus.ERROR || deliveries.isEmpty()) return sms.lastHttpCode
+    return deliveries.firstOrNull { it.status == DeliveryStatus.ERROR && it.lastHttpCode != null }?.lastHttpCode
+}
+
 internal fun SmsEntity.toRowUi(deliveries: List<DeliveryEntity> = emptyList()) = RowUi(
     id = id,
     sender = sender,
     subId = subId,
     receivedAt = receivedAt,
     preview = body.replace(Regex("\\s+"), " ").trim().take(PREVIEW_LENGTH),
-    label = statusLabelOf(status, origin, attempts, lastHttpCode),
+    label = statusLabelOf(status, origin, attempts, shownCode(this, deliveries)),
     deliveries = deliveries.map { it.toChip() },
 )
 
