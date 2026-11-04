@@ -15,6 +15,8 @@ import dev.smsforwarder.data.ImportResult
 import dev.smsforwarder.data.TransientSecretException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +44,7 @@ sealed interface TransferMessage {
     data object WriteFailed : TransferMessage
     data object SecretsUnavailable : TransferMessage
     data object ExportInterrupted : TransferMessage
+    data object PickerUnavailable : TransferMessage
 }
 
 /**
@@ -62,6 +65,7 @@ class TransferViewModel(
     private var exportText: String? = null
     private var exportWithSecrets = false
     private var pending: ConfigFile? = null
+    private var writing = false
 
     private val sc get() = scope ?: viewModelScope
 
@@ -99,7 +103,15 @@ class TransferViewModel(
         if (s is TransferUi.PickExportFile || s is TransferUi.PickImportFile) _state.value = TransferUi.Waiting
     }
 
+    /** The system has no app to pick a file: drop any exported text and say so. */
+    fun pickerUnavailable() {
+        exportText = null
+        pending = null
+        _state.value = TransferUi.Done(TransferMessage.PickerUnavailable)
+    }
+
     fun onExportFile(uri: Uri?) {
+        if (writing) return
         val text = exportText
         val withSecrets = exportWithSecrets
         exportText = null
@@ -108,7 +120,9 @@ class TransferViewModel(
             return
         }
         _state.value = TransferUi.Waiting
+        writing = true
         sc.launch {
+          try {
             if (text == null) {
                 // The process died while the picker was open: the file exists but there is nothing to write.
                 deleteQuietly(uri)
@@ -118,6 +132,8 @@ class TransferViewModel(
             try {
                 io.write(uri, text)
             } catch (c: CancellationException) {
+                // Cancelled mid-write (the owner is gone): the file is partial.
+                withContext(NonCancellable) { deleteQuietly(uri) }
                 throw c
             } catch (e: Exception) {
                 deleteQuietly(uri)
@@ -132,6 +148,9 @@ class TransferViewModel(
                 // The log is best effort; the file is already written.
             }
             _state.value = TransferUi.Done(TransferMessage.Exported)
+          } finally {
+            writing = false
+          }
         }
     }
 

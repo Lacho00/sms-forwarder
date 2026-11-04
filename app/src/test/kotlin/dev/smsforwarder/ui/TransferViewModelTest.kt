@@ -42,8 +42,10 @@ class FakeDocumentIo : DocumentIo {
     var failWrite = false
     var failDelete = false
     val deleted = mutableListOf<Uri>()
+    var gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
 
     override suspend fun write(uri: Uri, text: String) {
+        gate?.await()
         if (failWrite) throw IOException("write failed")
         writes += uri to text
     }
@@ -106,6 +108,46 @@ class TransferViewModelTest {
         assertEquals(uri, io.writes[0].first)
         assertFalse(io.writes[0].second.contains("h.example"))
         assertFalse(io.writes[0].second.contains("TOKEN"))
+    }
+
+    @Test fun pickerUnavailableDropsExportText() = runBlocking {
+        seed()
+        val vm = vm()
+        vm.startExport()
+        vm.confirmExport()
+        vm.await { it is TransferUi.PickExportFile }
+        vm.pickerLaunched()
+        vm.pickerUnavailable()
+        assertEquals(TransferUi.Done(TransferMessage.PickerUnavailable), vm.state.value)
+        // The text is gone: a late file would only be treated as interrupted.
+        vm.onExportFile(uri)
+        assertEquals(TransferUi.Done(TransferMessage.ExportInterrupted), vm.await { it is TransferUi.Done && it.message == TransferMessage.ExportInterrupted })
+        assertTrue(io.writes.isEmpty())
+    }
+
+    @Test fun importPickerUnavailable() = runBlocking {
+        val vm = vm()
+        vm.startImport()
+        vm.pickerLaunched()
+        vm.pickerUnavailable()
+        assertEquals(TransferUi.Done(TransferMessage.PickerUnavailable), vm.state.value)
+    }
+
+    @Test fun secondFileWhileWritingIsIgnoredAndCancelDeletes() = runBlocking {
+        seed()
+        io.gate = kotlinx.coroutines.CompletableDeferred()
+        val own = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Unconfined)
+        val vm = TransferViewModel(transfer, io, "2.0.0", { LocalDate.of(2026, 11, 3) }, own)
+        vm.startExport()
+        vm.confirmExport()
+        vm.await { it is TransferUi.PickExportFile }
+        vm.pickerLaunched()
+        vm.onExportFile(uri)
+        vm.onExportFile(Uri.parse("content://test/doc/other"))
+        own.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+        kotlinx.coroutines.yield()
+        assertEquals(listOf(uri), io.deleted)
+        assertTrue(io.writes.isEmpty())
     }
 
     @Test fun cancelPickerWritesNothing() = runBlocking {

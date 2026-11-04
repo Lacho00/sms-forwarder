@@ -8,6 +8,8 @@ import dev.smsforwarder.diag.DiagnosticsCollector
 import dev.smsforwarder.ui.DocumentIo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +39,7 @@ class AboutViewModel(
     val state: StateFlow<AboutState> = _state.asStateFlow()
 
     private var report: String? = null
+    private var writing = false
 
     private val sc get() = scope ?: viewModelScope
 
@@ -60,7 +63,14 @@ class AboutViewModel(
         if (_state.value.pickFile != null) _state.value = _state.value.copy(pickFile = null)
     }
 
+    /** The system has no app to pick a file: drop the report and say it failed. */
+    fun pickerUnavailable() {
+        report = null
+        _state.value = AboutState(message = DiagnosticMessage.FAILED)
+    }
+
     fun onFile(uri: Uri?) {
+        if (writing) return
         val text = report
         report = null
         if (uri == null) {
@@ -68,17 +78,30 @@ class AboutViewModel(
             return
         }
         _state.value = AboutState(busy = true)
+        writing = true
         sc.launch {
+            try {
+                write(uri, text)
+            } finally {
+                writing = false
+            }
+        }
+    }
+
+    private suspend fun write(uri: Uri, text: String?) {
+        run {
             if (text == null) {
                 // The process died while the picker was open: the file exists but there is nothing to write.
                 deleteQuietly(uri)
                 _state.value = AboutState(message = DiagnosticMessage.INTERRUPTED)
-                return@launch
+                return
             }
             try {
                 io.write(uri, text)
                 _state.value = AboutState(message = DiagnosticMessage.SAVED)
             } catch (c: CancellationException) {
+                // Cancelled mid-write (the screen's owner is gone): the file is partial.
+                withContext(NonCancellable) { deleteQuietly(uri) }
                 throw c
             } catch (e: Exception) {
                 deleteQuietly(uri)

@@ -168,12 +168,20 @@ fun AppNavHost(
     LaunchedEffect(transferState) {
         when (val s = transferState) {
             is TransferUi.PickExportFile -> {
-                exportLauncher.launch(s.fileName)
-                transferViewModel.pickerLaunched()
+                try {
+                    exportLauncher.launch(s.fileName)
+                    transferViewModel.pickerLaunched()
+                } catch (_: ActivityNotFoundException) {
+                    transferViewModel.pickerUnavailable()
+                }
             }
             TransferUi.PickImportFile -> {
-                importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream"))
-                transferViewModel.pickerLaunched()
+                try {
+                    importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream"))
+                    transferViewModel.pickerLaunched()
+                } catch (_: ActivityNotFoundException) {
+                    transferViewModel.pickerUnavailable()
+                }
             }
             else -> Unit
         }
@@ -185,8 +193,12 @@ fun AppNavHost(
     }
     LaunchedEffect(aboutState.pickFile) {
         aboutState.pickFile?.let {
-            diagnosticLauncher.launch(it)
-            aboutViewModel.pickerLaunched()
+            try {
+                diagnosticLauncher.launch(it)
+                aboutViewModel.pickerLaunched()
+            } catch (_: ActivityNotFoundException) {
+                aboutViewModel.pickerUnavailable()
+            }
         }
     }
 

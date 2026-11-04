@@ -1,6 +1,7 @@
 package dev.smsforwarder.ui
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -14,6 +15,7 @@ import dev.smsforwarder.ui.about.REPO_URL
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -77,6 +79,9 @@ class AboutScreenTest {
         println("MEASURE about back after w=${bounds.first}dp h=${bounds.second}dp")
         assertEquals(40f, bounds.first, 0.5f)
         assertEquals(40f, bounds.second, 0.5f)
+        val touch = compose.onNodeWithContentDescription(context.getString(R.string.back)).fetchSemanticsNode().touchBoundsInRoot
+        assertTrue(touch.width / compose.density.density >= 48f)
+        assertTrue(touch.height / compose.density.density >= 48f)
     }
 
     @Test fun iconIsShownAt108dp() {
@@ -98,6 +103,10 @@ class AboutScreenTest {
 
     @Test fun savedMessageShown() {
         show(state = AboutState(message = DiagnosticMessage.SAVED))
-        compose.onNodeWithText(context.getString(R.string.about_diagnostic_saved)).performScrollTo().assertExists()
+        compose.onNodeWithText(context.getString(R.string.about_diagnostic_saved)).performScrollTo()
+            .assert(androidx.compose.ui.test.SemanticsMatcher.expectValue(
+                androidx.compose.ui.semantics.SemanticsProperties.LiveRegion,
+                androidx.compose.ui.semantics.LiveRegionMode.Polite,
+            ))
     }
 }

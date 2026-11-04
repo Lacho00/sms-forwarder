@@ -18,6 +18,7 @@ import dev.smsforwarder.AppGraph
 import dev.smsforwarder.SmsForwarderApp
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.health.MiuiIntents
+import dev.smsforwarder.ui.about.AboutViewModel
 import dev.smsforwarder.ui.destinations.DestinationEditorViewModel
 import dev.smsforwarder.ui.destinations.DestinationsViewModel
 import dev.smsforwarder.ui.destinations.templateLabelRes
@@ -31,7 +32,6 @@ import dev.smsforwarder.ui.rules.RulesViewModel
 import dev.smsforwarder.ui.settings.SettingsViewModel
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
-import dev.smsforwarder.ui.about.AboutViewModel
 import dev.smsforwarder.ui.transfer.TransferViewModel
 import dev.smsforwarder.work.WorkScheduler
 
