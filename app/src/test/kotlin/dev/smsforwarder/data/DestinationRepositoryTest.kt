@@ -256,4 +256,20 @@ class DestinationRepositoryTest {
         assertEquals(DeliveryStatus.QUEUED, sms.deliveriesOf(a).single().status)
         assertEquals(DeliveryStatus.QUEUED, sms.deliveriesOf(b).single().status)
     }
+
+    @Test fun completingCredentialsKicksQueued() = runBlocking {
+        val id = repo.create(custom("One"))
+        repos.secrets.map.remove(id)
+        val smsId = ingest(id)
+        val queued = repo.update(id, custom("One"))
+        assertEquals(listOf(smsId), queued)
+    }
+
+    @Test fun observeLiveWithConfiguredFlagsMissingSecrets() = runBlocking {
+        val a = repo.create(custom("A"))
+        val b = repo.create(custom("B"))
+        repos.secrets.map.remove(b)
+        val flags = repo.observeLiveWithConfigured().first().associate { it.entity.id to it.configured }
+        assertEquals(mapOf(a to true, b to false), flags)
+    }
 }

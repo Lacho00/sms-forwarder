@@ -6,6 +6,7 @@ import androidx.room.Room
 import dev.smsforwarder.core.NotifyKind
 import dev.smsforwarder.core.SystemClock
 import dev.smsforwarder.data.AppDatabase
+import dev.smsforwarder.data.ConfigTransfer
 import dev.smsforwarder.data.DestinationRepository
 import dev.smsforwarder.data.DestinationSecretStore
 import dev.smsforwarder.data.DestinationSecrets
@@ -59,6 +60,7 @@ class AppGraph(context: Context) {
     val destinationRepository by lazy {
         DestinationRepository(db, secretsProxy, clock, context.getString(R.string.destination_primary_name), smsRepository, notifier)
     }
+    val configTransfer by lazy { ConfigTransfer(db, destinationRepository, ruleRepository, secretsProxy) }
     val ruleRepository by lazy { RuleRepository(db, destinationRepository, clock) }
 
     /** Lazy so it picks up the stores a test may have swapped in. */

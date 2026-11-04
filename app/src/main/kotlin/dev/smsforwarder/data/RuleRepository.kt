@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import dev.smsforwarder.core.BodyMode
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.RuleDraft
+import dev.smsforwarder.core.RuleError
 import dev.smsforwarder.core.RuleSpec
 import dev.smsforwarder.core.SenderFilter
 import dev.smsforwarder.core.SenderMode
@@ -81,6 +82,20 @@ class RuleRepository(
     suspend fun create(draft: RuleDraft): Long {
         val r = trimmed(draft)
         require(validateRule(r).isEmpty()) { "invalid rule" }
+        return db.withTransaction {
+            val id = dao.insert(entity(0, r, clock.now()))
+            dao.insertLinks(liveLinks(id, r))
+            id
+        }
+    }
+
+    /**
+     * Import only: like [create] but a rule may end up with no live destination (it is kept inactive).
+     * Meant to run inside the caller's transaction.
+     */
+    internal suspend fun createImported(draft: RuleDraft): Long {
+        val r = trimmed(draft)
+        require((validateRule(r) - RuleError.NO_DESTINATIONS).isEmpty()) { "invalid rule" }
         return db.withTransaction {
             val id = dao.insert(entity(0, r, clock.now()))
             dao.insertLinks(liveLinks(id, r))

@@ -63,6 +63,9 @@ interface RuleDao {
     @Query("SELECT senderPattern FROM rule WHERE senderMode = 'EXACT' AND bodyMode IS NULL")
     suspend fun exactSenderOnlyPatterns(): List<String>
 
+    @Query("SELECT name FROM rule")
+    suspend fun allNames(): List<String>
+
     @Query("DELETE FROM rule_destination WHERE destinationId = :destinationId")
     suspend fun deleteLinksTo(destinationId: Long)
 

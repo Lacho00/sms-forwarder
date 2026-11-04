@@ -11,12 +11,16 @@ import dev.smsforwarder.core.validateDestination
 import dev.smsforwarder.notify.Notifier
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 
 /** A form's view of a stored destination: URL and secret header values never leave the store. */
 data class EditableDestination(val draft: DestinationDraft, val urlStored: Boolean)
+
+/** A live destination and whether it has stored secrets (a URL). */
+data class DestinationWithConfig(val entity: DestinationEntity, val configured: Boolean)
 
 /**
  * Destinations and their secrets. The "primary" is the live standard-JSON destination with the lowest id; the
@@ -35,6 +39,43 @@ class DestinationRepository(
     private val deliveries = db.deliveryDao()
 
     fun observeLive(): Flow<List<DestinationEntity>> = dao.observeLive()
+
+    /** Like [observeLive], flagging the destinations with no stored secrets. A Keystore hiccup counts as configured. */
+    fun observeLiveWithConfigured(): Flow<List<DestinationWithConfig>> = dao.observeLive().map { list ->
+        list.map { e ->
+            val configured = try {
+                secretStore.get(e.id) != null
+            } catch (_: TransientSecretException) {
+                true
+            }
+            DestinationWithConfig(e, configured)
+        }
+    }
+
+    /** Names of the live destinations. */
+    suspend fun liveNames(): List<String> = dao.liveNames()
+
+    /**
+     * Import only: inserts the row of [d] without touching the secret store, for the caller's transaction.
+     * [d] must already be valid.
+     */
+    internal suspend fun insertRow(d: DestinationDraft): Long = dao.insert(
+        DestinationEntity(
+            name = d.name.trim(),
+            enabled = d.enabled,
+            template = d.template,
+            method = d.method,
+            bodyTemplate = d.body.ifBlank { null },
+            bodyIsJson = d.bodyIsJson,
+            publicHeaders = publicHeadersJson(d.headers),
+            successPolicy = d.successPolicy,
+            createdAt = clock.now(),
+        ),
+    )
+
+    /** Secrets of a draft with a URL; null for one without. */
+    internal fun secretsOf(d: DestinationDraft): DestinationSecrets? =
+        d.url?.let { DestinationSecrets(it.trim(), secretHeaders(d.headers, emptyList())) }
 
     /** QUEUED and ERROR delivery counts per destination (visible SMS only); destinations with none are absent. */
     fun observeCounts(): Flow<List<DestinationCounts>> = deliveries.observeCounts()
@@ -104,7 +145,7 @@ class DestinationRepository(
             )
             val url = d.url?.trim() ?: stored?.url ?: throw IllegalArgumentException("invalid destination")
             secretStore.set(id, DestinationSecrets(url, secretHeaders(d.headers, stored?.headers.orEmpty())))
-            val resumed = if (!entity.enabled && d.enabled) deliveries.smsIdsQueuedFor(id) else emptyList()
+            val resumed = if ((!entity.enabled && d.enabled) || stored == null) deliveries.smsIdsQueuedFor(id) else emptyList()
             // Saving a paused destination (or pausing it) leaves its errors alone: nothing would send them and
             // they would read as "queued". They go back to the queue when it is active again.
             val fixed = if (d.enabled) sms.requeueAuthErrors(id) + sms.requeueConfigErrors(id) else emptyList()

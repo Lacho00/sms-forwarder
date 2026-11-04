@@ -31,4 +31,8 @@ interface DestinationDao {
     /** Destinations not deleted, paused ones included, by id. */
     @Query("SELECT * FROM destination WHERE deletedAt IS NULL ORDER BY id ASC")
     fun observeLive(): Flow<List<DestinationEntity>>
+
+    /** Names of the destinations not deleted, for import renaming. */
+    @Query("SELECT name FROM destination WHERE deletedAt IS NULL")
+    suspend fun liveNames(): List<String>
 }
