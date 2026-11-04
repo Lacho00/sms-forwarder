@@ -136,7 +136,7 @@ class ConfigFileTest {
         assertEquals(ConfigError.BAD_VALUE, invalid(wrap(dests = "\"x\"")).error)
         assertEquals(ConfigError.BAD_VALUE, invalid(wrap(dests = "[${destJson(enabled = "\"yes\"")}]")).error)
         assertEquals(ConfigError.NOT_JSON, invalid("").error)
-        assertIs<ConfigParse.Ok>(ConfigCodec.decode("﻿" + wrap()))
+        assertIs<ConfigParse.Ok>(ConfigCodec.decode("\uFEFF" + wrap()))
     }
 
     private fun named(vararg names: String) =
@@ -187,5 +187,87 @@ class ConfigFileTest {
         assertFalse(text.contains("https://h.example"))
         assertFalse(text.contains("TOKEN"))
         assertFalse(text.contains("BOT"))
+    }
+
+    @Test
+    fun ruleAndHeaderLimits() {
+        val rules = (1..501).joinToString(",", "[", "]") { ruleJson(name = "R$it") }
+        assertEquals(ConfigError.TOO_MANY, invalid(wrap(dests = "[${destJson()}]", rules = rules)).error)
+        val headers = (1..51).joinToString(",", "[", "]") { "{\"name\":\"H$it\",\"value\":\"v\",\"secret\":false}" }
+        val r = invalid(wrap(dests = "[${destJson(headers = headers)}]"))
+        assertEquals(ConfigError.TOO_MANY, r.error)
+        assertEquals("Main", r.item)
+    }
+
+    @Test
+    fun byteSizeBranch() {
+        assertEquals(ConfigError.TOO_LARGE, invalid("\u00e9".repeat(600_000)).error)
+    }
+
+    @Test
+    fun duplicateKeysInRuleCollapse() {
+        val ok = assertIs<ConfigParse.Ok>(
+            ConfigCodec.decode(wrap(dests = "[${destJson()}]", rules = "[${ruleJson(dests = "[\"d1\",\"d1\"]")}]")),
+        )
+        assertEquals(listOf("d1"), planImport(ok.file, emptyList(), emptyList()).rules.single().destinationKeys)
+        assertEquals(listOf("d1"), ok.file.rules.single().destinationKeys)
+    }
+
+    @Test
+    fun hugeVersionIsNewer() {
+        assertEquals(
+            ConfigError.NEWER_VERSION,
+            invalid(wrap().replace("\"version\":1", "\"version\":99999999999999999999999")).error,
+        )
+    }
+
+    @Test
+    fun bomEscape() {
+        assertIs<ConfigParse.Ok>(ConfigCodec.decode("\uFEFF" + wrap()))
+    }
+
+    @Test
+    fun rulesHidePatternsInToString() {
+        val r = RuleDraft("N", true, SenderMode.EXACT, "SECRETSENDER", BodyMode.CONTAINS, "SECRETBODY", SimMatch.ANY, emptySet())
+        val f = ConfigFile(emptyList(), listOf(ConfigRule(r, emptyList())), true)
+        val plan = planImport(f, emptyList(), emptyList())
+        for (t in listOf(f.rules.single().toString(), plan.rules.single().toString(), plan.toString(), f.toString())) {
+            assertFalse(t.contains("SECRETSENDER"))
+            assertFalse(t.contains("SECRETBODY"))
+        }
+    }
+
+    @Test
+    fun uniqueNameTrims() {
+        assertEquals("Main", uniqueName("Main ", emptySet()))
+        assertEquals("Main", planImport(named("Main "), emptyList(), emptyList()).destinations.single().draft.name)
+    }
+
+    @Test
+    fun encodeIsDeterministic() {
+        assertEquals(ConfigCodec.encode(full(), "2.0.0"), ConfigCodec.encode(full(), "2.0.0"))
+    }
+
+    @Test
+    fun unknownFieldsInItemsIgnored() {
+        val d = destJson().replace("{\"key\"", "{\"extra\":1,\"key\"")
+        val r = ruleJson().replace("{\"name\"", "{\"extra\":[1],\"name\"")
+        assertIs<ConfigParse.Ok>(ConfigCodec.decode(wrap(dests = "[$d]", rules = "[$r]")))
+    }
+
+    @Test
+    fun takenRuleNameRenamed() {
+        val f = ConfigFile(emptyList(), listOf(ConfigRule(rule("Alpha"), emptyList())), true)
+        assertEquals("Alpha (2)", planImport(f, emptyList(), listOf("alpha")).rules.single().draft.name)
+    }
+
+    @Test
+    fun destinationAndPlanToStringHideSecrets() {
+        val c = ConfigDestination("d1", dest("Main", url = "https://h.example/TOKENURL", headers = listOf(HeaderDraft("A", "HEADERVAL", true))))
+        val plan = planImport(ConfigFile(listOf(c), emptyList(), true), emptyList(), emptyList())
+        for (t in listOf(c.toString(), plan.toString(), plan.destinations.single().toString())) {
+            assertFalse(t.contains("TOKENURL"))
+            assertFalse(t.contains("HEADERVAL"))
+        }
     }
 }

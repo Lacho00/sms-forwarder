@@ -18,10 +18,15 @@ const val CONFIG_MAX_RULES = 500
 const val CONFIG_MAX_HEADERS = 50
 
 /** `draft.url == null` means no credentials; a secret header with `value == null` has no value. */
-data class ConfigDestination(val key: String, val draft: DestinationDraft)
+data class ConfigDestination(val key: String, val draft: DestinationDraft) {
+    override fun toString(): String = "ConfigDestination(key=$key, draft=$draft)"
+}
 
 /** `draft.destinationIds` is empty: the links are [destinationKeys]. */
-data class ConfigRule(val draft: RuleDraft, val destinationKeys: List<String>)
+data class ConfigRule(val draft: RuleDraft, val destinationKeys: List<String>) {
+    override fun toString(): String =
+        "ConfigRule(name=${draft.name}, enabled=${draft.enabled}, destinations=${destinationKeys.size})"
+}
 
 data class ConfigFile(
     val destinations: List<ConfigDestination>,
@@ -113,7 +118,7 @@ object ConfigCodec {
             return ConfigParse.Invalid(ConfigError.TOO_LARGE, null)
         }
         val root = try {
-            Json.parseToJsonElement(text.removePrefix("﻿"))
+            Json.parseToJsonElement(text.removePrefix("\uFEFF"))
         } catch (_: Exception) {
             return ConfigParse.Invalid(ConfigError.NOT_JSON, null)
         } catch (_: StackOverflowError) {
@@ -129,10 +134,10 @@ object ConfigCodec {
     private fun read(root: JsonElement): ConfigFile {
         val obj = root as? JsonObject ?: throw Bad(ConfigError.WRONG_FORMAT)
         if (str(obj["format"]) != CONFIG_FORMAT) throw Bad(ConfigError.WRONG_FORMAT)
-        val version = (obj["version"] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toIntOrNull()
+        val version = (obj["version"] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toBigIntegerOrNull()
             ?: throw Bad(ConfigError.BAD_VALUE)
-        if (version > CONFIG_VERSION) throw Bad(ConfigError.NEWER_VERSION)
-        if (version < 1) throw Bad(ConfigError.BAD_VALUE)
+        if (version > CONFIG_VERSION.toBigInteger()) throw Bad(ConfigError.NEWER_VERSION)
+        if (version < java.math.BigInteger.ONE) throw Bad(ConfigError.BAD_VALUE)
 
         val destArray = array(obj["destinations"])
         val ruleArray = array(obj["rules"])
@@ -195,7 +200,7 @@ object ConfigCodec {
         val o = e as? JsonObject ?: throw Bad(ConfigError.BAD_VALUE)
         val name = str(o["name"])
         try {
-            val keys = array(o["destinations"]).map { req(str(it)) }
+            val keys = array(o["destinations"]).map { req(str(it)) }.distinct()
             val draft = RuleDraft(
                 name = req(name),
                 enabled = bool(o["enabled"]),
@@ -245,13 +250,15 @@ data class PlannedDestination(
     val droppedSecretHeaders: List<String>,
 )
 
-data class PlannedRule(val draft: RuleDraft, val originalName: String, val destinationKeys: List<String>)
+data class PlannedRule(val draft: RuleDraft, val originalName: String, val destinationKeys: List<String>) {
+    override fun toString(): String = "PlannedRule(name=${draft.name}, destinations=${destinationKeys.size})"
+}
 
 data class ImportPlan(val destinations: List<PlannedDestination>, val rules: List<PlannedRule>) {
     /** Pairs of (name in the file, name it will get), destinations first. */
     val renamed: List<Pair<String, String>>
-        get() = destinations.filter { it.originalName != it.draft.name }.map { it.originalName to it.draft.name } +
-            rules.filter { it.originalName != it.draft.name }.map { it.originalName to it.draft.name }
+        get() = destinations.filter { it.originalName.trim() != it.draft.name }.map { it.originalName to it.draft.name } +
+            rules.filter { it.originalName.trim() != it.draft.name }.map { it.originalName to it.draft.name }
 
     /** Final names of the destinations that will be created without a URL. */
     val withoutCredentials: List<String>
@@ -263,7 +270,7 @@ private fun nameKey(name: String) = name.trim().lowercase()
 /** Compares without surrounding spaces and ignoring case; appends " (2)", " (3)"... until free. */
 fun uniqueName(name: String, taken: Set<String>): String {
     val used = taken.mapTo(HashSet()) { nameKey(it) }
-    if (nameKey(name) !in used) return name
+    if (nameKey(name) !in used) return name.trim()
     var n = 2
     while (true) {
         val candidate = "${name.trim()} ($n)"
