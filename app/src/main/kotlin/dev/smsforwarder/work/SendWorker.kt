@@ -105,7 +105,9 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             if (destination == null || destination.deletedAt != null || !destination.enabled) return false
             // No secrets yet (or a transient Keystore failure): keep it queued and back off.
             val secrets = graph.destinationRepository.secrets(destination.id) ?: run {
-                graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.SEND, smsId = sms.id, destinationId = destination.id, code = "no_secrets"))
+                if (graph.noSecretsLogged.add(delivery.id)) {
+                    graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.SEND, smsId = sms.id, destinationId = destination.id, code = "no_secrets"))
+                }
                 return true
             }
             used = destination to secrets
@@ -145,6 +147,7 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         } catch (e: Exception) {
             return true
         }
+        graph.noSecretsLogged.remove(delivery.id)
         logSend(graph, sms.id, delivery, outcome)
         if (outcome is SendOutcome.Rejected) notifyRejected(graph, sms.id, delivery, outcome)
         if (outcome is SendOutcome.Invalid) notifyConfigError(graph, sms.id, delivery)

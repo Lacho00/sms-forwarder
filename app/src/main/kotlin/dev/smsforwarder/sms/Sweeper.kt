@@ -5,9 +5,8 @@ import android.util.Log
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.EngineEvent
 import dev.smsforwarder.core.EngineEventType
-import dev.smsforwarder.diag.EngineLog
-import dev.smsforwarder.core.QueuePolicy
 import dev.smsforwarder.core.IncomingSms
+import dev.smsforwarder.core.QueuePolicy
 import dev.smsforwarder.core.RuleEngine
 import dev.smsforwarder.core.SmsIdentity
 import dev.smsforwarder.core.SmsOrigin
@@ -17,6 +16,7 @@ import dev.smsforwarder.data.RuleRepository
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
+import dev.smsforwarder.diag.EngineLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -52,7 +52,10 @@ class Sweeper(
         val cursor = settings.sweepCursor()
         val from = if (cursor != null) QueuePolicy.sweepFrom(cursor, floor) else floor
 
-        val rows = withContext(Dispatchers.IO) { reader.readSince(from) } ?: return SweepResult(0, true).also { log(EngineEvent(clock.now(), EngineEventType.SWEEP, code = "unreadable", count = 0)) }
+        val rows = withContext(Dispatchers.IO) { reader.readSince(from) } ?: run {
+            log(EngineEvent(clock.now(), EngineEventType.SWEEP, code = "unreadable", count = 0))
+            return SweepResult(0, true)
+        }
         if (rows.isEmpty() && withContext(Dispatchers.IO) { reader.hasAnyRow() } == false) {
             log(EngineEvent(clock.now(), EngineEventType.SWEEP, code = "unreadable", count = 0))
             return SweepResult(0, true)

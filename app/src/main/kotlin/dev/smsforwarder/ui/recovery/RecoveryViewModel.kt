@@ -1,15 +1,14 @@
 package dev.smsforwarder.ui.recovery
 
-import dev.smsforwarder.core.EngineEvent
-import dev.smsforwarder.core.EngineEventType
-import dev.smsforwarder.diag.EngineLog
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import dev.smsforwarder.core.Clock
-import dev.smsforwarder.core.QueuePolicy
+import dev.smsforwarder.core.EngineEvent
+import dev.smsforwarder.core.EngineEventType
 import dev.smsforwarder.core.IncomingSms
+import dev.smsforwarder.core.QueuePolicy
 import dev.smsforwarder.core.RuleEngine
 import dev.smsforwarder.core.SmsIdentity
 import dev.smsforwarder.core.SmsOrigin
@@ -17,6 +16,7 @@ import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.data.IngestResult
 import dev.smsforwarder.data.RuleRepository
 import dev.smsforwarder.data.SmsRepository
+import dev.smsforwarder.diag.EngineLog
 import dev.smsforwarder.sms.InboxReader
 import dev.smsforwarder.sms.SimSlots
 import kotlinx.coroutines.Dispatchers

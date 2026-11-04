@@ -29,7 +29,7 @@ fun EngineEvent.toLine(): String = buildString {
     destinationId?.let { append(" dest=").append(it) }
     ruleId?.let { append(" rule=").append(it) }
     httpCode?.let { append(" http=").append(it) }
-    code?.let { append(" code=").append(it) }
+    safeCode(code)?.let { append(" code=").append(it) }
     count?.let { append(" n=").append(it) }
 }
 

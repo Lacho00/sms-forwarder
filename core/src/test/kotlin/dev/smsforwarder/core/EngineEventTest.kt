@@ -28,4 +28,10 @@ class EngineEventTest {
         assertEquals("other", safeCode("a".repeat(41)))
         assertNull(safeCode(null))
     }
+
+    @Test fun toLineSanitizesCode() {
+        val line = EngineEvent(1L, EngineEventType.SEND, code = "https://h.example x\nfoo=bar").toLine()
+        assertEquals("1 SEND code=other", line)
+        assertEquals("other", parseEngineEvent(line)?.code)
+    }
 }

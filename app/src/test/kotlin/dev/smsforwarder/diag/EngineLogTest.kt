@@ -42,9 +42,20 @@ class EngineLogTest {
 
     @Test fun concurrentAddsKeepAll() = runBlocking {
         val f = File(tmp.root, "e.log")
-        val log = EngineLog(f, capacity = 500)
+        // Small capacity so compaction runs during the concurrent adds.
+        val log = EngineLog(f, capacity = 10)
         (1..100).map { i -> async(kotlinx.coroutines.Dispatchers.Default) { log.add(event(i)) } }.awaitAll()
-        assertEquals(100, f.readLines().size)
-        assertEquals(100, log.recent(500).size)
+        val recent = log.recent(10)
+        assertEquals(10, recent.size)
+        assertEquals(10, recent.map { it.at }.toSet().size)
+        assertEquals(true, f.readLines().size <= 20)
+    }
+
+    @Test fun partialLineThenAddParsesCleanly() = runBlocking {
+        val f = File(tmp.root, "e.log")
+        f.writeText("123 SEND sms=")
+        val log = EngineLog(f, capacity = 5)
+        log.add(event(2))
+        assertEquals(listOf(event(2)), log.recent(10))
     }
 }

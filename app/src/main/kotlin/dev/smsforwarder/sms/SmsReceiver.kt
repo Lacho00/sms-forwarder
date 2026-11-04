@@ -70,7 +70,7 @@ class SmsReceiver : BroadcastReceiver() {
             graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.RULE_TIMEOUT, ruleId = it))
         }
         if (match.destinationIds.isEmpty()) {
-            graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.RECEIVED, code = if (match.timedOutRuleIds.isEmpty()) "no_rule" else "no_destination"))
+            graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.RECEIVED, code = "no_rule"))
             return
         }
 
@@ -82,12 +82,12 @@ class SmsReceiver : BroadcastReceiver() {
             subId = subId,
         )
         val result = graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, match.destinationIds)
+        if (result is IngestResult.Inserted) enqueue(context.applicationContext, result.id)
         val (id, code) = when (result) {
             is IngestResult.Inserted -> result.id to "inserted"
             is IngestResult.AlreadyKnown -> result.id to "known"
             IngestResult.NoDestination -> null to "no_destination"
         }
         graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.RECEIVED, smsId = id, code = code))
-        if (result is IngestResult.Inserted) enqueue(context.applicationContext, result.id)
     }
 }

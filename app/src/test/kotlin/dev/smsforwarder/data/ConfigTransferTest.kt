@@ -214,6 +214,21 @@ class ConfigTransferTest {
         assertEquals("https://h.example/in", repos.secrets.map[live.last().id]!!.url)
     }
 
+    @Test fun failingLogAfterCommitDoesNotFailApplyOrExport() = runBlocking {
+        seed()
+        val file = ok(transfer.export(true, "2.0.0"))
+        val log = EngineLog(java.io.File.createTempFile("engine", ".log"))
+        val throwing = ConfigTransfer(
+            db, repos.destinations, repos.rules, repos.secrets,
+            engineLog = log, clock = Clock { throw IllegalStateException("clock") },
+        )
+        assertEquals(2, throwing.apply(file).destinations + 1)
+        val live = db.destinationDao().observeLive().first()
+        assertEquals(2, live.size)
+        assertEquals("https://h.example/in", repos.secrets.map[live.last().id]!!.url)
+        assertTrue(throwing.export(false, "2.0.0").isNotEmpty())
+    }
+
     @Test fun ruleInsertFailureLeavesNothing() = runBlocking {
         seed()
         val file = ok(transfer.export(true, "2.0.0"))

@@ -118,7 +118,14 @@ class ConfigTransfer(
     }
 
     private suspend fun log(type: EngineEventType, withSecrets: Boolean, destinations: Int) {
-        engineLog?.add(EngineEvent(clock.now(), type, code = if (withSecrets) "with_secrets" else "no_secrets", count = destinations))
+        // Runs after the work is done: only cancellation may propagate.
+        try {
+            engineLog?.add(EngineEvent(clock.now(), type, code = if (withSecrets) "with_secrets" else "no_secrets", count = destinations))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The log is best effort.
+        }
     }
 
     private fun keyOf(id: Long) = "d$id"

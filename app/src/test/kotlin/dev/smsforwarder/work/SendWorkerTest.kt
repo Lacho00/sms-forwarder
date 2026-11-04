@@ -160,6 +160,16 @@ class SendWorkerTest {
         assertEquals(false, raw.contains("test-token"))
     }
 
+    @Test fun noSecretsLoggedOncePerDelivery() = runBlocking {
+        val id = insertSms()
+        graph.destinationSecretStore.remove(1L)
+        run(id)
+        run(id)
+        val events = graph.engineLog.recent(10).filter { it.code == "no_secrets" }
+        assertEquals(1, events.size)
+        assertEquals(1L, events.single().destinationId)
+    }
+
     @Test fun `200MarksSent`() = runBlocking {
         val id = insertSms()
         server.enqueue(MockResponse.Builder().code(200).build())
