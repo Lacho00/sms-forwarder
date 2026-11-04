@@ -41,6 +41,7 @@ class DestinationRepository(
     fun observeLive(): Flow<List<DestinationEntity>> = dao.observeLive()
 
     /** Like [observeLive], flagging the destinations with no stored secrets. A Keystore hiccup counts as configured. */
+    // Any other failure of get() (unrecoverable blob handling aside) is meant to surface as an error of the flow.
     fun observeLiveWithConfigured(): Flow<List<DestinationWithConfig>> = dao.observeLive().map { list ->
         list.map { e ->
             val configured = try {
@@ -56,10 +57,12 @@ class DestinationRepository(
     suspend fun liveNames(): List<String> = dao.liveNames()
 
     /**
-     * Import only: inserts the row of [d] without touching the secret store, for the caller's transaction.
-     * [d] must already be valid.
+     * Import only: inserts the row of [d] for the caller's transaction and clears any stale secrets stored under the
+     * new id (an id can be reused after a rollback). The caller saves the real secrets afterwards.
      */
-    internal suspend fun insertRow(d: DestinationDraft): Long = dao.insert(
+    internal suspend fun insertRow(d: DestinationDraft): Long {
+        require(validateDestination(d, urlStored = d.url == null).isEmpty()) { "invalid destination" }
+        val id = dao.insert(
         DestinationEntity(
             name = d.name.trim(),
             enabled = d.enabled,
@@ -71,7 +74,10 @@ class DestinationRepository(
             successPolicy = d.successPolicy,
             createdAt = clock.now(),
         ),
-    )
+        )
+        secretStore.remove(id)
+        return id
+    }
 
     /** Secrets of a draft with a URL; null for one without. */
     internal fun secretsOf(d: DestinationDraft): DestinationSecrets? =
@@ -97,6 +103,7 @@ class DestinationRepository(
             ),
         )
         try {
+            secretStore.remove(id) // an id reused after a rollback must not inherit old secrets
             secretStore.set(id, DestinationSecrets(d.url.orEmpty().trim(), secretHeaders(d.headers, emptyList())))
         } catch (e: Throwable) {
             // Also when the scope is cancelled: a live row without secrets could become the primary.
@@ -145,7 +152,7 @@ class DestinationRepository(
             )
             val url = d.url?.trim() ?: stored?.url ?: throw IllegalArgumentException("invalid destination")
             secretStore.set(id, DestinationSecrets(url, secretHeaders(d.headers, stored?.headers.orEmpty())))
-            val resumed = if ((!entity.enabled && d.enabled) || stored == null) deliveries.smsIdsQueuedFor(id) else emptyList()
+            val resumed = if (d.enabled && (!entity.enabled || stored == null)) deliveries.smsIdsQueuedFor(id) else emptyList()
             // Saving a paused destination (or pausing it) leaves its errors alone: nothing would send them and
             // they would read as "queued". They go back to the queue when it is active again.
             val fixed = if (d.enabled) sms.requeueAuthErrors(id) + sms.requeueConfigErrors(id) else emptyList()

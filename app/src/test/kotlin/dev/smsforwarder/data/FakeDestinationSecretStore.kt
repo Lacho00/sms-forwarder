@@ -6,6 +6,7 @@ class FakeDestinationSecretStore : DestinationSecretStore {
     var failOnGet = false
     var getFailure: Throwable? = null
     var setCalls = 0
+    var removeFailsAfterSet = false
     var failOnNthSet: Int? = null
 
     override suspend fun get(destinationId: Long): DestinationSecrets? {
@@ -22,6 +23,7 @@ class FakeDestinationSecretStore : DestinationSecretStore {
     }
 
     override suspend fun remove(destinationId: Long) {
+        if (removeFailsAfterSet && setCalls > 0) throw java.security.GeneralSecurityException("remove failed")
         map.remove(destinationId)
     }
 }

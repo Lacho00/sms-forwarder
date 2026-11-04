@@ -90,7 +90,7 @@ class RuleRepository(
     }
 
     /**
-     * Import only: like [create] but a rule may end up with no live destination (it is kept inactive).
+     * Import only: like [create] but a rule may end up with no live destination; it is stored, but matches nothing.
      * Meant to run inside the caller's transaction.
      */
     internal suspend fun createImported(draft: RuleDraft): Long {

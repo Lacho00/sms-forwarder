@@ -57,6 +57,7 @@ class ConfigTransfer(
                 ),
             )
         }
+        val exportedKeys = exported.map { it.key }.toSet()
         val exportedRules = rules.observeAll().first().map { r ->
             ConfigRule(
                 RuleDraft(
@@ -64,7 +65,7 @@ class ConfigTransfer(
                     senderPattern = r.rule.senderPattern, bodyMode = r.rule.bodyMode, bodyPattern = r.rule.bodyPattern,
                     sim = r.rule.sim, destinationIds = emptySet(),
                 ),
-                r.destinations.sortedBy { it.id }.map { keyOf(it.id) },
+                r.destinations.sortedBy { it.id }.map { keyOf(it.id) }.filter { it in exportedKeys },
             )
         }
         val text = ConfigCodec.encode(ConfigFile(exported, exportedRules, includeSecrets), appVersion)
@@ -105,7 +106,13 @@ class ConfigTransfer(
                 ImportResult(plan.destinations.size, plan.rules.size, plan.withoutCredentials.size)
             }.also { log(EngineEventType.IMPORT, file.includesSecrets, it.destinations) }
         } catch (e: Throwable) {
-            withContext(NonCancellable) { inserted.forEach { secretStore.remove(it) } }
+            // Only ids without a row: after a commit (e.g. a cancellation while logging) the secrets are live.
+            withContext(NonCancellable) {
+                for (id in inserted) {
+                    runCatching { if (destinations.get(id) == null) secretStore.remove(id) }
+                        .onFailure { e.addSuppressed(it) }
+                }
+            }
             throw e
         }
     }

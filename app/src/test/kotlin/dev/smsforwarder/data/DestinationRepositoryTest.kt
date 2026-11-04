@@ -272,4 +272,12 @@ class DestinationRepositoryTest {
         val flags = repo.observeLiveWithConfigured().first().associate { it.entity.id to it.configured }
         assertEquals(mapOf(a to true, b to false), flags)
     }
+
+    @Test fun configuredOrPausedUpdateKicksNothing() = runBlocking {
+        val id = repo.create(custom("One"))
+        ingest(id)
+        assertEquals(emptyList<Long>(), repo.update(id, custom("One")))
+        repos.secrets.map.remove(id)
+        assertEquals(emptyList<Long>(), repo.update(id, custom("One").copy(enabled = false)))
+    }
 }

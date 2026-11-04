@@ -11,6 +11,7 @@ import dev.smsforwarder.core.DestinationPresets
 import dev.smsforwarder.core.RuleDraft
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
+import dev.smsforwarder.diag.EngineLog
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -168,5 +169,89 @@ class ConfigTransferTest {
         repos.destinations.create(DestinationPresets.standardJson("A", "https://h.example/a", "T"))
         transfer.apply((preview as ImportPreview.Ready).file)
         assertTrue(db.destinationDao().observeLive().first().any { it.name == "A (2)" })
+    }
+
+    private suspend fun twoWithUrls(): ConfigFile {
+        seed()
+        val file = ok(transfer.export(true, "2.0.0"))
+        return file.copy(
+            destinations = file.destinations + file.destinations.single().let {
+                it.copy(key = "d99", draft = it.draft.copy(name = "Second"))
+            },
+        )
+    }
+
+    @Test fun removeFailureDuringCleanupKeepsOriginalAndSuppresses() = runBlocking {
+        val two = twoWithUrls()
+        repos.secrets.setCalls = 0
+        repos.secrets.failOnNthSet = 2
+        repos.secrets.removeFailsAfterSet = true
+        try {
+            transfer.apply(two)
+            fail("expected failure")
+        } catch (e: java.security.GeneralSecurityException) {
+            assertEquals("set failed", e.message)
+            assertTrue(e.suppressed.any { it.message == "remove failed" })
+        }
+    }
+
+    @Test fun cancelAfterCommitKeepsSecrets() = runBlocking {
+        seed()
+        val file = ok(transfer.export(true, "2.0.0"))
+        val log = EngineLog(java.io.File.createTempFile("engine", ".log"))
+        val cancelling = ConfigTransfer(
+            db, repos.destinations, repos.rules, repos.secrets,
+            engineLog = log, clock = Clock { throw kotlinx.coroutines.CancellationException("after commit") },
+        )
+        try {
+            cancelling.apply(file)
+            fail("expected cancellation")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // expected
+        }
+        val live = db.destinationDao().observeLive().first()
+        assertEquals(2, live.size)
+        assertEquals("https://h.example/in", repos.secrets.map[live.last().id]!!.url)
+    }
+
+    @Test fun ruleInsertFailureLeavesNothing() = runBlocking {
+        seed()
+        val file = ok(transfer.export(true, "2.0.0"))
+        val bad = file.copy(
+            rules = file.rules.map { it.copy(draft = it.draft.copy(senderMode = SenderMode.REGEX, senderPattern = "(")) },
+        )
+        val before = counts()
+        try {
+            transfer.apply(bad)
+            fail("expected failure")
+        } catch (e: IllegalArgumentException) {
+            // expected
+        }
+        assertEquals(before, counts())
+    }
+
+    @Test fun reusedIdAfterRollbackHasNoSecrets() = runBlocking {
+        repos.secrets.map[1L] = DestinationSecrets("https://stale.example", listOf("X-Key" to "stale"))
+        val file = ok(
+            ConfigCodec.encode(
+                ConfigFile(
+                    listOf(dev.smsforwarder.core.ConfigDestination("d1", DestinationPresets.ntfy("N", "https://h.example/t").copy(url = null))),
+                    emptyList(),
+                    false,
+                ),
+                "2.0.0",
+            ),
+        )
+        transfer.apply(file)
+        val id = db.destinationDao().observeLive().first().single().id
+        assertNull(repos.secrets.map[id])
+    }
+
+    @Test fun inactiveRuleWithUnconfiguredDestinationIsNotInUse() = runBlocking {
+        val d = repos.destinations.create(DestinationPresets.ntfy("N", "https://h.example/t"))
+        val r = repos.rules.create(rule("Off", d))
+        repos.rules.setEnabled(r, false)
+        repos.secrets.map.remove(d)
+        assertTrue(repos.destinations.unconfiguredInUse().isEmpty())
     }
 }
