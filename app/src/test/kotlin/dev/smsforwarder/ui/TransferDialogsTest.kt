@@ -105,6 +105,11 @@ class TransferDialogsTest {
             .assertExists()
     }
 
+    @Test fun waitingSpinnerHasAnAccessibleLabel() {
+        show(TransferUi.Waiting)
+        compose.onNode(androidx.compose.ui.test.hasContentDescription(app.getString(R.string.transfer_working))).assertExists()
+    }
+
     @Test fun importedResultShowsPluralsAndMissingCredentials() {
         show(
             TransferUi.Done(

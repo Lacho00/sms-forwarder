@@ -361,6 +361,7 @@
         <item quantity="other">%d without credentials</item>
     </plurals>
     <string name="transfer_secrets_not_saved">Secrets could not be saved, nothing was imported</string>
+    <string name="transfer_working">Working…</string>
     <string name="transfer_read_failed">The file could not be read.</string>
     <string name="transfer_write_failed">The file could not be written.</string>
     <string name="transfer_secrets_unavailable">The saved secrets could not be read. Try again.</string>

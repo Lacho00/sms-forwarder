@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 import dev.smsforwarder.core.ConfigError
@@ -39,8 +41,8 @@ internal fun configErrorRes(error: ConfigError): Int = when (error) {
 
 internal fun messageRes(message: TransferMessage): Int = when (message) {
     TransferMessage.Exported -> R.string.transfer_exported
-    // Not a string: the result dialog builds the imported lines from plurals.
-    is TransferMessage.Imported -> R.plurals.transfer_imported_destinations
+    // The result dialog builds the imported lines from plurals and never asks for this.
+    is TransferMessage.Imported -> error("Imported uses plurals")
     TransferMessage.ReadFailed -> R.string.transfer_read_failed
     TransferMessage.WriteFailed -> R.string.transfer_write_failed
     TransferMessage.SecretsUnavailable -> R.string.transfer_secrets_unavailable
@@ -129,7 +131,10 @@ fun TransferDialogs(
         )
         TransferUi.Waiting -> AlertDialog(
             onDismissRequest = {},
-            text = { CircularProgressIndicator() },
+            text = {
+                val working = stringResource(R.string.transfer_working)
+                CircularProgressIndicator(Modifier.semantics { contentDescription = working })
+            },
             confirmButton = {},
         )
         else -> Unit

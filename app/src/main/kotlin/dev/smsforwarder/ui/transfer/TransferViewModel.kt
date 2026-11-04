@@ -17,7 +17,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -59,24 +62,21 @@ class TransferViewModel(
     private val appVersion: String,
     private val today: () -> LocalDate,
     private val scope: CoroutineScope? = null,
-    /** True while the 1.x import failed (safe mode): export and import stay off. */
-    private val importFailed: suspend () -> Boolean = { false },
+    /** True while the 1.x import failed (safe mode): export and import stay off. Observed, so it follows the flag. */
+    private val importFailed: Flow<Boolean> = flowOf(false),
 ) : ViewModel() {
     private val _state = MutableStateFlow<TransferUi>(TransferUi.Idle)
     val state: StateFlow<TransferUi> = _state.asStateFlow()
 
-    private val _blocked = MutableStateFlow(false)
+    // Unknown counts as blocked until the first value arrives.
+    private val _blocked = MutableStateFlow(true)
     val blocked: StateFlow<Boolean> = _blocked.asStateFlow()
 
     init {
         sc.launch {
-            _blocked.value = try {
-                importFailed()
-            } catch (c: CancellationException) {
-                throw c
-            } catch (e: Exception) {
-                false
-            }
+            importFailed
+                .catch { e -> if (e is CancellationException) throw e else emit(true) }
+                .collect { _blocked.value = it }
         }
     }
 
@@ -234,6 +234,9 @@ class TransferViewModel(
                 _state.value = TransferUi.Done(TransferMessage.SecretsNotSaved)
             } catch (e: java.security.ProviderException) {
                 _state.value = TransferUi.Done(TransferMessage.SecretsNotSaved)
+            } catch (e: java.io.IOException) {
+                // DataStore could not write the secrets; the apply rolls back.
+                _state.value = TransferUi.Done(TransferMessage.SecretsNotSaved)
             } catch (e: Exception) {
                 _state.value = TransferUi.Done(TransferMessage.WriteFailed)
             }
@@ -255,7 +258,7 @@ class TransferViewModel(
         private val transfer: ConfigTransfer,
         private val io: DocumentIo,
         private val appVersion: String,
-        private val importFailed: suspend () -> Boolean = { false },
+        private val importFailed: Flow<Boolean> = flowOf(false),
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =

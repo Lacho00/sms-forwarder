@@ -203,7 +203,11 @@ class KeystoreDestinationSecretStore internal constructor(
         }
     }
 
-    /** Key presence only: no Keystore call, so it is cheap and cannot fail on a Keystore hiccup. */
+    /**
+     * Key presence only: no Keystore call, so it is cheap and cannot fail on a Keystore hiccup.
+     * Trade-off: an undecryptable blob or an invalidated key still counts as configured; this avoids
+     * decrypting on Main, and the send will surface the error.
+     */
     override suspend fun hasSecrets(destinationId: Long): Boolean {
         val prefs = store.data.first()
         return prefs[ivKey(destinationId)] != null && prefs[blobKey(destinationId)] != null

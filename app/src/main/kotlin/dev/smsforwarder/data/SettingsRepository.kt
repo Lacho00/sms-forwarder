@@ -19,6 +19,7 @@ import dev.smsforwarder.notify.Notifier
 import dev.smsforwarder.ui.Localized
 import dev.smsforwarder.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.File
@@ -52,6 +53,9 @@ class SettingsRepository(
     suspend fun isImportDone(): Boolean = store.data.first()[IMPORT_DONE_KEY] == true
 
     suspend fun isImportFailed(): Boolean = store.data.first()[IMPORT_FAILED_KEY] == true
+
+    /** The safe-mode flag as it changes: it turns false once [markImportDone] runs. */
+    val importFailed: Flow<Boolean> = store.data.map { it[IMPORT_FAILED_KEY] == true }.distinctUntilChanged()
 
     /** Marks the import finished and clears an earlier failure in one write. */
     suspend fun markImportDone() {

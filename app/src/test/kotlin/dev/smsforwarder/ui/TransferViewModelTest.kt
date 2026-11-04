@@ -151,11 +151,44 @@ class TransferViewModelTest {
     }
 
     @Test fun blockedWhileImportFailed() = runBlocking {
-        val blockedVm = TransferViewModel(transfer, io, "2.0.0", { LocalDate.of(2026, 11, 3) }, scope, importFailed = { true })
+        val blockedVm = TransferViewModel(transfer, io, "2.0.0", { LocalDate.of(2026, 11, 3) }, scope, importFailed = kotlinx.coroutines.flow.flowOf(true))
         withTimeout(5_000) { blockedVm.blocked.first { it } }
         blockedVm.startExport()
         blockedVm.startImport()
         assertEquals(TransferUi.Idle, blockedVm.state.value)
+    }
+
+    @Test fun blockedFollowsTheSafeModeFlag() = runBlocking {
+        val flag = kotlinx.coroutines.flow.MutableStateFlow(true)
+        val v = TransferViewModel(transfer, io, "2.0.0", { LocalDate.of(2026, 11, 3) }, scope, importFailed = flag)
+        assertTrue(v.blocked.value)
+        v.startExport()
+        assertEquals(TransferUi.Idle, v.state.value)
+        flag.value = false
+        withTimeout(5_000) { v.blocked.first { !it } }
+        v.startExport()
+        assertEquals(TransferUi.AskExport(false), v.state.value)
+    }
+
+    @Test fun ioFailureWhileSavingSecretsIsSecretsNotSaved() = runBlocking {
+        seed()
+        val v = vm()
+        v.startExport()
+        v.setIncludeSecrets(true)
+        v.confirmExport()
+        v.await { it is TransferUi.PickExportFile }
+        v.pickerLaunched()
+        v.onExportFile(uri)
+        v.await { it is TransferUi.Done }
+        io.content = io.writes.single().second
+        v.dismiss()
+        v.startImport()
+        v.pickerLaunched()
+        v.onImportFile(uri)
+        v.await { it is TransferUi.ImportSummary }
+        repos.secrets.setFailure = IOException("datastore")
+        v.confirmImport()
+        assertEquals(TransferUi.Done(TransferMessage.SecretsNotSaved), v.await { it is TransferUi.Done })
     }
 
     @Test fun secretSaveFailureOnImportHasItsOwnMessage() = runBlocking {

@@ -112,7 +112,7 @@ class MainActivity : ComponentActivity() {
         val versionName = runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull().orEmpty()
         transferViewModel = ViewModelProvider(
             this,
-            TransferViewModel.Factory(g.configTransfer, ContentResolverDocumentIo(app.contentResolver), versionName) { g.settings.isImportFailed() },
+            TransferViewModel.Factory(g.configTransfer, ContentResolverDocumentIo(app.contentResolver), versionName, g.settings.importFailed),
         )[TransferViewModel::class.java]
         aboutViewModel = ViewModelProvider(
             this,

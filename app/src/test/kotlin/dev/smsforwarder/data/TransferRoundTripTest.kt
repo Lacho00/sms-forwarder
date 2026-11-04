@@ -64,7 +64,9 @@ class TransferRoundTripTest {
                 body = "{\"t\":\"{body}\",\"s\":\"{sender}\"}",
             ),
         )
-        // Creation only accepts https: point the stored URL at the test server afterwards.
+        // Export while the stored URL is still the original https one, so the file carries the real secrets.
+        val text = graph.configTransfer.export(includeSecrets = true, appVersion = "2.0.0")
+        // Creation only accepts https: point the stored URL at the test server for the first send.
         graph.destinationSecretStore.set(
             original,
             graph.destinationRepository.secrets(original)!!.copy(url = server.url("/hook").toString()),
@@ -73,16 +75,15 @@ class TransferRoundTripTest {
         assertEquals(ListenableWorker.Result.success(), send(ingest(original, 1_800_000_000_000L)))
         val first = server.takeRequest()
 
-        // The exported file only accepts https, so the test host is swapped for a placeholder in the file and put back
-        // on the imported destination's stored URL; path, headers and body still come from the import.
-        val text = graph.configTransfer.export(includeSecrets = true, appVersion = "2.0.0")
-            .replace(server.url("/hook").toString(), "https://h.example/hook")
         graph.destinationRepository.delete(original)
         val file = (ConfigCodec.decode(text) as ConfigParse.Ok).file
         graph.configTransfer.apply(file)
         val imported = graph.db.destinationDao().observeLive().first().single().id
         val secrets = graph.destinationRepository.secrets(imported)!!
+        // The secrets really made the round trip: the URL and the secret header value come from the file.
         assertEquals("https://h.example/hook", secrets.url)
+        assertEquals("k1", secrets.headers.single { it.first == "X-Key" }.second)
+        // Only now is the stored URL pointed at the test server, for the wire comparison.
         graph.destinationSecretStore.set(imported, secrets.copy(url = server.url("/hook").toString()))
 
         server.enqueue(MockResponse.Builder().code(200).build())

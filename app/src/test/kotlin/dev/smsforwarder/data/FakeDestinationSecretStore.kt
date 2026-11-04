@@ -11,6 +11,7 @@ class FakeDestinationSecretStore : DestinationSecretStore {
     var hasSecretsThread: Thread? = null
     var removeFailsAfterSet = false
     var failOnNthSet: Int? = null
+    var setFailure: Throwable? = null
 
     override suspend fun hasSecrets(destinationId: Long): Boolean {
         hasSecretsFailure?.let { throw it }
@@ -27,6 +28,7 @@ class FakeDestinationSecretStore : DestinationSecretStore {
 
     override suspend fun set(destinationId: Long, s: DestinationSecrets) {
         setCalls++
+        setFailure?.let { throw it }
         if (failOnNthSet == setCalls) throw java.security.GeneralSecurityException("set failed")
         if (failOnSet) throw java.security.GeneralSecurityException("set failed")
         map[destinationId] = s

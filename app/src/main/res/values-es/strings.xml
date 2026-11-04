@@ -361,6 +361,7 @@
         <item quantity="other">%d sin credenciales</item>
     </plurals>
     <string name="transfer_secrets_not_saved">No se pudieron guardar los secretos; no se importó nada</string>
+    <string name="transfer_working">Procesando…</string>
     <string name="transfer_read_failed">No se pudo leer el fichero.</string>
     <string name="transfer_write_failed">No se pudo escribir el fichero.</string>
     <string name="transfer_secrets_unavailable">No se pudieron leer los secretos guardados. Inténtalo de nuevo.</string>
