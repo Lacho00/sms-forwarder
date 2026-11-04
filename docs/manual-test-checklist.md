@@ -73,3 +73,27 @@ antes que acepta ese riesgo.
 - [ ] Inicio: los chips de destino filtran la lista y cada fila muestra el estado por destino.
 - [ ] Cambiar el idioma con un editor abierto no pierde la pantalla.
 - [ ] Actualizar de 1.2.0 a 1.3.0 (`adb install -r`) no pierde destinos, reglas ni historial.
+
+## v2.0.0
+
+- [ ] Exportar sin secretos (casilla desmarcada) y abrir el fichero: ningún destino lleva URL ni valores
+      de cabeceras secretas (los nombres de esas cabeceras sí aparecen).
+- [ ] Exportar con secretos: al marcar la casilla se ve el aviso; el fichero lleva URL, tokens y
+      cabeceras secretas.
+- [ ] Importar en el mismo teléfono el fichero con secretos: todo se añade duplicado con sufijo
+      ` (2)` y no se reemplaza nada. El resumen dice "Importados N destino(s) / regla(s)" (singular y plural
+      correctos) y se ve un indicador de progreso mientras se importa.
+- [ ] Importar el fichero sin secretos: el resumen incluye "Sin URL ni token (añádelos en Destinos):
+      <nombres>"; en Destinos esos destinos salen en la fila "Sin credenciales"; una regla activa que
+      los usa muestra el aviso `NOT_CONFIGURED`; al añadir la URL, los SMS en cola se envían enseguida.
+- [ ] Importar un fichero no válido (URL http, regex roto, `"version": 2`, un fichero de texto
+      cualquiera): mensaje de error y no cambia nada (ni destinos, ni reglas, ni secretos).
+- [ ] Si guardar los secretos falla durante la importación, el mensaje dice que no se importó nada y la
+      lista de destinos y reglas queda igual.
+- [ ] Exportar diagnóstico desde Acerca de y buscar en el fichero un cuerpo de SMS, un remitente
+      y la URL de un destino: no aparece ninguno.
+- [ ] Acerca de: flecha de volver, icono redondo y enlace al código.
+- [ ] Menú ⋮ con Exportar, Importar y Acerca de en las tres pestañas.
+- [ ] Con la migración heredada en modo seguro, Exportar e Importar salen desactivados.
+- [ ] Actualizar de 1.3.0 a 2.0.0 (`adb install -r`) no pierde destinos, reglas ni historial.
+- [ ] La APK no pide permisos nuevos (`aapt dump permissions` igual que la 1.3.0).
