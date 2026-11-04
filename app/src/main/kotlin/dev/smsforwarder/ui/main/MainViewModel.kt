@@ -13,6 +13,7 @@ import dev.smsforwarder.core.SmsSearch
 import dev.smsforwarder.core.StatusFilter
 import dev.smsforwarder.core.StatusLabel
 import dev.smsforwarder.core.statusLabelOf
+import dev.smsforwarder.data.RuleRepository
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -100,6 +102,7 @@ class MainViewModel(
     private val settings: SettingsRepository,
     private val healthChecker: HealthChecker,
     destinationRepository: DestinationRepository,
+    ruleRepository: RuleRepository,
 ) : ViewModel() {
 
     private val issues = MutableStateFlow<Set<HealthIssue>>(emptySet())
@@ -172,9 +175,14 @@ class MainViewModel(
     )
 
     init {
-        // A finished sweep is a good moment to look at the health again.
+        // A finished sweep, or a change to the destinations (or their credentials) or the rules, is a good moment
+        // to look at the health again.
+        val configuration = combine(
+            destinationRepository.observeLiveWithConfigured(),
+            ruleRepository.observeAll(),
+        ) { live, rules -> live to rules }.distinctUntilChanged()
         viewModelScope.launch {
-            combine(settings.lastSweepAtFlow, settings.inboxUnreadableFlow) { _, _ -> }
+            combine(settings.lastSweepAtFlow, settings.inboxUnreadableFlow, configuration) { _, _, _ -> }
                 .collect { refreshIssues() }
         }
     }
@@ -197,9 +205,10 @@ class MainViewModel(
         private val settings: SettingsRepository,
         private val healthChecker: HealthChecker,
         private val destinationRepository: DestinationRepository,
+        private val ruleRepository: RuleRepository,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            MainViewModel(smsRepository, settings, healthChecker, destinationRepository) as T
+            MainViewModel(smsRepository, settings, healthChecker, destinationRepository, ruleRepository) as T
     }
 }

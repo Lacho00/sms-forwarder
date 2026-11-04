@@ -73,7 +73,7 @@ class MainViewModelTest {
         errorId = add("SENDERONE", "Code 2222", now - 2_000)
         otherSenderId = add("SENDERTWO", "Code 3333", now - 1_000)
         sms.recordAttemptForSms(errorId, SendOutcome.Rejected(400, null))
-        vm = MainViewModel(sms, settings, HealthChecker(context, sms, repos.destinations, repos.rules, settings), repos.destinations)
+        vm = MainViewModel(sms, settings, HealthChecker(context, sms, repos.destinations, repos.rules, settings), repos.destinations, repos.rules)
     }
 
     @After fun tearDown() {
@@ -188,5 +188,18 @@ class MainViewModelTest {
         runBlocking { repos.destinations.delete(second) }
         val s = await { it.destinationFilter == null && it.rows.size == 3 }
         assertEquals(null, s.destinationFilter)
+    }
+
+    @Test fun healthRefreshesWhenDestinationAndRuleAppearAfterCreation() = runBlocking {
+        val id = repos.destinations.create(
+            dev.smsforwarder.core.DestinationPresets.custom("Other").copy(url = "https://h.example/x"),
+        )
+        repos.secrets.map.remove(id)
+        repos.rules.addSender("AAA")
+        db.ruleDao().insertLinks(
+            listOf(dev.smsforwarder.data.RuleDestinationEntity(db.ruleDao().activeWithDestinations().first().rule.id, id)),
+        )
+        val s = await { dev.smsforwarder.health.HealthIssue.NOT_CONFIGURED in it.issues }
+        assertEquals(true, dev.smsforwarder.health.HealthIssue.NOT_CONFIGURED in s.issues)
     }
 }

@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
         }
         mainViewModel = ViewModelProvider(
             this,
-            MainViewModel.Factory(repository, settings, g.healthChecker, g.destinationRepository),
+            MainViewModel.Factory(repository, settings, g.healthChecker, g.destinationRepository, g.ruleRepository),
         )[MainViewModel::class.java]
         onboardingViewModel = ViewModelProvider(
             this,
