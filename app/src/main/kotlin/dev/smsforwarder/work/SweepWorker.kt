@@ -34,6 +34,7 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             clock = graph.clock,
             enqueue = { id -> WorkScheduler.enqueueSend(applicationContext, id) },
             onRecovered = graph.onRecovered,
+            engineLog = graph.engineLog,
         )
         val result = try {
             sweeper.sweep()

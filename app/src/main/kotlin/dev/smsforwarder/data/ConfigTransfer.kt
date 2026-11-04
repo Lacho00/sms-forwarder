@@ -1,7 +1,12 @@
 package dev.smsforwarder.data
 
 import androidx.room.withTransaction
+import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.ConfigCodec
+import dev.smsforwarder.core.EngineEvent
+import dev.smsforwarder.core.EngineEventType
+import dev.smsforwarder.core.SystemClock
+import dev.smsforwarder.diag.EngineLog
 import dev.smsforwarder.core.ConfigDestination
 import dev.smsforwarder.core.ConfigError
 import dev.smsforwarder.core.ConfigFile
@@ -32,6 +37,8 @@ class ConfigTransfer(
     private val destinations: DestinationRepository,
     private val rules: RuleRepository,
     private val secretStore: DestinationSecretStore,
+    private val engineLog: EngineLog? = null,
+    private val clock: Clock = SystemClock,
 ) {
     /** Throws (including [TransientSecretException]) when the secret store cannot be read; nothing is written. */
     suspend fun export(includeSecrets: Boolean, appVersion: String): String {
@@ -60,7 +67,9 @@ class ConfigTransfer(
                 r.destinations.sortedBy { it.id }.map { keyOf(it.id) },
             )
         }
-        return ConfigCodec.encode(ConfigFile(exported, exportedRules, includeSecrets), appVersion)
+        val text = ConfigCodec.encode(ConfigFile(exported, exportedRules, includeSecrets), appVersion)
+        log(EngineEventType.EXPORT, includeSecrets, exported.size)
+        return text
     }
 
     suspend fun preview(text: String): ImportPreview = when (val parsed = ConfigCodec.decode(text)) {
@@ -94,11 +103,15 @@ class ConfigTransfer(
                     secretStore.set(ids.getValue(p.key), secrets)
                 }
                 ImportResult(plan.destinations.size, plan.rules.size, plan.withoutCredentials.size)
-            }
+            }.also { log(EngineEventType.IMPORT, file.includesSecrets, it.destinations) }
         } catch (e: Throwable) {
             withContext(NonCancellable) { inserted.forEach { secretStore.remove(it) } }
             throw e
         }
+    }
+
+    private suspend fun log(type: EngineEventType, withSecrets: Boolean, destinations: Int) {
+        engineLog?.add(EngineEvent(clock.now(), type, code = if (withSecrets) "with_secrets" else "no_secrets", count = destinations))
     }
 
     private fun keyOf(id: Long) = "d$id"

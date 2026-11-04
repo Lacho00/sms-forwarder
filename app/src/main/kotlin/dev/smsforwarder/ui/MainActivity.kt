@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
                 app,
                 clock,
                 { g.legacyImport.run() },
+                g.engineLog,
             ) { id -> WorkScheduler.kickSend(app, id) },
         )[RecoveryViewModel::class.java]
         settingsViewModel = ViewModelProvider(

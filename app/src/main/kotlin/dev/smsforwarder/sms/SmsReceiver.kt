@@ -7,6 +7,8 @@ import android.provider.Telephony
 import android.util.Log
 import android.telephony.SubscriptionManager
 import dev.smsforwarder.SmsForwarderApp
+import dev.smsforwarder.core.EngineEvent
+import dev.smsforwarder.core.EngineEventType
 import dev.smsforwarder.core.IncomingSms
 import dev.smsforwarder.core.RuleEngine
 import dev.smsforwarder.core.SmsOrigin
@@ -63,8 +65,14 @@ class SmsReceiver : BroadcastReceiver() {
             IncomingSms(sender, body, SimSlots.slotOf(context, subId)),
             graph.ruleRepository.activeRules(),
         )
-        match.timedOutRuleIds.forEach { Log.w(TAG, "rule $it timed out") }
-        if (match.destinationIds.isEmpty()) return
+        match.timedOutRuleIds.forEach {
+            Log.w(TAG, "rule $it timed out")
+            graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.RULE_TIMEOUT, ruleId = it))
+        }
+        if (match.destinationIds.isEmpty()) {
+            graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.RECEIVED, code = if (match.timedOutRuleIds.isEmpty()) "no_rule" else "no_destination"))
+            return
+        }
 
         val record = SmsRecord(
             sender = sender,
@@ -74,6 +82,12 @@ class SmsReceiver : BroadcastReceiver() {
             subId = subId,
         )
         val result = graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, match.destinationIds)
+        val (id, code) = when (result) {
+            is IngestResult.Inserted -> result.id to "inserted"
+            is IngestResult.AlreadyKnown -> result.id to "known"
+            IngestResult.NoDestination -> null to "no_destination"
+        }
+        graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.RECEIVED, smsId = id, code = code))
         if (result is IngestResult.Inserted) enqueue(context.applicationContext, result.id)
     }
 }

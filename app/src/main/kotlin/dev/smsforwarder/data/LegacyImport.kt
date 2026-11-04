@@ -1,5 +1,8 @@
 package dev.smsforwarder.data
 
+import dev.smsforwarder.core.EngineEvent
+import dev.smsforwarder.core.EngineEventType
+import dev.smsforwarder.diag.EngineLog
 import androidx.room.withTransaction
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.SenderFilter
@@ -25,6 +28,7 @@ class LegacyImport(
     private val clock: Clock = SystemClock,
     /** Runs once after a real 1.1 import completes (e.g. to drop alerts 1.1 left behind). */
     private val onImported: () -> Unit = {},
+    private val engineLog: EngineLog? = null,
 ) {
     private val lock = Mutex()
 
@@ -104,6 +108,7 @@ class LegacyImport(
             } catch (inner: Exception) {
                 // ignored on purpose
             }
+            engineLog?.add(EngineEvent(clock.now(), EngineEventType.SAFE_MODE, code = "legacy_import"))
             false
         }
     }

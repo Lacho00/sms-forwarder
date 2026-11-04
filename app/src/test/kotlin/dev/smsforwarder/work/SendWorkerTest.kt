@@ -134,6 +134,32 @@ class SendWorkerTest {
         assertEquals(SmsStatus.SENT, graph.smsRepository.get(id)!!.status)
     }
 
+    @Test fun logsOutcomePerDelivery() = runBlocking {
+        val other = graph.db.destinationDao().insert(
+            DestinationEntity(
+                name = "T2", enabled = true, template = TemplateKind.STANDARD_JSON, method = HttpMethod.POST,
+                bodyTemplate = null, bodyIsJson = true, publicHeaders = "[]",
+                successPolicy = SuccessPolicy.ANY_2XX, createdAt = 1L,
+            ),
+        )
+        graph.destinationSecretStore.set(other, DestinationSecrets(server.url("/second").toString(), emptyList()))
+        val record = SmsRecord("OPERADOR", body, 1_800_000_000_000L, null, null)
+        val id = (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, setOf(1L, other)) as IngestResult.Inserted).id
+        server.dispatcher = object : mockwebserver3.Dispatcher() {
+            override fun dispatch(request: mockwebserver3.RecordedRequest): MockResponse =
+                MockResponse.Builder().code(if (request.url.encodedPath == "/second") 403 else 200).build()
+        }
+        run(id)
+        val sends = graph.engineLog.recent(10).filter { it.type == dev.smsforwarder.core.EngineEventType.SEND }
+        assertEquals(setOf(1L to 200, other to 403), sends.map { it.destinationId to it.httpCode }.toSet())
+        assertEquals(2, sends.size)
+        assertEquals(setOf("accepted", "rejected"), sends.map { it.code }.toSet())
+        val raw = java.io.File(context.noBackupFilesDir, "engine-events.log").readText()
+        assertEquals(false, raw.contains("OPERADOR"))
+        assertEquals(false, raw.contains("://"))
+        assertEquals(false, raw.contains("test-token"))
+    }
+
     @Test fun `200MarksSent`() = runBlocking {
         val id = insertSms()
         server.enqueue(MockResponse.Builder().code(200).build())

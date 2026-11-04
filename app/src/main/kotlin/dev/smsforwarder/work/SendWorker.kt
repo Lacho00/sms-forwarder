@@ -8,10 +8,13 @@ import dev.smsforwarder.AppGraph
 import dev.smsforwarder.SmsForwarderApp
 import dev.smsforwarder.core.DeliveryStatus
 import dev.smsforwarder.core.DestinationSpec
+import dev.smsforwarder.core.EngineEvent
+import dev.smsforwarder.core.EngineEventType
 import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SmsStatus
 import dev.smsforwarder.core.SmsVars
 import dev.smsforwarder.core.Templates
+import dev.smsforwarder.core.httpCode
 import dev.smsforwarder.core.isAuthRejection
 import dev.smsforwarder.data.DeliveryEntity
 import dev.smsforwarder.data.DestinationEntity
@@ -101,7 +104,10 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             // Paused or deleted destinations are skipped without an attempt.
             if (destination == null || destination.deletedAt != null || !destination.enabled) return false
             // No secrets yet (or a transient Keystore failure): keep it queued and back off.
-            val secrets = graph.destinationRepository.secrets(destination.id) ?: return true
+            val secrets = graph.destinationRepository.secrets(destination.id) ?: run {
+                graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.SEND, smsId = sms.id, destinationId = destination.id, code = "no_secrets"))
+                return true
+            }
             used = destination to secrets
             // A destination that cannot be rendered never will until it is edited: record it, do not retry.
             val rendered = try {
@@ -139,9 +145,23 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         } catch (e: Exception) {
             return true
         }
+        logSend(graph, sms.id, delivery, outcome)
         if (outcome is SendOutcome.Rejected) notifyRejected(graph, sms.id, delivery, outcome)
         if (outcome is SendOutcome.Invalid) notifyConfigError(graph, sms.id, delivery)
         return outcome is SendOutcome.Retry
+    }
+
+    /** Ids and a code only; a failing log never changes the result of the job. */
+    private suspend fun logSend(graph: AppGraph, smsId: Long, delivery: DeliveryEntity, outcome: SendOutcome) {
+        val code = when (outcome) {
+            is SendOutcome.Accepted -> "accepted"
+            is SendOutcome.Retry -> "retry"
+            is SendOutcome.Rejected -> "rejected"
+            is SendOutcome.Invalid -> "invalid"
+        }
+        graph.engineLog.add(
+            EngineEvent(graph.clock.now(), EngineEventType.SEND, smsId = smsId, destinationId = delivery.destinationId, httpCode = outcome.httpCode, code = code),
+        )
     }
 
     private suspend fun changedSince(graph: AppGraph, used: Pair<DestinationEntity, DestinationSecrets>?): Boolean {

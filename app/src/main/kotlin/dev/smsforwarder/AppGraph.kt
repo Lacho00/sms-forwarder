@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Build
 import androidx.room.Room
 import dev.smsforwarder.core.NotifyKind
+import dev.smsforwarder.diag.EngineLog
+import java.io.File
 import dev.smsforwarder.core.SystemClock
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.ConfigTransfer
@@ -37,6 +39,7 @@ class AppGraph(context: Context) {
             .addMigrations(MIGRATION_1_2, migration2to3(context.getString(R.string.destination_primary_name)))
             .build()
     val clock = SystemClock
+    val engineLog = EngineLog(File(context.noBackupFilesDir, "engine-events.log"))
     val smsRepository = SmsRepository(db, clock)
 
     /** `var` so tests can swap in a fake instead of the Android Keystore. */
@@ -60,7 +63,7 @@ class AppGraph(context: Context) {
     val destinationRepository by lazy {
         DestinationRepository(db, secretsProxy, clock, context.getString(R.string.destination_primary_name), smsRepository, notifier)
     }
-    val configTransfer by lazy { ConfigTransfer(db, destinationRepository, ruleRepository, secretsProxy) }
+    val configTransfer by lazy { ConfigTransfer(db, destinationRepository, ruleRepository, secretsProxy, engineLog = engineLog, clock = clock) }
     val ruleRepository by lazy { RuleRepository(db, destinationRepository, clock) }
 
     /** Lazy so it picks up the stores a test may have swapped in. */
@@ -84,7 +87,7 @@ class AppGraph(context: Context) {
     /** Built on first use; a test can assign its own with fake stores. */
     var legacyImport: LegacyImport
         get() = synchronized(this) {
-            legacyImportOrNull ?: LegacyImport(db, secretStore, destinationSecretStore, settings, onImported = { notifier.cancelLegacyTokenRejected() })
+            legacyImportOrNull ?: LegacyImport(db, secretStore, destinationSecretStore, settings, onImported = { notifier.cancelLegacyTokenRejected() }, engineLog = engineLog)
                 .also { legacyImportOrNull = it }
         }
         set(value) = synchronized(this) { legacyImportOrNull = value }

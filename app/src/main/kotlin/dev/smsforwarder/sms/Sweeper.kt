@@ -3,6 +3,9 @@ package dev.smsforwarder.sms
 import android.content.Context
 import android.util.Log
 import dev.smsforwarder.core.Clock
+import dev.smsforwarder.core.EngineEvent
+import dev.smsforwarder.core.EngineEventType
+import dev.smsforwarder.diag.EngineLog
 import dev.smsforwarder.core.QueuePolicy
 import dev.smsforwarder.core.IncomingSms
 import dev.smsforwarder.core.RuleEngine
@@ -36,7 +39,10 @@ class Sweeper(
     private val clock: Clock,
     private val enqueue: (Long) -> Unit,
     private val onRecovered: (List<SmsEntity>) -> Unit,
+    private val engineLog: EngineLog? = null,
 ) {
+    private suspend fun log(e: EngineEvent) { engineLog?.add(e) }
+
     suspend fun sweep(): SweepResult {
         if (!settings.onboardingDone.first()) return SweepResult(0, false)
 
@@ -46,8 +52,9 @@ class Sweeper(
         val cursor = settings.sweepCursor()
         val from = if (cursor != null) QueuePolicy.sweepFrom(cursor, floor) else floor
 
-        val rows = withContext(Dispatchers.IO) { reader.readSince(from) } ?: return SweepResult(0, true)
+        val rows = withContext(Dispatchers.IO) { reader.readSince(from) } ?: return SweepResult(0, true).also { log(EngineEvent(clock.now(), EngineEventType.SWEEP, code = "unreadable", count = 0)) }
         if (rows.isEmpty() && withContext(Dispatchers.IO) { reader.hasAnyRow() } == false) {
+            log(EngineEvent(clock.now(), EngineEventType.SWEEP, code = "unreadable", count = 0))
             return SweepResult(0, true)
         }
 
@@ -58,7 +65,10 @@ class Sweeper(
                 IncomingSms(row.address, row.body, SimSlots.slotOf(context, row.subId)),
                 rules,
             )
-            match.timedOutRuleIds.forEach { Log.w(TAG, "rule $it timed out") }
+            match.timedOutRuleIds.forEach {
+                Log.w(TAG, "rule $it timed out")
+                log(EngineEvent(clock.now(), EngineEventType.RULE_TIMEOUT, ruleId = it))
+            }
             if (match.destinationIds.isEmpty()) continue
             val record = SmsRecord(
                 sender = row.address,
@@ -75,6 +85,7 @@ class Sweeper(
         }
         settings.setSweepCursor(rows.maxOfOrNull { it.date } ?: now)
         if (recovered.isNotEmpty()) onRecovered(recovered)
+        log(EngineEvent(clock.now(), EngineEventType.SWEEP, code = "ok", count = recovered.size))
         return SweepResult(recovered.size, false)
     }
 }

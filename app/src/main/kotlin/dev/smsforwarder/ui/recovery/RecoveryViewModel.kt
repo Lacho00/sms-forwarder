@@ -1,5 +1,8 @@
 package dev.smsforwarder.ui.recovery
 
+import dev.smsforwarder.core.EngineEvent
+import dev.smsforwarder.core.EngineEventType
+import dev.smsforwarder.diag.EngineLog
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -47,6 +50,7 @@ class RecoveryViewModel(
     private val context: Context,
     private val clock: Clock,
     private val awaitImport: suspend () -> Boolean = { true },
+    private val engineLog: EngineLog? = null,
     private val enqueue: (Long) -> Unit,
 ) : ViewModel() {
 
@@ -94,7 +98,10 @@ class RecoveryViewModel(
         rows.filter { row ->
             val slot = SimSlots.slotOf(context, row.subId)
             val match = RuleEngine.destinationsFor(IncomingSms(row.address, row.body, slot), rules)
-            match.timedOutRuleIds.forEach { Log.w(TAG, "rule $it timed out") }
+            match.timedOutRuleIds.forEach {
+                Log.w(TAG, "rule $it timed out")
+                engineLog?.add(EngineEvent(clock.now(), EngineEventType.RULE_TIMEOUT, ruleId = it))
+            }
             match.destinationIds.isNotEmpty()
         }
             .map {
@@ -137,7 +144,10 @@ class RecoveryViewModel(
                 IncomingSms(record.sender, record.body, SimSlots.slotOf(context, record.subId)),
                 rules,
             )
-            match.timedOutRuleIds.forEach { Log.w(TAG, "rule $it timed out") }
+            match.timedOutRuleIds.forEach {
+                Log.w(TAG, "rule $it timed out")
+                engineLog?.add(EngineEvent(clock.now(), EngineEventType.RULE_TIMEOUT, ruleId = it))
+            }
             if (match.destinationIds.isEmpty()) continue
             val result = smsRepository.ingest(record, SmsOrigin.MANUAL, match.destinationIds)
             if (result is IngestResult.Inserted) {
@@ -158,10 +168,11 @@ class RecoveryViewModel(
         private val context: Context,
         private val clock: Clock,
         private val awaitImport: suspend () -> Boolean = { true },
+        private val engineLog: EngineLog? = null,
         private val enqueue: (Long) -> Unit,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            RecoveryViewModel(reader, smsRepository, ruleRepository, context, clock, awaitImport, enqueue) as T
+            RecoveryViewModel(reader, smsRepository, ruleRepository, context, clock, awaitImport, engineLog, enqueue) as T
     }
 }
