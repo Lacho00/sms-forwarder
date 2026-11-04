@@ -78,5 +78,45 @@ class SeedCommandsTest {
         assertEquals("ok", r.data)
         assertTrue(graph.settings.onboardingDone.first())
         assertNotNull(graph.settings.sweepFloor())
+        assertEquals(graph.settings.sweepFloor(), graph.settings.sweepCursor())
+    }
+
+    private suspend fun seedTwoDestinations() {
+        for (n in 1..2) seed.run(mapOf("op" to "destination", "template" to "ntfy", "name" to "N$n", "url" to "https://h.example/t$n"))
+    }
+
+    @Test fun softDeletedSmsLeftOutOfStatus() = runBlocking {
+        seedTwoDestinations()
+        val t = System.currentTimeMillis()
+        val id = (graph.smsRepository.ingest(SmsRecord("AAA", "one", t, null, null), SmsOrigin.RECEIVER, setOf(1L)) as dev.smsforwarder.data.IngestResult.Inserted).id
+        graph.smsRepository.ingest(SmsRecord("AAA", "two", t + 10_000, null, null), SmsOrigin.RECEIVER, setOf(1L))
+        graph.smsRepository.softDelete(id)
+        val s = seed.run(mapOf("op" to "status")).data
+        assertTrue(s, s.startsWith("sms queued=1 "))
+        assertTrue(s, s.contains("deliveries queued=1 "))
+    }
+
+    @Test fun badArgForNonNumericDestinationAndMissingExtra() = runBlocking {
+        seedTwoDestinations()
+        val a = seed.run(mapOf("op" to "rule", "name" to "R", "sender" to "AAA", "destinations" to "x"))
+        assertFalse(a.ok)
+        assertEquals("error=bad_arg", a.data)
+        val b = seed.run(mapOf("op" to "destination", "template" to "ntfy", "name" to "N"))
+        assertFalse(b.ok)
+        assertEquals("error=bad_arg", b.data)
+        val c = seed.run(mapOf("op" to "rule", "name" to "R", "destinations" to "1"))
+        assertEquals("error=bad_arg", c.data)
+    }
+
+    @Test fun statusCountsSentAndErrorDeliveries() = runBlocking {
+        seedTwoDestinations()
+        val t = System.currentTimeMillis()
+        val id = (graph.smsRepository.ingest(SmsRecord("AAA", "one", t, null, null), SmsOrigin.RECEIVER, setOf(1L, 2L)) as dev.smsforwarder.data.IngestResult.Inserted).id
+        val ds = graph.smsRepository.deliveriesOf(id)
+        graph.smsRepository.recordAttempt(ds[0].id, dev.smsforwarder.core.SendOutcome.Accepted(200))
+        graph.smsRepository.recordAttempt(ds[1].id, dev.smsforwarder.core.SendOutcome.Rejected(403, null))
+        val s = seed.run(mapOf("op" to "status")).data
+        assertTrue(s, s.contains("deliveries queued=0 sent=1 error=1 canceled=0"))
+        assertTrue(s, s.startsWith("sms queued=0 sent=0 error=1 "))
     }
 }

@@ -27,8 +27,11 @@ class SeedReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 SeedResult(false, "error=${e.javaClass.simpleName}")
             }
-            pending.setResult(if (result.ok) 0 else 1, result.data, null)
-            pending.finish()
+            try {
+                pending.setResult(if (result.ok) 0 else 1, result.data, null)
+            } finally {
+                pending.finish()
+            }
         }
     }
 

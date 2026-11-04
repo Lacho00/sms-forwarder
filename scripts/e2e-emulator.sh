@@ -18,6 +18,8 @@ TIMEOUT_S=90
 
 cd "$(dirname "$0")/.."
 
+timeout 60 adb wait-for-device
+
 if [ "${1:-}" != "--no-install" ]; then
   ./gradlew :app:installDebug
 fi
@@ -32,7 +34,7 @@ seed() {
     cmd+=" --es $(quote "${kv%%=*}") $(quote "${kv#*=}")"
   done
   local out code data
-  out="$(adb shell "$cmd" | tr -d '\r')"
+  out="$(timeout 20 adb shell "$cmd" | tr -d '\r')"
   code="$(sed -n 's/.*result=\([0-9-]*\).*/\1/p' <<<"$out" | head -n1)"
   data="$(sed -n 's/.*data="\(.*\)".*/\1/p' <<<"$out" | head -n1)"
   if [ "$code" != "0" ]; then
@@ -42,20 +44,27 @@ seed() {
   printf '%s\n' "$data"
 }
 
-id_of() { sed -n 's/^id=//p' <<<"$1"; }
+id_of() {
+  local id
+  id="$(sed -n 's/^id=//p' <<<"$1")"
+  if [ -z "$id" ]; then echo "seed returned no id: ${1:-empty}" >&2; exit 1; fi
+  printf '%s\n' "$id"
+}
 
-adb shell pm clear "$PKG" >/dev/null
+timeout 20 adb shell pm clear "$PKG" >/dev/null
 for p in RECEIVE_SMS READ_SMS POST_NOTIFICATIONS; do
-  adb shell pm grant "$PKG" "android.permission.$p"
+  timeout 20 adb shell pm grant "$PKG" "android.permission.$p"
 done
 
 BODY='{"b":"{body}"}'
 seed op=done >/dev/null
-OK_ID="$(id_of "$(seed op=destination template=custom name=Ok "url=$OK_URL" "body=$BODY" json=true)")"
-FAIL_ID="$(id_of "$(seed op=destination template=custom name=Fail "url=$FAIL_URL" "body=$BODY" json=true)")"
+out="$(seed op=destination template=custom name=Ok "url=$OK_URL" "body=$BODY" json=true)"
+OK_ID="$(id_of "$out")"
+out="$(seed op=destination template=custom name=Fail "url=$FAIL_URL" "body=$BODY" json=true)"
+FAIL_ID="$(id_of "$out")"
 seed op=rule name=E2E sender=TEST "destinations=$OK_ID,$FAIL_ID" >/dev/null
 
-adb emu sms send TEST "e2e $(date +%s)" >/dev/null
+timeout 20 adb emu sms send TEST "e2e $(date +%s)" >/dev/null
 
 deadline=$((SECONDS + TIMEOUT_S))
 status=""
