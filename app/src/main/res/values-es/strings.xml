@@ -354,4 +354,9 @@
     <string name="transfer_secrets_unavailable">No se pudieron leer los secretos guardados. Inténtalo de nuevo.</string>
     <string name="transfer_export_interrupted">Exportación interrumpida, vuelve a intentarlo</string>
     <string name="destination_without_credentials">Sin credenciales</string>
+    <string name="about_export_diagnostic">Exportar diagnóstico</string>
+    <string name="about_diagnostic_hint">Fichero de texto sin texto de SMS, remitentes, URLs ni tokens</string>
+    <string name="about_diagnostic_saved">Diagnóstico guardado</string>
+    <string name="about_diagnostic_failed">No se pudo guardar el fichero de diagnóstico</string>
+    <string name="about_diagnostic_interrupted">Exportación interrumpida, inténtalo de nuevo</string>
 </resources>

@@ -354,4 +354,9 @@
     <string name="transfer_secrets_unavailable">The saved secrets could not be read. Try again.</string>
     <string name="transfer_export_interrupted">Export interrupted, try again</string>
     <string name="destination_without_credentials">No credentials</string>
+    <string name="about_export_diagnostic">Export diagnostics</string>
+    <string name="about_diagnostic_hint">Text file without SMS text, senders, URLs or tokens</string>
+    <string name="about_diagnostic_saved">Diagnostics saved</string>
+    <string name="about_diagnostic_failed">Could not save the diagnostics file</string>
+    <string name="about_diagnostic_interrupted">Export interrupted, try again</string>
 </resources>

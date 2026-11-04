@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.ui.about.AboutScreen
+import dev.smsforwarder.ui.about.AboutViewModel
 import dev.smsforwarder.ui.detail.DetailScreen
 import dev.smsforwarder.ui.detail.DetailViewModel
 import dev.smsforwarder.ui.destinations.DestinationEditorScreen
@@ -138,6 +139,7 @@ fun AppNavHost(
     onOpenSystemIssue: (HealthIssue) -> Unit,
     onSweepNow: () -> Unit,
     transferViewModel: TransferViewModel,
+    aboutViewModel: AboutViewModel,
 ) {
     var stack by rememberSaveable { mutableStateOf(startRoute) }
     // Kept here, not in the Home branch, so opening an SMS and coming back keeps the search field next to its query.
@@ -174,6 +176,17 @@ fun AppNavHost(
                 transferViewModel.pickerLaunched()
             }
             else -> Unit
+        }
+    }
+
+    val aboutState by aboutViewModel.state.collectAsState()
+    val diagnosticLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) {
+        aboutViewModel.onFile(it)
+    }
+    LaunchedEffect(aboutState.pickFile) {
+        aboutState.pickFile?.let {
+            diagnosticLauncher.launch(it)
+            aboutViewModel.pickerLaunched()
         }
     }
 
@@ -357,6 +370,8 @@ fun AppNavHost(
             }
             AboutScreen(
                 versionName = versionName,
+                state = aboutState,
+                onExportDiagnostic = aboutViewModel::startExport,
                 onOpenLink = { url ->
                     try {
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

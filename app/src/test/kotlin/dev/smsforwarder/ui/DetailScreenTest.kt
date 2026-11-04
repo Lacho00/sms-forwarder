@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -170,5 +171,21 @@ class DetailScreenTest {
             }
         }
         compose.onNodeWithText(str(R.string.detail_resend_to)).assertDoesNotExist()
+    }
+
+    @Test fun backIsArrowWithContentDescription() {
+        var backs = 0
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(state = DetailUiState(sms(SmsStatus.QUEUED), emptyList()), onRetry = {}, onDelete = {}, onBack = { backs++ })
+            }
+        }
+        val back = str(R.string.back)
+        compose.onNodeWithText(back).assertDoesNotExist()
+        val raw = compose.onNodeWithContentDescription(back).fetchSemanticsNode().boundsInRoot
+        val bounds = Pair(raw.width / compose.density.density, raw.height / compose.density.density)
+        println("MEASURE detail back after w=${bounds.first}dp h=${bounds.second}dp")
+        compose.onNodeWithContentDescription(back).performClick()
+        assertEquals(1, backs)
     }
 }
