@@ -15,6 +15,8 @@ class DiagnosticTest {
         assertEquals("other", errorKey(null, "leak https://h.example"))
         assertEquals("other", errorKey(null, null))
         assertEquals("other", errorKey(null, "config_Bad Value"))
+        assertEquals("config_request", errorKey(null, "config_request"))
+        assertEquals("config_other", errorKey(null, "config_leak_7f3a"))
     }
 
     private fun input() = DiagnosticInput(
@@ -54,5 +56,14 @@ class DiagnosticTest {
         assertTrue(text.contains("SEND sms=9 dest=7 http=200"))
         assertTrue(text.contains("2027-01-15T08:00:00Z"))
         assertFalse(text.contains("1800000000000"))
+    }
+
+    @Test
+    fun unavailableSectionsSaySo() {
+        val text = renderDiagnostic(input().copy(unavailable = setOf("Health", "Destinations")))
+        assertTrue(text.contains("== Health ==\nunavailable\n"))
+        assertTrue(text.contains("== Destinations ==\nunavailable\n"))
+        assertTrue(text.contains("== Events =="))
+        assertFalse(text.contains("NO_RULES"))
     }
 }

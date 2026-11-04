@@ -66,13 +66,28 @@ class DiagnosticsCollectorTest {
         for (t in EngineEventType.entries) {
             graph.engineLog.add(EngineEvent(1_800_000_000_000L, t, smsId = sms, destinationId = dest, code = "other"))
         }
+        graph.engineLog.add(EngineEvent(1_800_000_000_000L, EngineEventType.SEND, code = "srv https://h.example/tok-7f3a"))
+        android.provider.Settings.Global.putString(context.contentResolver, "device_name", "DEV-7f3a")
         val report = DiagnosticsCollector(context, graph).report()
         assertFalse(report, report.contains("7f3a"))
         assertFalse(report, report.contains("h.example"))
-        assertTrue(report.contains("other"))
-        assertTrue(report.contains("queued"))
-        assertTrue(report.contains("SEND"))
+        val lines = report.lines()
+        assertTrue(report, lines.contains("other: 1"))
+        assertTrue(report, lines.contains("queued: 1"))
+        assertTrue(report, lines.any { it.contains(" SEND sms=") })
         assertTrue(report.contains(DiagnosticsCollector(context, graph).collect().appVersion))
+    }
+
+    @Test fun failingSourcesGiveUnavailableLines() = runBlocking {
+        seed()
+        (graph.destinationSecretStore as FakeDestinationSecretStore).getFailure = RuntimeException("boom")
+        val collector = DiagnosticsCollector(context, graph, health = { throw IllegalStateException("health boom") })
+        val report = collector.report()
+        assertTrue(report, report.contains("== Health ==\nunavailable\n"))
+        assertTrue(report, report.contains("== Destinations ==\nunavailable\n"))
+        assertTrue(report, report.contains("== Queue ==\nqueued: 1"))
+        assertTrue(report, report.contains("== Events =="))
+        assertFalse(report.contains("boom"))
     }
 
     @Test fun countsMatchDatabase() = runBlocking {

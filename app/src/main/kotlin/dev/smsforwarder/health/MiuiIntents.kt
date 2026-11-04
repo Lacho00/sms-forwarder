@@ -19,7 +19,7 @@ object MiuiIntents {
     private const val POWER_KEEPER = "com.miui.powerkeeper"
     private const val OP_AUTO_START = 10008
 
-    private fun isMiui(): Boolean =
+    internal fun isMiui(): Boolean =
         Build.MANUFACTURER.lowercase() in setOf("xiaomi", "redmi", "poco")
 
     /** true = allowed, false = blocked, null = not MIUI or it could not be determined. */
