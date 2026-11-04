@@ -86,6 +86,10 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
 
     suspend fun get(id: Long): SmsEntity? = dao.get(id)
 
+    suspend fun countsByStatus(): List<StatusCount> = dao.countsByStatus()
+
+    suspend fun deliveryCountsByStatus(): List<DeliveryStatusCount> = deliveries.countsByStatus()
+
     fun observeAll(): Flow<List<SmsEntity>> = dao.observeAll()
 
     fun observe(id: Long): Flow<SmsEntity?> = dao.observe(id)

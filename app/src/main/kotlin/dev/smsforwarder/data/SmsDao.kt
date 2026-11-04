@@ -62,4 +62,9 @@ interface SmsDao {
             "(status = :status OR (deletedAt IS NOT NULL AND deletedAt < :cutoff))",
     )
     suspend fun deleteOlderThan(status: SmsStatus, cutoff: Long): Int
+
+    @Query("SELECT status AS status, COUNT(*) AS count FROM sms WHERE deletedAt IS NULL GROUP BY status")
+    suspend fun countsByStatus(): List<StatusCount>
 }
+
+data class StatusCount(val status: SmsStatus, val count: Int)

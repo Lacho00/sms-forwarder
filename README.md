@@ -19,6 +19,7 @@ además barre periódicamente la bandeja de entrada como red de seguridad.
 La app también compila en local con el SDK de Android y JDK 17 (`./gradlew :core:test`,
 `:app:testDebugUnitTest`), pero la referencia es GitHub Actions. Capturas de las pantallas:
 [docs/screenshots.md](docs/screenshots.md).
+`scripts/e2e-emulator.sh` prueba el envío de punta a punta en un emulador con la compilación debug (siembra por broadcast, solo debug).
 
 ## Firma
 

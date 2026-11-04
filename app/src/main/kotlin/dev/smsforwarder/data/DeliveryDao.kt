@@ -92,6 +92,15 @@ interface DeliveryDao {
             "AND s.deletedAt IS NULL ORDER BY s.receivedAt ASC",
     )
     suspend fun idsConfigErrors(destinationId: Long): List<Long>
+
+    /** Delivery counts per status, visible SMS only. */
+    @Query(
+        "SELECT d.status AS status, COUNT(*) AS count FROM delivery d JOIN sms s ON s.id = d.smsId " +
+            "WHERE s.deletedAt IS NULL GROUP BY d.status",
+    )
+    suspend fun countsByStatus(): List<DeliveryStatusCount>
 }
+
+data class DeliveryStatusCount(val status: DeliveryStatus, val count: Int)
 
 data class DestinationCounts(val destinationId: Long, val queued: Int, val errors: Int)
