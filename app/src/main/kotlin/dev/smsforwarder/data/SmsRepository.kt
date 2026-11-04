@@ -26,7 +26,12 @@ sealed interface IngestResult {
     data object NoDestination : IngestResult
 }
 
-class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
+class SmsRepository(
+    private val db: AppDatabase,
+    private val clock: Clock,
+    /** Whether a destination has stored secrets; deliveries to one that has none are covered by NOT_CONFIGURED. */
+    private val isConfigured: suspend (Long) -> Boolean = { true },
+) {
     private val dao = db.smsDao()
     private val deliveries = db.deliveryDao()
     private val destinations = db.destinationDao()
@@ -305,7 +310,7 @@ class SmsRepository(private val db: AppDatabase, private val clock: Clock) {
                     d.status,
                     d.lastHttpCode,
                     d.lastError,
-                    live = destination != null && destination.deletedAt == null && destination.enabled,
+                    live = destination != null && destination.deletedAt == null && destination.enabled && isConfigured(destination.id),
                 )
             }
             QueuePolicy.isStuck(states, sms.firstSeenAt, now, stuckAfterMs)

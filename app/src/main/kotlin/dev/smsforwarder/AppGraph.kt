@@ -43,7 +43,7 @@ class AppGraph(context: Context) {
     /** Deliveries whose "no secrets" was logged; cleared when the delivery gets an outcome. */
     val noSecretsLogged: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     val engineLog = EngineLog(File(context.noBackupFilesDir, "engine-events.log"))
-    val smsRepository = SmsRepository(db, clock)
+    val smsRepository = SmsRepository(db, clock, isConfigured = { id -> secretsProxy.hasSecrets(id) })
 
     /** `var` so tests can swap in a fake instead of the Android Keystore. */
     var secretStore: SecretStore = KeystoreSecretStore(context)
@@ -62,6 +62,7 @@ class AppGraph(context: Context) {
         override suspend fun set(destinationId: Long, s: DestinationSecrets) =
             destinationSecretStore.set(destinationId, s)
         override suspend fun remove(destinationId: Long) = destinationSecretStore.remove(destinationId)
+        override suspend fun hasSecrets(destinationId: Long) = destinationSecretStore.hasSecrets(destinationId)
     }
     val destinationRepository by lazy {
         DestinationRepository(db, secretsProxy, clock, context.getString(R.string.destination_primary_name), smsRepository, notifier)

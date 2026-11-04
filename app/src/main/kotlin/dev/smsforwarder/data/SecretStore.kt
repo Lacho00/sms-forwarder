@@ -121,6 +121,9 @@ interface DestinationSecretStore {
     suspend fun get(destinationId: Long): DestinationSecrets?
     suspend fun set(destinationId: Long, s: DestinationSecrets)
     suspend fun remove(destinationId: Long)
+
+    /** Whether secrets are stored for the destination. Implementations should not decrypt; the default reads them. */
+    suspend fun hasSecrets(destinationId: Long): Boolean = get(destinationId) != null
 }
 
 fun DestinationSecrets.Companion.encode(s: DestinationSecrets): String =
@@ -198,6 +201,12 @@ class KeystoreDestinationSecretStore internal constructor(
                 it[blobKey(destinationId)] = Base64.encodeToString(encrypted, Base64.NO_WRAP)
             }
         }
+    }
+
+    /** Key presence only: no Keystore call, so it is cheap and cannot fail on a Keystore hiccup. */
+    override suspend fun hasSecrets(destinationId: Long): Boolean {
+        val prefs = store.data.first()
+        return prefs[ivKey(destinationId)] != null && prefs[blobKey(destinationId)] != null
     }
 
     override suspend fun remove(destinationId: Long) {

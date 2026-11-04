@@ -150,6 +150,36 @@ class TransferViewModelTest {
         assertTrue(io.writes.isEmpty())
     }
 
+    @Test fun blockedWhileImportFailed() = runBlocking {
+        val blockedVm = TransferViewModel(transfer, io, "2.0.0", { LocalDate.of(2026, 11, 3) }, scope, importFailed = { true })
+        withTimeout(5_000) { blockedVm.blocked.first { it } }
+        blockedVm.startExport()
+        blockedVm.startImport()
+        assertEquals(TransferUi.Idle, blockedVm.state.value)
+    }
+
+    @Test fun secretSaveFailureOnImportHasItsOwnMessage() = runBlocking {
+        seed()
+        val v = vm()
+        v.startExport()
+        v.setIncludeSecrets(true)
+        v.confirmExport()
+        v.await { it is TransferUi.PickExportFile }
+        v.pickerLaunched()
+        v.onExportFile(uri)
+        v.await { it is TransferUi.Done }
+        io.content = io.writes.single().second
+        v.dismiss()
+        v.startImport()
+        v.pickerLaunched()
+        v.onImportFile(uri)
+        v.await { it is TransferUi.ImportSummary }
+        repos.secrets.setCalls = 0
+        repos.secrets.failOnNthSet = 1
+        v.confirmImport()
+        assertEquals(TransferUi.Done(TransferMessage.SecretsNotSaved), v.await { it is TransferUi.Done })
+    }
+
     @Test fun cancelPickerWritesNothing() = runBlocking {
         seed()
         val vm = vm()

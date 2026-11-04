@@ -45,6 +45,7 @@ sealed interface TransferMessage {
     data object SecretsUnavailable : TransferMessage
     data object ExportInterrupted : TransferMessage
     data object PickerUnavailable : TransferMessage
+    data object SecretsNotSaved : TransferMessage
 }
 
 /**
@@ -58,9 +59,26 @@ class TransferViewModel(
     private val appVersion: String,
     private val today: () -> LocalDate,
     private val scope: CoroutineScope? = null,
+    /** True while the 1.x import failed (safe mode): export and import stay off. */
+    private val importFailed: suspend () -> Boolean = { false },
 ) : ViewModel() {
     private val _state = MutableStateFlow<TransferUi>(TransferUi.Idle)
     val state: StateFlow<TransferUi> = _state.asStateFlow()
+
+    private val _blocked = MutableStateFlow(false)
+    val blocked: StateFlow<Boolean> = _blocked.asStateFlow()
+
+    init {
+        sc.launch {
+            _blocked.value = try {
+                importFailed()
+            } catch (c: CancellationException) {
+                throw c
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
 
     private var exportText: String? = null
     private var exportWithSecrets = false
@@ -69,7 +87,7 @@ class TransferViewModel(
 
     private val sc get() = scope ?: viewModelScope
 
-    private fun canStart() = _state.value.let { it is TransferUi.Idle || it is TransferUi.Done }
+    private fun canStart() = !_blocked.value && _state.value.let { it is TransferUi.Idle || it is TransferUi.Done }
 
     fun startExport() {
         if (canStart()) _state.value = TransferUi.AskExport(false)
@@ -211,7 +229,11 @@ class TransferViewModel(
             } catch (c: CancellationException) {
                 throw c
             } catch (e: TransientSecretException) {
-                _state.value = TransferUi.Done(TransferMessage.SecretsUnavailable)
+                _state.value = TransferUi.Done(TransferMessage.SecretsNotSaved)
+            } catch (e: java.security.GeneralSecurityException) {
+                _state.value = TransferUi.Done(TransferMessage.SecretsNotSaved)
+            } catch (e: java.security.ProviderException) {
+                _state.value = TransferUi.Done(TransferMessage.SecretsNotSaved)
             } catch (e: Exception) {
                 _state.value = TransferUi.Done(TransferMessage.WriteFailed)
             }
@@ -233,9 +255,10 @@ class TransferViewModel(
         private val transfer: ConfigTransfer,
         private val io: DocumentIo,
         private val appVersion: String,
+        private val importFailed: suspend () -> Boolean = { false },
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            TransferViewModel(transfer, io, appVersion, { LocalDate.now() }) as T
+            TransferViewModel(transfer, io, appVersion, { LocalDate.now() }, importFailed = importFailed) as T
     }
 }

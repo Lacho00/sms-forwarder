@@ -80,7 +80,7 @@ class DiagnosticsCollectorTest {
 
     @Test fun failingSourcesGiveUnavailableLines() = runBlocking {
         seed()
-        (graph.destinationSecretStore as FakeDestinationSecretStore).getFailure = RuntimeException("boom")
+        (graph.destinationSecretStore as FakeDestinationSecretStore).hasSecretsFailure = RuntimeException("boom")
         val collector = DiagnosticsCollector(context, graph, health = { throw IllegalStateException("health boom") })
         val report = collector.report()
         assertTrue(report, report.contains("== Health ==\nunavailable\n"))

@@ -159,6 +159,7 @@ fun AppNavHost(
 
     // The picker is launched only from the Pick* states; pickerLaunched() moves on so a recomposition cannot repeat it.
     val transferState by transferViewModel.state.collectAsState()
+    val transferBlocked by transferViewModel.blocked.collectAsState()
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {
         transferViewModel.onExportFile(it)
     }
@@ -215,6 +216,7 @@ fun AppNavHost(
                 onExport = transferViewModel::startExport,
                 onImport = transferViewModel::startImport,
                 onAbout = { navigate(Routes.ABOUT) },
+                transferEnabled = !transferBlocked,
                 actions = {
                     IconButton(onClick = {
                         // Closing the field also clears the query, so a hidden search never filters the list.
@@ -282,6 +284,7 @@ fun AppNavHost(
                 onExport = transferViewModel::startExport,
                 onImport = transferViewModel::startImport,
                 onAbout = { navigate(Routes.ABOUT) },
+                transferEnabled = !transferBlocked,
             ) { padding ->
                 SettingsScreen(
                     prefs = prefs,
@@ -301,6 +304,7 @@ fun AppNavHost(
                 onExport = transferViewModel::startExport,
                 onImport = transferViewModel::startImport,
                 onAbout = { navigate(Routes.ABOUT) },
+                transferEnabled = !transferBlocked,
             ) { padding ->
                 RulesScreen(
                     rows = rows,
@@ -320,6 +324,7 @@ fun AppNavHost(
                 onExport = transferViewModel::startExport,
                 onImport = transferViewModel::startImport,
                 onAbout = { navigate(Routes.ABOUT) },
+                transferEnabled = !transferBlocked,
             ) { padding ->
                 DestinationsScreen(
                     rows = rows,

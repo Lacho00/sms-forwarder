@@ -9,8 +9,10 @@ import dev.smsforwarder.core.SuccessPolicy
 import dev.smsforwarder.core.TemplateKind
 import dev.smsforwarder.core.validateDestination
 import dev.smsforwarder.notify.Notifier
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -43,15 +45,8 @@ class DestinationRepository(
     /** Like [observeLive], flagging the destinations with no stored secrets. A Keystore hiccup counts as configured. */
     // Any other failure of get() (unrecoverable blob handling aside) is meant to surface as an error of the flow.
     fun observeLiveWithConfigured(): Flow<List<DestinationWithConfig>> = dao.observeLive().map { list ->
-        list.map { e ->
-            val configured = try {
-                secretStore.get(e.id) != null
-            } catch (_: TransientSecretException) {
-                true
-            }
-            DestinationWithConfig(e, configured)
-        }
-    }
+        list.map { e -> DestinationWithConfig(e, secretStore.hasSecrets(e.id)) }
+    }.flowOn(Dispatchers.IO)
 
     /** Names of the live destinations. */
     suspend fun liveNames(): List<String> = dao.liveNames()

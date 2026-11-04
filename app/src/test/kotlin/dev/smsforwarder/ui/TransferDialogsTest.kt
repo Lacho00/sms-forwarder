@@ -77,7 +77,9 @@ class TransferDialogsTest {
         show(TransferUi.ImportSummary(planImport(file, listOf("Main"), emptyList())))
         compose.onNodeWithText(app.resources.getQuantityString(R.plurals.import_summary_destinations, 2, 2)).assertExists()
         compose.onNodeWithText(app.getString(R.string.import_renamed, "Main", "Main (2)")).assertExists()
-        compose.onNodeWithText(app.getString(R.string.import_without_credentials)).assertExists()
+        compose.onNodeWithText(app.getString(R.string.import_without_credentials, "Main (2), Other")).assertExists()
+        // The names never stand alone without their label.
+        compose.onNodeWithText("Main (2), Other").assertDoesNotExist()
         compose.onNodeWithText(app.getString(R.string.import_confirm)).performClick()
         assertEquals(1, confirmedImport)
     }
@@ -95,5 +97,36 @@ class TransferDialogsTest {
     @Test fun idleShowsNothing() {
         show(TransferUi.Idle)
         compose.onNodeWithText(app.getString(R.string.export_confirm)).assertDoesNotExist()
+    }
+
+    @Test fun waitingShowsProgress() {
+        show(TransferUi.Waiting)
+        compose.onNode(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo))
+            .assertExists()
+    }
+
+    @Test fun importedResultShowsPluralsAndMissingCredentials() {
+        show(
+            TransferUi.Done(
+                dev.smsforwarder.ui.transfer.TransferMessage.Imported(dev.smsforwarder.data.ImportResult(1, 2, 1)),
+            ),
+        )
+        compose.onNodeWithText(app.resources.getQuantityString(R.plurals.transfer_imported_destinations, 1, 1)).assertExists()
+        compose.onNodeWithText(app.resources.getQuantityString(R.plurals.transfer_imported_rules, 2, 2)).assertExists()
+        compose.onNodeWithText(app.resources.getQuantityString(R.plurals.transfer_imported_without_credentials, 1, 1)).assertExists()
+    }
+
+    @Test fun importedResultWithoutMissingCredentialsHidesThatLine() {
+        show(
+            TransferUi.Done(
+                dev.smsforwarder.ui.transfer.TransferMessage.Imported(dev.smsforwarder.data.ImportResult(2, 0, 0)),
+            ),
+        )
+        compose.onNodeWithText(app.resources.getQuantityString(R.plurals.transfer_imported_without_credentials, 1, 1)).assertDoesNotExist()
+    }
+
+    @Test fun secretsNotSavedHasItsOwnMessage() {
+        show(TransferUi.Done(dev.smsforwarder.ui.transfer.TransferMessage.SecretsNotSaved))
+        compose.onNodeWithText(app.getString(R.string.transfer_secrets_not_saved)).assertExists()
     }
 }

@@ -332,7 +332,7 @@
         <item quantity="other">%d rules</item>
     </plurals>
     <string name="import_renamed">\u201c%1$s\u201d will be named \u201c%2$s\u201d</string>
-    <string name="import_without_credentials">No URL or token: add them in Destinations</string>
+    <string name="import_without_credentials">Without URL or token (add them in Destinations): %1$s</string>
     <string name="import_dropped_headers">%1$s: add these secret headers again: %2$s</string>
     <string name="import_confirm">Import</string>
     <string name="import_invalid_title">This file cannot be imported</string>
@@ -348,7 +348,19 @@
     <string name="import_error_invalid_destination">A destination in the file is not valid (for example, the URL is not https).</string>
     <string name="import_error_invalid_rule">A rule in the file is not valid.</string>
     <string name="transfer_exported">Configuration exported.</string>
-    <string name="transfer_imported">Imported %1$d destinations and %2$d rules.</string>
+    <plurals name="transfer_imported_destinations">
+        <item quantity="one">Imported %d destination</item>
+        <item quantity="other">Imported %d destinations</item>
+    </plurals>
+    <plurals name="transfer_imported_rules">
+        <item quantity="one">Imported %d rule</item>
+        <item quantity="other">Imported %d rules</item>
+    </plurals>
+    <plurals name="transfer_imported_without_credentials">
+        <item quantity="one">%d without credentials</item>
+        <item quantity="other">%d without credentials</item>
+    </plurals>
+    <string name="transfer_secrets_not_saved">Secrets could not be saved, nothing was imported</string>
     <string name="transfer_read_failed">The file could not be read.</string>
     <string name="transfer_write_failed">The file could not be written.</string>
     <string name="transfer_secrets_unavailable">The saved secrets could not be read. Try again.</string>

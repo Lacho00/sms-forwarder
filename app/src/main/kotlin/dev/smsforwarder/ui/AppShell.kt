@@ -38,6 +38,7 @@ fun AppShell(
     onExport: () -> Unit,
     onImport: () -> Unit,
     onAbout: () -> Unit,
+    transferEnabled: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
@@ -54,6 +55,7 @@ fun AppShell(
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.menu_export)) },
+                            enabled = transferEnabled,
                             onClick = {
                                 menuOpen = false
                                 onExport()
@@ -61,6 +63,7 @@ fun AppShell(
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.menu_import)) },
+                            enabled = transferEnabled,
                             onClick = {
                                 menuOpen = false
                                 onImport()

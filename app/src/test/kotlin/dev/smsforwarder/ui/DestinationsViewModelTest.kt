@@ -94,4 +94,15 @@ class DestinationsViewModelTest {
         assertEquals(true, rows[0].configured)
         assertEquals(false, rows[1].configured)
     }
+
+    @Test fun rowsNeverDecryptAndReadOffTheTestThread() = runBlocking {
+        val a = repos.destinations.create(draft("One"))
+        repos.secrets.getCalls = 0
+        repos.secrets.hasSecretsThread = null
+        val rows = withTimeout(10_000) { vm().rows.first { it.isNotEmpty() } }
+        assertEquals(listOf(a), rows.map { it.id })
+        assertEquals(0, repos.secrets.getCalls)
+        val reader = repos.secrets.hasSecretsThread
+        assertFalse(reader == null || reader === Thread.currentThread())
+    }
 }

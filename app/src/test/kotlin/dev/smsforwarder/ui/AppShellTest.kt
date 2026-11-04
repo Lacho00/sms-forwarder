@@ -2,6 +2,8 @@ package dev.smsforwarder.ui
 
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -29,7 +31,7 @@ class AppShellTest {
     private var exportCount = 0
     private var importCount = 0
 
-    private fun show(current: String = Routes.MAIN) {
+    private fun show(current: String = Routes.MAIN, transferEnabled: Boolean = true) {
         compose.setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {
                 AppShell(
@@ -39,6 +41,7 @@ class AppShellTest {
                     onExport = { exportCount++ },
                     onImport = { importCount++ },
                     onAbout = { aboutCount++ },
+                    transferEnabled = transferEnabled,
                 ) { Text("body") }
             }
         }
@@ -106,5 +109,13 @@ class AppShellTest {
         assertEquals("main|settings", stackForTab(Routes.SETTINGS))
         assertEquals("main|destinations", stackForTab(Routes.DESTINATIONS))
         assertEquals("main|rules", stackForTab(Routes.RULES))
+    }
+
+    @Test fun exportAndImportAreDisabledInSafeMode() {
+        show(transferEnabled = false)
+        compose.onNodeWithContentDescription(str(R.string.menu_more_options)).performClick()
+        compose.onNodeWithText(str(R.string.menu_export)).assertIsNotEnabled()
+        compose.onNodeWithText(str(R.string.menu_import)).assertIsNotEnabled()
+        compose.onNodeWithText(str(R.string.about_title)).assertIsEnabled()
     }
 }

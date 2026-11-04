@@ -9,6 +9,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,12 +39,14 @@ internal fun configErrorRes(error: ConfigError): Int = when (error) {
 
 internal fun messageRes(message: TransferMessage): Int = when (message) {
     TransferMessage.Exported -> R.string.transfer_exported
-    is TransferMessage.Imported -> R.string.transfer_imported
+    // Not a string: the result dialog builds the imported lines from plurals.
+    is TransferMessage.Imported -> R.plurals.transfer_imported_destinations
     TransferMessage.ReadFailed -> R.string.transfer_read_failed
     TransferMessage.WriteFailed -> R.string.transfer_write_failed
     TransferMessage.SecretsUnavailable -> R.string.transfer_secrets_unavailable
     TransferMessage.ExportInterrupted -> R.string.transfer_export_interrupted
     TransferMessage.PickerUnavailable -> R.string.transfer_picker_unavailable
+    TransferMessage.SecretsNotSaved -> R.string.transfer_secrets_not_saved
 }
 
 /** The dialogs of the export/import flow, drawn over any tab. Nothing is drawn for the other states. */
@@ -108,13 +111,26 @@ fun TransferDialogs(
                 val m = state.message
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     if (m is TransferMessage.Imported) {
-                        Text(stringResource(messageRes(m), m.result.destinations, m.result.rules))
+                        val r = m.result
+                        Text(pluralStringResource(R.plurals.transfer_imported_destinations, r.destinations, r.destinations))
+                        Text(pluralStringResource(R.plurals.transfer_imported_rules, r.rules, r.rules))
+                        if (r.withoutCredentials > 0) {
+                            Text(
+                                pluralStringResource(R.plurals.transfer_imported_without_credentials, r.withoutCredentials, r.withoutCredentials),
+                                Modifier.padding(top = 8.dp),
+                            )
+                        }
                     } else {
                         Text(stringResource(messageRes(m)))
                     }
                 }
             },
             confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.transfer_close)) } },
+        )
+        TransferUi.Waiting -> AlertDialog(
+            onDismissRequest = {},
+            text = { CircularProgressIndicator() },
+            confirmButton = {},
         )
         else -> Unit
     }
@@ -128,8 +144,10 @@ private fun SummaryBody(plan: ImportPlan) {
         Text(stringResource(R.string.import_renamed, from, to), Modifier.padding(top = 8.dp))
     }
     if (plan.withoutCredentials.isNotEmpty()) {
-        Text(stringResource(R.string.import_without_credentials), Modifier.padding(top = 8.dp))
-        Text(plan.withoutCredentials.joinToString(", "), style = MaterialTheme.typography.bodyMedium)
+        Text(
+            stringResource(R.string.import_without_credentials, plan.withoutCredentials.joinToString(", ")),
+            Modifier.padding(top = 8.dp),
+        )
     }
     plan.destinations.filter { it.droppedSecretHeaders.isNotEmpty() }.forEach {
         Text(

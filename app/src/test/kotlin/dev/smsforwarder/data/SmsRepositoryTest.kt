@@ -485,4 +485,12 @@ class SmsRepositoryTest {
         repo.softDelete(b)
         assertEquals(setOf(a), repo.observeDeliveries().first().map { it.smsId }.toSet())
     }
+
+    @Test fun deliveriesToDestinationsWithoutSecretsAreNotStuck() = runBlocking {
+        val id = (repo.ingest(record(), SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
+        now += QueuePolicy.STUCK_AFTER_MS + 1L
+        assertEquals(listOf(id), repo.stuckToNotify().map { it.id })
+        val unconfigured = SmsRepository(db, clock, isConfigured = { false })
+        assertTrue(unconfigured.stuckToNotify().isEmpty())
+    }
 }
