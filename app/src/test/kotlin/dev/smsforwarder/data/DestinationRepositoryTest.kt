@@ -10,7 +10,11 @@ import dev.smsforwarder.core.SendOutcome
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsRecord
 import dev.smsforwarder.core.SmsStatus
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -271,6 +275,21 @@ class DestinationRepositoryTest {
         repos.secrets.map.remove(b)
         val flags = repo.observeLiveWithConfigured().first().associate { it.entity.id to it.configured }
         assertEquals(mapOf(a to true, b to false), flags)
+    }
+
+    @Test fun observeLiveWithConfiguredUpdatesWhenSecretsArrive() = runBlocking {
+        // Saving credentials of an existing row changes no table, so only the secrets signal can refresh the flag.
+        val id = repo.ensurePrimary()
+        repos.secrets.map.remove(id)
+        val seen = java.util.concurrent.CopyOnWriteArrayList<Boolean>()
+        val job = launch(Dispatchers.Default) {
+            repo.observeLiveWithConfigured().collect { list -> seen += list.single { it.entity.id == id }.configured }
+        }
+        withTimeout(5_000) { while (seen.isEmpty()) delay(10) }
+        repo.savePrimaryCredentials(Credentials("https://h.example/new", "tok2"))
+        withTimeout(5_000) { while (seen.lastOrNull() != true) delay(10) }
+        job.cancel()
+        assertEquals(false, seen.first())
     }
 
     @Test fun configuredOrPausedUpdateKicksNothing() = runBlocking {

@@ -12,8 +12,11 @@ import dev.smsforwarder.notify.Notifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -40,11 +43,14 @@ class DestinationRepository(
     private val rulesDao = db.ruleDao()
     private val deliveries = db.deliveryDao()
 
+    // Secrets are written after the row, so the table flow alone would report a new destination as unconfigured.
+    private val secretsVersion = MutableStateFlow(0)
+
     fun observeLive(): Flow<List<DestinationEntity>> = dao.observeLive()
 
     /** Like [observeLive], flagging the destinations with no stored secrets. A Keystore hiccup counts as configured. */
     // Any other failure of get() (unrecoverable blob handling aside) is meant to surface as an error of the flow.
-    fun observeLiveWithConfigured(): Flow<List<DestinationWithConfig>> = dao.observeLive().map { list ->
+    fun observeLiveWithConfigured(): Flow<List<DestinationWithConfig>> = combine(dao.observeLive(), secretsVersion) { list, _ ->
         list.map { e -> DestinationWithConfig(e, secretStore.hasSecrets(e.id)) }
     }.flowOn(Dispatchers.IO)
 
@@ -100,6 +106,7 @@ class DestinationRepository(
         try {
             secretStore.remove(id) // an id reused after a rollback must not inherit old secrets
             secretStore.set(id, DestinationSecrets(d.url.orEmpty().trim(), secretHeaders(d.headers, emptyList())))
+            secretsVersion.update { it + 1 }
         } catch (e: Throwable) {
             // Also when the scope is cancelled: a live row without secrets could become the primary.
             withContext(NonCancellable) { dao.hardDelete(id) }
@@ -147,6 +154,7 @@ class DestinationRepository(
             )
             val url = d.url?.trim() ?: stored?.url ?: throw IllegalArgumentException("invalid destination")
             secretStore.set(id, DestinationSecrets(url, secretHeaders(d.headers, stored?.headers.orEmpty())))
+            secretsVersion.update { it + 1 }
             val resumed = if (d.enabled && (!entity.enabled || stored == null)) deliveries.smsIdsQueuedFor(id) else emptyList()
             // Saving a paused destination (or pausing it) leaves its errors alone: nothing would send them and
             // they would read as "queued". They go back to the queue when it is active again.
@@ -240,6 +248,7 @@ class DestinationRepository(
         val fresh = c.toDestinationSecrets()
         val kept = secretStore.get(id)?.headers.orEmpty().filter { !it.first.equals("Authorization", ignoreCase = true) }
         secretStore.set(id, DestinationSecrets(fresh.url, fresh.headers + kept))
+        secretsVersion.update { it + 1 }
     }
 
     suspend fun get(id: Long): DestinationEntity? = dao.get(id)
