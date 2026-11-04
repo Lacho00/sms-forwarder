@@ -2,6 +2,7 @@ package dev.smsforwarder.ui
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -37,7 +38,7 @@ class TransferDialogsTest {
 
     private fun show(initial: TransferUi) {
         compose.setContent {
-            var state by mutableStateOf(initial)
+            var state by remember { mutableStateOf(initial) }
             SmsForwarderTheme(ThemeMode.SYSTEM) {
                 TransferDialogs(
                     state = state,
