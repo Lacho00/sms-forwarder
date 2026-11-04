@@ -314,4 +314,43 @@
     <string name="rule_error_regex">This is not a valid regular expression</string>
     <string name="rule_error_body_empty">Enter the text</string>
     <string name="rule_error_no_destinations">Choose at least one destination</string>
+    <string name="menu_export">Export</string>
+    <string name="menu_import">Import</string>
+    <string name="transfer_cancel">Cancel</string>
+    <string name="transfer_close">Close</string>
+    <string name="export_title">Export configuration</string>
+    <string name="export_secrets_label">Include URL, tokens and secret headers</string>
+    <string name="export_secrets_warning">Anyone with this file can send to your destinations</string>
+    <string name="export_confirm">Export</string>
+    <string name="import_title">Import configuration</string>
+    <plurals name="import_summary_destinations">
+        <item quantity="one">%d destination</item>
+        <item quantity="other">%d destinations</item>
+    </plurals>
+    <plurals name="import_summary_rules">
+        <item quantity="one">%d rule</item>
+        <item quantity="other">%d rules</item>
+    </plurals>
+    <string name="import_renamed">\u201c%1$s\u201d will be named \u201c%2$s\u201d</string>
+    <string name="import_without_credentials">No URL or token: add them in Destinations</string>
+    <string name="import_dropped_headers">%1$s: add these secret headers again: %2$s</string>
+    <string name="import_confirm">Import</string>
+    <string name="import_invalid_title">This file cannot be imported</string>
+    <string name="import_invalid_item">Problem in: %1$s</string>
+    <string name="import_error_too_large">The file is too large.</string>
+    <string name="import_error_not_json">The file is not valid JSON.</string>
+    <string name="import_error_wrong_format">The file is not an SMS Forwarder configuration.</string>
+    <string name="import_error_newer_version">The file was created by a newer version of the app.</string>
+    <string name="import_error_bad_value">The file has a missing or invalid value.</string>
+    <string name="import_error_too_many">The file has too many destinations, rules or headers.</string>
+    <string name="import_error_duplicate_key">The file repeats a destination key.</string>
+    <string name="import_error_unknown_destination">A rule points to a destination that is not in the file.</string>
+    <string name="import_error_invalid_destination">A destination in the file is not valid (for example, the URL is not https).</string>
+    <string name="import_error_invalid_rule">A rule in the file is not valid.</string>
+    <string name="transfer_exported">Configuration exported.</string>
+    <string name="transfer_imported">Imported %1$d destinations and %2$d rules.</string>
+    <string name="transfer_read_failed">The file could not be read.</string>
+    <string name="transfer_write_failed">The file could not be written.</string>
+    <string name="transfer_secrets_unavailable">The saved secrets could not be read. Try again.</string>
+    <string name="destination_without_credentials">No credentials</string>
 </resources>

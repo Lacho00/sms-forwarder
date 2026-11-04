@@ -85,4 +85,17 @@ class DestinationsScreenTest {
         sw.performClick()
         assertEquals(listOf(1L to false), toggled)
     }
+
+    @Test fun withoutCredentialsLabel() {
+        show(
+            listOf(
+                DestinationRowUi(1, "Alpha", TemplateKind.CUSTOM, enabled = true, queued = 0, errors = 0, configured = false),
+                DestinationRowUi(2, "Beta", TemplateKind.CUSTOM, enabled = true, queued = 0, errors = 0),
+            ),
+        )
+        val sep = " · "
+        val custom = app.getString(R.string.template_custom)
+        compose.onNodeWithText(custom + sep + app.getString(R.string.destination_without_credentials)).assertExists()
+        compose.onNodeWithText(custom).assertExists()
+    }
 }

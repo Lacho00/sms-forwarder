@@ -37,6 +37,7 @@ fun templateLabelRes(kind: TemplateKind): Int = when (kind) {
 @Composable
 private fun supportingLine(row: DestinationRowUi): String {
     val parts = mutableListOf(stringResource(templateLabelRes(row.template)))
+    if (!row.configured) parts += stringResource(R.string.destination_without_credentials)
     if (!row.enabled) {
         parts += stringResource(R.string.destination_paused)
     } else {

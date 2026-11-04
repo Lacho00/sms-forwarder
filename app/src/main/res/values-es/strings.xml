@@ -314,4 +314,43 @@
     <string name="rule_error_regex">No es una expresión regular válida</string>
     <string name="rule_error_body_empty">Escribe el texto</string>
     <string name="rule_error_no_destinations">Elige al menos un destino</string>
+    <string name="menu_export">Exportar</string>
+    <string name="menu_import">Importar</string>
+    <string name="transfer_cancel">Cancelar</string>
+    <string name="transfer_close">Cerrar</string>
+    <string name="export_title">Exportar configuración</string>
+    <string name="export_secrets_label">Incluir URL, tokens y cabeceras secretas</string>
+    <string name="export_secrets_warning">Quien tenga este fichero podrá enviar a tus destinos</string>
+    <string name="export_confirm">Exportar</string>
+    <string name="import_title">Importar configuración</string>
+    <plurals name="import_summary_destinations">
+        <item quantity="one">%d destino</item>
+        <item quantity="other">%d destinos</item>
+    </plurals>
+    <plurals name="import_summary_rules">
+        <item quantity="one">%d regla</item>
+        <item quantity="other">%d reglas</item>
+    </plurals>
+    <string name="import_renamed">\u201c%1$s\u201d se llamará \u201c%2$s\u201d</string>
+    <string name="import_without_credentials">Sin URL ni token: añádelos en Destinos</string>
+    <string name="import_dropped_headers">%1$s: vuelve a añadir estas cabeceras secretas: %2$s</string>
+    <string name="import_confirm">Importar</string>
+    <string name="import_invalid_title">No se puede importar este fichero</string>
+    <string name="import_invalid_item">Problema en: %1$s</string>
+    <string name="import_error_too_large">El fichero es demasiado grande.</string>
+    <string name="import_error_not_json">El fichero no es un JSON válido.</string>
+    <string name="import_error_wrong_format">El fichero no es una configuración de SMS Forwarder.</string>
+    <string name="import_error_newer_version">El fichero lo creó una versión más nueva de la app.</string>
+    <string name="import_error_bad_value">Al fichero le falta un valor o tiene uno no válido.</string>
+    <string name="import_error_too_many">El fichero tiene demasiados destinos, reglas o cabeceras.</string>
+    <string name="import_error_duplicate_key">El fichero repite la clave de un destino.</string>
+    <string name="import_error_unknown_destination">Una regla apunta a un destino que no está en el fichero.</string>
+    <string name="import_error_invalid_destination">Un destino del fichero no es válido (por ejemplo, la URL no es https).</string>
+    <string name="import_error_invalid_rule">Una regla del fichero no es válida.</string>
+    <string name="transfer_exported">Configuración exportada.</string>
+    <string name="transfer_imported">Importados %1$d destinos y %2$d reglas.</string>
+    <string name="transfer_read_failed">No se pudo leer el fichero.</string>
+    <string name="transfer_write_failed">No se pudo escribir el fichero.</string>
+    <string name="transfer_secrets_unavailable">No se pudieron leer los secretos guardados. Inténtalo de nuevo.</string>
+    <string name="destination_without_credentials">Sin credenciales</string>
 </resources>

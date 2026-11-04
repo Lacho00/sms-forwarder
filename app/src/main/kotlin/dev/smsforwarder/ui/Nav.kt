@@ -4,6 +4,8 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -44,6 +46,9 @@ import dev.smsforwarder.ui.rules.RuleEditorScreen
 import dev.smsforwarder.ui.rules.RuleEditorViewModel
 import dev.smsforwarder.ui.rules.RulesScreen
 import dev.smsforwarder.ui.rules.RulesViewModel
+import dev.smsforwarder.ui.transfer.TransferDialogs
+import dev.smsforwarder.ui.transfer.TransferUi
+import dev.smsforwarder.ui.transfer.TransferViewModel
 import dev.smsforwarder.ui.settings.SettingsActions
 import dev.smsforwarder.ui.settings.SettingsScreen
 import dev.smsforwarder.ui.settings.SettingsViewModel
@@ -132,6 +137,7 @@ fun AppNavHost(
     ruleEditorViewModel: (RuleTarget) -> RuleEditorViewModel,
     onOpenSystemIssue: (HealthIssue) -> Unit,
     onSweepNow: () -> Unit,
+    transferViewModel: TransferViewModel,
 ) {
     var stack by rememberSaveable { mutableStateOf(startRoute) }
     // Kept here, not in the Home branch, so opening an SMS and coming back keeps the search field next to its query.
@@ -149,6 +155,28 @@ fun AppNavHost(
 
     val onTab: (String) -> Unit = { tab -> stack = stackForTab(tab) }
 
+    // The picker is launched only from the Pick* states; pickerLaunched() moves on so a recomposition cannot repeat it.
+    val transferState by transferViewModel.state.collectAsState()
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {
+        transferViewModel.onExportFile(it)
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        transferViewModel.onImportFile(it)
+    }
+    LaunchedEffect(transferState) {
+        when (val s = transferState) {
+            is TransferUi.PickExportFile -> {
+                exportLauncher.launch(s.fileName)
+                transferViewModel.pickerLaunched()
+            }
+            TransferUi.PickImportFile -> {
+                importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream"))
+                transferViewModel.pickerLaunched()
+            }
+            else -> Unit
+        }
+    }
+
     val detailId = Routes.detailId(current)
     val destinationTarget = Routes.destinationTarget(current)
     val ruleTarget = Routes.ruleTarget(current)
@@ -159,6 +187,8 @@ fun AppNavHost(
                 current = current,
                 title = stringResource(R.string.app_name),
                 onTab = onTab,
+                onExport = transferViewModel::startExport,
+                onImport = transferViewModel::startImport,
                 onAbout = { navigate(Routes.ABOUT) },
                 actions = {
                     IconButton(onClick = {
@@ -224,6 +254,8 @@ fun AppNavHost(
                 current = current,
                 title = stringResource(R.string.settings_title),
                 onTab = onTab,
+                onExport = transferViewModel::startExport,
+                onImport = transferViewModel::startImport,
                 onAbout = { navigate(Routes.ABOUT) },
             ) { padding ->
                 SettingsScreen(
@@ -241,6 +273,8 @@ fun AppNavHost(
                 current = current,
                 title = stringResource(R.string.tab_rules),
                 onTab = onTab,
+                onExport = transferViewModel::startExport,
+                onImport = transferViewModel::startImport,
                 onAbout = { navigate(Routes.ABOUT) },
             ) { padding ->
                 RulesScreen(
@@ -258,6 +292,8 @@ fun AppNavHost(
                 current = current,
                 title = stringResource(R.string.tab_destinations),
                 onTab = onTab,
+                onExport = transferViewModel::startExport,
+                onImport = transferViewModel::startImport,
                 onAbout = { navigate(Routes.ABOUT) },
             ) { padding ->
                 DestinationsScreen(
@@ -355,6 +391,13 @@ fun AppNavHost(
             onFinished = { stack = Routes.MAIN },
         )
     }
+    TransferDialogs(
+        state = transferState,
+        onIncludeSecrets = transferViewModel::setIncludeSecrets,
+        onConfirmExport = transferViewModel::confirmExport,
+        onConfirmImport = transferViewModel::confirmImport,
+        onDismiss = transferViewModel::dismiss,
+    )
 }
 
 /** Shown while the stored "onboarding done" flag is still being read. */

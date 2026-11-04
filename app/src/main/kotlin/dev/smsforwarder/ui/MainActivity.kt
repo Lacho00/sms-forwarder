@@ -31,6 +31,7 @@ import dev.smsforwarder.ui.rules.RulesViewModel
 import dev.smsforwarder.ui.settings.SettingsViewModel
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
+import dev.smsforwarder.ui.transfer.TransferViewModel
 import dev.smsforwarder.work.WorkScheduler
 
 class MainActivity : ComponentActivity() {
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var settingsViewModel: SettingsViewModel
     private lateinit var destinationsViewModel: DestinationsViewModel
     private lateinit var rulesViewModel: RulesViewModel
+    private lateinit var transferViewModel: TransferViewModel
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(Localized.wrap(newBase, Localized.savedTag(newBase)))
@@ -105,6 +107,11 @@ class MainActivity : ComponentActivity() {
             this,
             RulesViewModel.Factory(g.ruleRepository),
         )[RulesViewModel::class.java]
+        val versionName = runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull().orEmpty()
+        transferViewModel = ViewModelProvider(
+            this,
+            TransferViewModel.Factory(g.configTransfer, ContentResolverDocumentIo(app.contentResolver), versionName),
+        )[TransferViewModel::class.java]
         // Collected here, not in the ViewModel: after a recreation this is the activity that is alive.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -135,6 +142,7 @@ class MainActivity : ComponentActivity() {
                         ruleEditorViewModel = this::ruleEditorViewModel,
                         onOpenSystemIssue = this::openSystemIssue,
                         onSweepNow = { WorkScheduler.sweepNow(applicationContext) },
+                        transferViewModel = transferViewModel,
                     )
                 }
             }

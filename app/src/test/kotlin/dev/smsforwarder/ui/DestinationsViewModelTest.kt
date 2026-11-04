@@ -84,4 +84,14 @@ class DestinationsViewModelTest {
         assertEquals(1, enqueued.size)
         assertEquals(setOf(s1, s2), enqueued[0].toSet())
     }
+
+    @Test fun rowFlagsMissingCredentials() = runBlocking {
+        val a = repos.destinations.create(draft("One"))
+        val b = repos.destinations.create(draft("Two"))
+        repos.secrets.map.remove(b)
+        val rows = withTimeout(5_000) { vm().rows.first { r -> r.size == 2 } }
+        assertEquals(a, rows[0].id)
+        assertEquals(true, rows[0].configured)
+        assertEquals(false, rows[1].configured)
+    }
 }

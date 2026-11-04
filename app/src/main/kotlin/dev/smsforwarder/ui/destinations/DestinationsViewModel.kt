@@ -20,6 +20,8 @@ data class DestinationRowUi(
     val enabled: Boolean,
     val queued: Int,
     val errors: Int,
+    /** False when the destination has no stored URL or secrets (e.g. imported without credentials). */
+    val configured: Boolean = true,
 )
 
 /** [scope] is only passed by tests; in the app it is the ViewModel scope. */
@@ -29,11 +31,11 @@ class DestinationsViewModel(
     private val scope: CoroutineScope? = null,
 ) : ViewModel() {
 
-    val rows: StateFlow<List<DestinationRowUi>> = combine(repo.observeLive(), repo.observeCounts()) { live, counts ->
+    val rows: StateFlow<List<DestinationRowUi>> = combine(repo.observeLiveWithConfigured(), repo.observeCounts()) { live, counts ->
         val byId = counts.associateBy { it.destinationId }
-        live.map {
+        live.map { (it, configured) ->
             val c = byId[it.id]
-            DestinationRowUi(it.id, it.name, it.template, it.enabled, c?.queued ?: 0, c?.errors ?: 0)
+            DestinationRowUi(it.id, it.name, it.template, it.enabled, c?.queued ?: 0, c?.errors ?: 0, configured)
         }
     }.stateIn(scope ?: viewModelScope, SharingStarted.Eagerly, emptyList())
 

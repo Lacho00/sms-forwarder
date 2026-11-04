@@ -35,6 +35,8 @@ fun AppShell(
     current: String,
     title: String,
     onTab: (String) -> Unit,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
     onAbout: () -> Unit,
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
@@ -50,6 +52,20 @@ fun AppShell(
                         Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.menu_more_options))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.menu_export)) },
+                            onClick = {
+                                menuOpen = false
+                                onExport()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.menu_import)) },
+                            onClick = {
+                                menuOpen = false
+                                onImport()
+                            },
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.about_title)) },
                             onClick = {

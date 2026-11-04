@@ -26,6 +26,8 @@ class AppShellTest {
 
     private val tabs = mutableListOf<String>()
     private var aboutCount = 0
+    private var exportCount = 0
+    private var importCount = 0
 
     private fun show(current: String = Routes.MAIN) {
         compose.setContent {
@@ -34,6 +36,8 @@ class AppShellTest {
                     current = current,
                     title = "Title",
                     onTab = { tabs += it },
+                    onExport = { exportCount++ },
+                    onImport = { importCount++ },
                     onAbout = { aboutCount++ },
                 ) { Text("body") }
             }
@@ -72,11 +76,22 @@ class AppShellTest {
         assertEquals(listOf(Routes.SETTINGS), tabs)
     }
 
-    @Test fun overflowMenuOnlyHasAbout() {
+    @Test fun menuHasExportImportAbout() {
         show()
+        compose.onNodeWithContentDescription(str(R.string.menu_more_options)).performClick()
+        val labels = listOf(R.string.menu_export, R.string.menu_import, R.string.about_title)
+        val ys = labels.map { compose.onNodeWithText(str(it)).assertExists().fetchSemanticsNode().positionInRoot.y }
+        assertEquals(ys.sorted(), ys)
+        assertEquals(3, ys.toSet().size)
+        compose.onNodeWithText(str(R.string.menu_export)).performClick()
+        assertEquals(1, exportCount)
+        compose.onNodeWithContentDescription(str(R.string.menu_more_options)).performClick()
+        compose.onNodeWithText(str(R.string.menu_import)).performClick()
+        assertEquals(1, importCount)
         compose.onNodeWithContentDescription(str(R.string.menu_more_options)).performClick()
         compose.onNodeWithText(str(R.string.about_title)).assertIsDisplayed().performClick()
         assertEquals(1, aboutCount)
+        assertEquals(1, exportCount)
     }
 
     @Test fun onlyTopLevelScreensAreTabs() {
