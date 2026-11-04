@@ -13,6 +13,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
@@ -264,7 +265,11 @@ private fun MethodPicker(method: HttpMethod, onSelect: (HttpMethod) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.destination_method), modifier = Modifier.weight(1f))
         Box {
-            OutlinedButton(onClick = { open = true }) { Text(method.name) }
+            OutlinedButton(onClick = { open = true }) {
+                Text(method.name)
+                // The arrow tells the button opens a list, like other dropdowns.
+                Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+            }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 HttpMethod.entries.forEach { m ->
                     DropdownMenuItem(text = { Text(m.name) }, onClick = {
