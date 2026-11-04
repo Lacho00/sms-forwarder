@@ -99,7 +99,27 @@ interface DeliveryDao {
             "WHERE s.deletedAt IS NULL GROUP BY d.status",
     )
     suspend fun countsByStatus(): List<DeliveryStatusCount>
+
+    /** ERROR deliveries of visible SMS grouped by their last HTTP code and error text (the text is bucketed by the caller). */
+    @Query(
+        "SELECT d.lastHttpCode AS lastHttpCode, d.lastError AS lastError, COUNT(*) AS n FROM delivery d " +
+            "JOIN sms s ON s.id = d.smsId WHERE d.status = 'ERROR' AND s.deletedAt IS NULL " +
+            "GROUP BY d.lastHttpCode, d.lastError",
+    )
+    suspend fun errorCodes(): List<ErrorCodeCount>
+
+    /** Delivery counts per destination and status, visible SMS only. */
+    @Query(
+        "SELECT d.destinationId AS destinationId, d.status AS status, COUNT(*) AS count FROM delivery d " +
+            "JOIN sms s ON s.id = d.smsId WHERE d.destinationId IS NOT NULL AND s.deletedAt IS NULL " +
+            "GROUP BY d.destinationId, d.status",
+    )
+    suspend fun countsByDestination(): List<DestinationStatusCount>
 }
+
+data class ErrorCodeCount(val lastHttpCode: Int?, val lastError: String?, val n: Int)
+
+data class DestinationStatusCount(val destinationId: Long, val status: DeliveryStatus, val count: Int)
 
 data class DeliveryStatusCount(val status: DeliveryStatus, val count: Int)
 

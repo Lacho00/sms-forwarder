@@ -4,8 +4,6 @@ import android.content.Context
 import android.os.Build
 import androidx.room.Room
 import dev.smsforwarder.core.NotifyKind
-import dev.smsforwarder.diag.EngineLog
-import java.io.File
 import dev.smsforwarder.core.SystemClock
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.ConfigTransfer
@@ -16,12 +14,14 @@ import dev.smsforwarder.data.KeystoreDestinationSecretStore
 import dev.smsforwarder.data.KeystoreSecretStore
 import dev.smsforwarder.data.LegacyImport
 import dev.smsforwarder.data.MIGRATION_1_2
-import dev.smsforwarder.data.migration2to3
 import dev.smsforwarder.data.RuleRepository
 import dev.smsforwarder.data.SecretStore
 import dev.smsforwarder.data.SettingsRepository
 import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.data.SmsRepository
+import dev.smsforwarder.data.migration2to3
+import dev.smsforwarder.diag.EngineLog
+import dev.smsforwarder.diag.DiagnosticsCollector
 import dev.smsforwarder.health.HealthChecker
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.net.DeliveryClient
@@ -31,6 +31,7 @@ import dev.smsforwarder.net.defaultHttpClient
 import dev.smsforwarder.notify.Notifier
 import dev.smsforwarder.sms.SweepResult
 import dev.smsforwarder.work.WorkScheduler
+import java.io.File
 import kotlinx.coroutines.runBlocking
 
 class AppGraph(context: Context) {
@@ -39,6 +40,8 @@ class AppGraph(context: Context) {
             .addMigrations(MIGRATION_1_2, migration2to3(context.getString(R.string.destination_primary_name)))
             .build()
     val clock = SystemClock
+    /** Deliveries whose "no secrets" was logged; cleared when the delivery gets an outcome. */
+    val noSecretsLogged: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     val engineLog = EngineLog(File(context.noBackupFilesDir, "engine-events.log"))
     val smsRepository = SmsRepository(db, clock)
 
@@ -91,6 +94,8 @@ class AppGraph(context: Context) {
                 .also { legacyImportOrNull = it }
         }
         set(value) = synchronized(this) { legacyImportOrNull = value }
+
+    val diagnostics by lazy { DiagnosticsCollector(context.applicationContext, this) }
 
     val notifier by lazy { Notifier(context.applicationContext) }
     val healthChecker by lazy {
