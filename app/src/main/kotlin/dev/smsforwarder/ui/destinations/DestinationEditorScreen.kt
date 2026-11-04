@@ -152,7 +152,7 @@ private fun EditorForm(state: DestinationEditorState, vm: DestinationEditorViewM
     val errors = state.errors
     if (state.isNew) {
         Text(stringResource(R.string.destination_template), style = MaterialTheme.typography.titleMedium)
-        listOf(TemplateKind.STANDARD_JSON, TemplateKind.TELEGRAM, TemplateKind.CUSTOM).forEach { kind ->
+        TemplateKind.entries.forEach { kind ->
             RadioRow(stringResource(templateLabelRes(kind)), state.template == kind) { vm.chooseTemplate(kind) }
         }
         PresetFields(state, vm)

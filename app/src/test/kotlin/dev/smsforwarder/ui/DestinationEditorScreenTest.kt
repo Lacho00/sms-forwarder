@@ -16,6 +16,7 @@ import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.DestinationError
 import dev.smsforwarder.core.DestinationPresets
 import dev.smsforwarder.core.HeaderDraft
+import dev.smsforwarder.core.TemplateKind
 import dev.smsforwarder.data.AppDatabase
 import dev.smsforwarder.data.TestRepos
 import dev.smsforwarder.net.DeliveryClient
@@ -28,9 +29,11 @@ import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -115,6 +118,20 @@ class DestinationEditorScreenTest {
     @Test fun templateSelectorOnlyWhenCreating() {
         show(vm(null), DestinationEditorState(loaded = true, isNew = true))
         compose.onNodeWithText(app.getString(R.string.template_telegram)).assertExists()
+    }
+
+    @Test fun ntfyTemplateCanBeChosenAndSaved() {
+        val vm = vm(null)
+        show(vm)
+        compose.onNodeWithText(app.getString(R.string.template_ntfy)).performScrollTo().assertExists().performClick()
+        compose.waitForIdle()
+        vm.setPreset(vm.state.value.preset.copy(url = "https://ntfy.sh/topic"))
+        vm.applyPreset()
+        vm.save()
+        val end = System.currentTimeMillis() + 5_000
+        while (!vm.state.value.done && System.currentTimeMillis() < end) Thread.sleep(10)
+        val saved = runBlocking { repos.destinations.observeLive().first() }
+        assertEquals(listOf(TemplateKind.NTFY), saved.map { it.template })
     }
 
     @Test fun savingAnEmptyFormShowsErrorsAndDoesNotFinish() {
