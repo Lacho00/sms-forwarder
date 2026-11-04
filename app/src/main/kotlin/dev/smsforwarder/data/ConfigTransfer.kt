@@ -69,8 +69,12 @@ class ConfigTransfer(
             )
         }
         val text = ConfigCodec.encode(ConfigFile(exported, exportedRules, includeSecrets), appVersion)
-        log(EngineEventType.EXPORT, includeSecrets, exported.size)
         return text
+    }
+
+    /** Logs that an export was written. Called once the file is on disk, not when the text is built. */
+    suspend fun recordExport(includeSecrets: Boolean) {
+        log(EngineEventType.EXPORT, includeSecrets, destinations.observeLive().first().size)
     }
 
     suspend fun preview(text: String): ImportPreview = when (val parsed = ConfigCodec.decode(text)) {

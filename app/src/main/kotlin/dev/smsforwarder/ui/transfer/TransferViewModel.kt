@@ -41,6 +41,7 @@ sealed interface TransferMessage {
     data object ReadFailed : TransferMessage
     data object WriteFailed : TransferMessage
     data object SecretsUnavailable : TransferMessage
+    data object ExportInterrupted : TransferMessage
 }
 
 /**
@@ -59,6 +60,7 @@ class TransferViewModel(
     val state: StateFlow<TransferUi> = _state.asStateFlow()
 
     private var exportText: String? = null
+    private var exportWithSecrets = false
     private var pending: ConfigFile? = null
 
     private val sc get() = scope ?: viewModelScope
@@ -79,11 +81,14 @@ class TransferViewModel(
         sc.launch {
             try {
                 exportText = transfer.export(ask.includeSecrets, appVersion)
+                exportWithSecrets = ask.includeSecrets
                 _state.value = TransferUi.PickExportFile("sms-forwarder-config-${today()}.json")
             } catch (c: CancellationException) {
                 throw c
             } catch (e: Exception) {
-                _state.value = TransferUi.Done(TransferMessage.SecretsUnavailable)
+                _state.value = TransferUi.Done(
+                    if (ask.includeSecrets) TransferMessage.SecretsUnavailable else TransferMessage.WriteFailed,
+                )
             }
         }
     }
@@ -96,21 +101,47 @@ class TransferViewModel(
 
     fun onExportFile(uri: Uri?) {
         val text = exportText
+        val withSecrets = exportWithSecrets
         exportText = null
-        if (uri == null || text == null) {
+        if (uri == null) {
             _state.value = TransferUi.Idle
             return
         }
         _state.value = TransferUi.Waiting
         sc.launch {
+            if (text == null) {
+                // The process died while the picker was open: the file exists but there is nothing to write.
+                deleteQuietly(uri)
+                _state.value = TransferUi.Done(TransferMessage.ExportInterrupted)
+                return@launch
+            }
             try {
                 io.write(uri, text)
-                _state.value = TransferUi.Done(TransferMessage.Exported)
             } catch (c: CancellationException) {
                 throw c
             } catch (e: Exception) {
+                deleteQuietly(uri)
                 _state.value = TransferUi.Done(TransferMessage.WriteFailed)
+                return@launch
             }
+            try {
+                transfer.recordExport(withSecrets)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (e: Exception) {
+                // The log is best effort; the file is already written.
+            }
+            _state.value = TransferUi.Done(TransferMessage.Exported)
+        }
+    }
+
+    private suspend fun deleteQuietly(uri: Uri) {
+        try {
+            io.delete(uri)
+        } catch (c: CancellationException) {
+            throw c
+        } catch (e: Exception) {
+            // Nothing more can be done about a file the provider will not remove.
         }
     }
 
@@ -128,10 +159,14 @@ class TransferViewModel(
             try {
                 val text = io.read(uri, CONFIG_MAX_BYTES)
                 _state.value = if (text == null) {
+                    pending = null
                     TransferUi.ImportInvalid(ConfigError.TOO_LARGE, null)
                 } else {
                     when (val p = transfer.preview(text)) {
-                        is ImportPreview.Invalid -> TransferUi.ImportInvalid(p.error, p.item)
+                        is ImportPreview.Invalid -> {
+                            pending = null
+                            TransferUi.ImportInvalid(p.error, p.item)
+                        }
                         is ImportPreview.Ready -> {
                             pending = p.file
                             TransferUi.ImportSummary(p.plan)

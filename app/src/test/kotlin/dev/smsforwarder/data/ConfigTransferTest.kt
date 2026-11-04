@@ -229,6 +229,19 @@ class ConfigTransferTest {
         assertTrue(throwing.export(false, "2.0.0").isNotEmpty())
     }
 
+    @Test fun exportLogsOnlyWhenRecorded() = runBlocking {
+        seed()
+        val log = EngineLog(java.io.File.createTempFile("engine", ".log"))
+        val t = ConfigTransfer(db, repos.destinations, repos.rules, repos.secrets, engineLog = log, clock = clock)
+        t.export(false, "2.0.0")
+        assertTrue(log.recent(10).isEmpty())
+        t.recordExport(true)
+        val e = log.recent(10).single()
+        assertEquals(dev.smsforwarder.core.EngineEventType.EXPORT, e.type)
+        assertEquals("with_secrets", e.code)
+        assertEquals(1, e.count)
+    }
+
     @Test fun ruleInsertFailureLeavesNothing() = runBlocking {
         seed()
         val file = ok(transfer.export(true, "2.0.0"))

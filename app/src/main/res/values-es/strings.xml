@@ -352,5 +352,6 @@
     <string name="transfer_read_failed">No se pudo leer el fichero.</string>
     <string name="transfer_write_failed">No se pudo escribir el fichero.</string>
     <string name="transfer_secrets_unavailable">No se pudieron leer los secretos guardados. Inténtalo de nuevo.</string>
+    <string name="transfer_export_interrupted">Exportación interrumpida, vuelve a intentarlo</string>
     <string name="destination_without_credentials">Sin credenciales</string>
 </resources>

@@ -40,10 +40,17 @@ class FakeDocumentIo : DocumentIo {
     var content: String? = ""
     var failRead = false
     var failWrite = false
+    var failDelete = false
+    val deleted = mutableListOf<Uri>()
 
     override suspend fun write(uri: Uri, text: String) {
         if (failWrite) throw IOException("write failed")
         writes += uri to text
+    }
+
+    override suspend fun delete(uri: Uri) {
+        deleted += uri
+        if (failDelete) throw IOException("delete failed")
     }
 
     override suspend fun read(uri: Uri, maxBytes: Int): String? {
@@ -122,6 +129,78 @@ class TransferViewModelTest {
         vm.await { it is TransferUi.PickExportFile }
         vm.pickerLaunched()
         vm.onExportFile(uri)
+        assertEquals(TransferUi.Done(TransferMessage.WriteFailed), vm.await { it is TransferUi.Done })
+        assertEquals(listOf(uri), io.deleted)
+    }
+
+    @Test fun failedDeleteAfterWriteFailureIsIgnored() = runBlocking {
+        seed()
+        io.failWrite = true
+        io.failDelete = true
+        val vm = vm()
+        vm.startExport()
+        vm.confirmExport()
+        vm.await { it is TransferUi.PickExportFile }
+        vm.pickerLaunched()
+        vm.onExportFile(uri)
+        assertEquals(TransferUi.Done(TransferMessage.WriteFailed), vm.await { it is TransferUi.Done })
+    }
+
+    @Test fun pickedFileWithoutTextIsDeletedAndReported() = runBlocking {
+        io.failDelete = true
+        val vm = vm()
+        vm.onExportFile(uri)
+        assertEquals(TransferUi.Done(TransferMessage.ExportInterrupted), vm.await { it is TransferUi.Done })
+        assertEquals(listOf(uri), io.deleted)
+        assertTrue(io.writes.isEmpty())
+    }
+
+    @Test fun exportEventLoggedOnlyAfterSuccessfulWrite() = runBlocking {
+        seed()
+        val log = dev.smsforwarder.diag.EngineLog(java.io.File.createTempFile("engine", ".log"))
+        transfer = ConfigTransfer(db, repos.destinations, repos.rules, repos.secrets, engineLog = log, clock = clock)
+        suspend fun run(uriOrNull: Uri?, fail: Boolean) {
+            io.failWrite = fail
+            val vm = vm()
+            vm.startExport()
+            vm.confirmExport()
+            vm.await { it is TransferUi.PickExportFile }
+            vm.pickerLaunched()
+            vm.onExportFile(uriOrNull)
+            if (uriOrNull != null) vm.await { it is TransferUi.Done }
+        }
+        run(null, false)
+        run(uri, true)
+        assertTrue(log.recent(10).isEmpty())
+        run(uri, false)
+        assertEquals(1, log.recent(10).count { it.type == dev.smsforwarder.core.EngineEventType.EXPORT })
+    }
+
+    @Test fun invalidImportAfterSummaryDropsThePendingFile() = runBlocking {
+        seed()
+        io.content = transfer.export(includeSecrets = false, appVersion = "2.0.0")
+        val vm = vm()
+        vm.startImport()
+        vm.pickerLaunched()
+        vm.onImportFile(uri)
+        vm.await { it is TransferUi.ImportSummary }
+        io.content = "not json"
+        vm.dismiss()
+        vm.startImport()
+        vm.pickerLaunched()
+        vm.onImportFile(uri)
+        vm.await { it is TransferUi.ImportInvalid }
+        vm.confirmImport()
+        assertTrue(vm.state.value is TransferUi.ImportInvalid)
+        assertEquals(listOf("Main"), names())
+    }
+
+    @Test fun keystoreFailureWithoutSecretsIsWriteFailed() = runBlocking {
+        seed()
+        repos.secrets.getFailure = dev.smsforwarder.data.TransientSecretException(java.security.GeneralSecurityException("x"))
+        val vm = vm()
+        vm.startExport()
+        vm.confirmExport()
         assertEquals(TransferUi.Done(TransferMessage.WriteFailed), vm.await { it is TransferUi.Done })
     }
 

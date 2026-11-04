@@ -42,6 +42,7 @@ internal fun messageRes(message: TransferMessage): Int = when (message) {
     TransferMessage.ReadFailed -> R.string.transfer_read_failed
     TransferMessage.WriteFailed -> R.string.transfer_write_failed
     TransferMessage.SecretsUnavailable -> R.string.transfer_secrets_unavailable
+    TransferMessage.ExportInterrupted -> R.string.transfer_export_interrupted
 }
 
 /** The dialogs of the export/import flow, drawn over any tab. Nothing is drawn for the other states. */
