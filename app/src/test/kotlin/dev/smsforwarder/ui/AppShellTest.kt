@@ -47,6 +47,19 @@ class AppShellTest {
         }
     }
 
+    @Test fun titleContentReplacesTitle() {
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                AppShell(
+                    current = Routes.MAIN, title = "Title", onTab = {}, onExport = {}, onImport = {}, onAbout = {},
+                    titleContent = { Text("custom") },
+                ) { Text("body") }
+            }
+        }
+        compose.onNodeWithText("custom").assertIsDisplayed()
+        compose.onNodeWithText("Title").assertDoesNotExist()
+    }
+
     @Test fun showsBothTabs() {
         show()
         compose.onNodeWithText(str(R.string.tab_home)).assertIsDisplayed()

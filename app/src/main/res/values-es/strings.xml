@@ -19,8 +19,6 @@
     <string name="field_token">Token</string>
     <string name="action_test_connection">Probar conexión</string>
     <string name="recover_sms">Recuperar SMS</string>
-    <string name="main_open_settings">Abrir ajustes</string>
-    <string name="main_status_line">Último barrido: %1$s · Cola: %2$d · Errores: %3$d</string>
     <string name="main_sweep_now">Barrer bandeja ahora</string>
     <string name="main_empty">Todavía no hay SMS</string>
     <string name="row_sender_sim">%1$s · SIM %2$d</string>
@@ -181,6 +179,7 @@
     <string name="settings_permissions_button">Permisos y pantallas del sistema</string>
     <string name="main_search_open">Buscar</string>
     <string name="main_search_close">Cerrar búsqueda</string>
+    <string name="main_search_clear">Borrar búsqueda</string>
     <string name="main_search_hint">Buscar por texto o remitente</string>
     <string name="main_filter_all">Todos</string>
     <string name="main_filter_queued">En cola</string>
@@ -373,4 +372,13 @@
     <string name="about_diagnostic_failed">No se pudo guardar el fichero de diagnóstico</string>
     <string name="about_diagnostic_interrupted">Exportación interrumpida, inténtalo de nuevo</string>
     <string name="transfer_picker_unavailable">No hay ninguna aplicación para elegir el fichero.</string>
+    <string name="main_forwarding">Reenviando</string>
+    <string name="main_last_sweep">Último barrido %1$s</string>
+    <string name="main_counter_sent_today">Enviados hoy</string>
+    <string name="main_counter_queued">En cola</string>
+    <string name="main_counter_errors">Errores</string>
+    <plurals name="main_issues_count">
+        <item quantity="one">%d ajuste puede detener el reenvío</item>
+        <item quantity="other">%d ajustes pueden detener el reenvío</item>
+    </plurals>
 </resources>

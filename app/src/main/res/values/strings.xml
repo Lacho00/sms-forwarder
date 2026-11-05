@@ -19,8 +19,6 @@
     <string name="field_token">Token</string>
     <string name="action_test_connection">Test connection</string>
     <string name="recover_sms">Recover SMS</string>
-    <string name="main_open_settings">Open settings</string>
-    <string name="main_status_line">Last sweep: %1$s · Queue: %2$d · Errors: %3$d</string>
     <string name="main_sweep_now">Sweep inbox now</string>
     <string name="main_empty">No SMS yet</string>
     <string name="row_sender_sim">%1$s · SIM %2$d</string>
@@ -181,6 +179,7 @@
     <string name="settings_permissions_button">Permissions and system screens</string>
     <string name="main_search_open">Search</string>
     <string name="main_search_close">Close search</string>
+    <string name="main_search_clear">Clear search</string>
     <string name="main_search_hint">Search by text or sender</string>
     <string name="main_filter_all">All</string>
     <string name="main_filter_queued">Queued</string>
@@ -373,4 +372,13 @@
     <string name="about_diagnostic_failed">Could not save the diagnostics file</string>
     <string name="about_diagnostic_interrupted">Export interrupted, try again</string>
     <string name="transfer_picker_unavailable">No app is available to choose a file.</string>
+    <string name="main_forwarding">Forwarding</string>
+    <string name="main_last_sweep">Last sweep %1$s</string>
+    <string name="main_counter_sent_today">Sent today</string>
+    <string name="main_counter_queued">Queued</string>
+    <string name="main_counter_errors">Errors</string>
+    <plurals name="main_issues_count">
+        <item quantity="one">%d setting may stop forwarding</item>
+        <item quantity="other">%d settings may stop forwarding</item>
+    </plurals>
 </resources>

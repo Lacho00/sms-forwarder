@@ -8,7 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,6 +38,7 @@ import dev.smsforwarder.ui.destinations.DestinationEditorViewModel
 import dev.smsforwarder.ui.destinations.DestinationsScreen
 import dev.smsforwarder.ui.destinations.DestinationsViewModel
 import dev.smsforwarder.ui.main.MainScreen
+import dev.smsforwarder.ui.main.MainSearchField
 import dev.smsforwarder.ui.main.MainViewModel
 import dev.smsforwarder.ui.onboarding.OnboardingScreen
 import dev.smsforwarder.ui.onboarding.OnboardingViewModel
@@ -217,18 +218,30 @@ fun AppNavHost(
                 onImport = transferViewModel::startImport,
                 onAbout = { navigate(Routes.ABOUT) },
                 transferEnabled = !transferBlocked,
+                titleContent = if (searchOpen) {
+                    { MainSearchField(state.query, mainViewModel::setQuery) }
+                } else {
+                    null
+                },
+                navigationIcon = {
+                    if (searchOpen) {
+                        IconButton(onClick = {
+                            // Closing the field also clears the query, so a hidden search never filters the list.
+                            mainViewModel.setQuery("")
+                            searchOpen = false
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.main_search_close),
+                            )
+                        }
+                    }
+                },
                 actions = {
-                    IconButton(onClick = {
-                        // Closing the field also clears the query, so a hidden search never filters the list.
-                        if (searchOpen) mainViewModel.setQuery("")
-                        searchOpen = !searchOpen
-                    }) {
-                        Icon(
-                            if (searchOpen) Icons.Filled.Close else Icons.Filled.Search,
-                            contentDescription = stringResource(
-                                if (searchOpen) R.string.main_search_close else R.string.main_search_open,
-                            ),
-                        )
+                    if (!searchOpen) {
+                        IconButton(onClick = { searchOpen = true }) {
+                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.main_search_open))
+                        }
                     }
                 },
             ) { padding ->
@@ -241,8 +254,6 @@ fun AppNavHost(
                     onSweepNow = onSweepNow,
                     onOpen = { id -> navigate(Routes.detail(id)) },
                     padding = padding,
-                    searchOpen = searchOpen,
-                    onQueryChange = mainViewModel::setQuery,
                     onFilterChange = mainViewModel::setFilter,
                     onDestinationFilterChange = mainViewModel::setDestinationFilter,
                 )

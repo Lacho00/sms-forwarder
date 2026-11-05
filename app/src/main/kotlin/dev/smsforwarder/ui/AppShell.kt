@@ -27,7 +27,7 @@ import dev.smsforwarder.R
 
 /**
  * Frame for the top-level screens: top bar with an overflow menu, bottom bar with Home, Rules, Destinations and Settings.
- * [actions] are placed before the overflow button.
+ * [actions] are placed before the overflow button. [titleContent], when set, replaces the title text (Home search field).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,13 +40,16 @@ fun AppShell(
     onAbout: () -> Unit,
     transferEnabled: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
+    titleContent: (@Composable () -> Unit)? = null,
+    navigationIcon: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(title) },
+                title = titleContent ?: { Text(title) },
+                navigationIcon = navigationIcon,
                 actions = {
                     actions()
                     IconButton(onClick = { menuOpen = true }) {
