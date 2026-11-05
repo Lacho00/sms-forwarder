@@ -37,6 +37,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import java.io.File
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.UUID
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -201,5 +203,53 @@ class MainViewModelTest {
         )
         val s = await { dev.smsforwarder.health.HealthIssue.NOT_CONFIGURED in it.issues }
         assertEquals(true, dev.smsforwarder.health.HealthIssue.NOT_CONFIGURED in s.issues)
+    }
+
+    private val havana = ZoneId.of("America/Havana")
+    private fun at(y: Int, mo: Int, d: Int, h: Int, mi: Int): Long =
+        LocalDateTime.of(y, mo, d, h, mi).atZone(havana).toInstant().toEpochMilli()
+
+    private fun clockedVm(): MainViewModel {
+        val fixedNow = at(2026, 11, 5, 10, 0)
+        return MainViewModel(
+            sms, settings,
+            HealthChecker(RuntimeEnvironment.getApplication(), sms, repos.destinations, repos.rules, settings),
+            repos.destinations, repos.rules, clock = { fixedNow }, zone = { havana },
+        )
+    }
+
+    private fun addWithStatus(sender: String, receivedAt: Long, origin: SmsOrigin, sent: Boolean?): Long = runBlocking {
+        val sid = (sms.ingest(SmsRecord(sender, "Code $sender", receivedAt, null, null), origin, setOf(1L)) as IngestResult.Inserted).id
+        val delivery = sms.deliveriesOf(sid).first().id
+        when (sent) {
+            true -> sms.recordAttempt(delivery, SendOutcome.Accepted(200))
+            false -> sms.recordAttempt(delivery, SendOutcome.Rejected(400, null))
+            null -> Unit
+        }
+        sid
+    }
+
+    private fun seedSentToday() {
+        addWithStatus("AAA", at(2026, 11, 5, 9, 0), SmsOrigin.RECEIVER, true)
+        addWithStatus("BBB", at(2026, 11, 5, 8, 0), SmsOrigin.SWEEP, true)
+        addWithStatus("CCC", at(2026, 11, 5, 7, 0), SmsOrigin.MANUAL, true)
+        addWithStatus("DDD", at(2026, 11, 5, 6, 0), SmsOrigin.RECEIVER, null)
+        addWithStatus("EEE", at(2026, 11, 5, 5, 0), SmsOrigin.RECEIVER, false)
+        addWithStatus("FFF", at(2026, 11, 4, 23, 59), SmsOrigin.RECEIVER, true)
+    }
+
+    @Test fun sentTodayCountsOnlySentSinceMidnight() {
+        seedSentToday()
+        vm = clockedVm()
+        assertEquals(3, await { it.rows.size >= 9 && it.sentToday > 0 }.sentToday)
+    }
+
+    @Test fun sentTodayIgnoresFilters() {
+        seedSentToday()
+        vm = clockedVm()
+        vm.setFilter(StatusFilter.ERROR)
+        vm.setQuery("zzz")
+        val s = await { it.query == "zzz" && it.filter == StatusFilter.ERROR && it.rows.isEmpty() }
+        assertEquals(3, s.sentToday)
     }
 }

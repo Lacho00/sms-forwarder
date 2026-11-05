@@ -27,6 +27,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** One destination's delivery of an SMS, as the home row shows it. */
 data class DeliveryChipUi(
@@ -59,9 +62,39 @@ data class MainUiState(
     /** Live destinations (id, name) for the filter chips. */
     val destinations: List<Pair<Long, String>> = emptyList(),
     val destinationFilter: Long? = null,
+    /** SMS received since local midnight whose status is SENT (recovered and manual ones included). Ignores filters. */
+    val sentToday: Int = 0,
 )
 
 private const val PREVIEW_LENGTH = 80
+
+internal fun startOfDay(now: Long, zone: ZoneId): Long =
+    Instant.ofEpochMilli(now).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
+
+enum class DayKind { TODAY, YESTERDAY, OTHER }
+
+data class DayGroup(val day: LocalDate, val kind: DayKind, val rows: List<RowUi>)
+
+/** Groups [rows] (already newest first) by local day, keeping their order. */
+internal fun groupByDay(rows: List<RowUi>, now: Long, zone: ZoneId): List<DayGroup> {
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val groups = mutableListOf<DayGroup>()
+    for (row in rows) {
+        val day = Instant.ofEpochMilli(row.receivedAt).atZone(zone).toLocalDate()
+        val last = groups.lastOrNull()
+        if (last != null && last.day == day) {
+            groups[groups.lastIndex] = last.copy(rows = last.rows + row)
+        } else {
+            val kind = when (day) {
+                today -> DayKind.TODAY
+                today.minusDays(1) -> DayKind.YESTERDAY
+                else -> DayKind.OTHER
+            }
+            groups += DayGroup(day, kind, listOf(row))
+        }
+    }
+    return groups
+}
 
 private fun matchesFilter(status: SmsStatus, filter: StatusFilter): Boolean = when (filter) {
     StatusFilter.ALL -> true
@@ -103,6 +136,8 @@ class MainViewModel(
     private val healthChecker: HealthChecker,
     destinationRepository: DestinationRepository,
     ruleRepository: RuleRepository,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val zone: () -> ZoneId = ZoneId::systemDefault,
 ) : ViewModel() {
 
     private val issues = MutableStateFlow<Set<HealthIssue>>(emptySet())
@@ -154,6 +189,9 @@ class MainViewModel(
             // The counters describe the whole queue, not what the search leaves on screen.
             queued = all.count { it.status == SmsStatus.QUEUED },
             errors = all.count { it.status == SmsStatus.ERROR },
+            sentToday = startOfDay(clock(), zone()).let { start ->
+                all.count { it.status == SmsStatus.SENT && it.receivedAt >= start }
+            },
             rows = all
                 .filter {
                     matchesFilter(it.status, c.filter) && SmsSearch.matches(it.sender, it.body, c.query) &&
@@ -206,9 +244,11 @@ class MainViewModel(
         private val healthChecker: HealthChecker,
         private val destinationRepository: DestinationRepository,
         private val ruleRepository: RuleRepository,
+        private val clock: () -> Long = System::currentTimeMillis,
+        private val zone: () -> ZoneId = ZoneId::systemDefault,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            MainViewModel(smsRepository, settings, healthChecker, destinationRepository, ruleRepository) as T
+            MainViewModel(smsRepository, settings, healthChecker, destinationRepository, ruleRepository, clock, zone) as T
     }
 }
