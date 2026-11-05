@@ -14,6 +14,10 @@ import dev.smsforwarder.ui.theme.ThemeMode
 import dev.smsforwarder.ui.theme.contrastRatio
 import dev.smsforwarder.ui.theme.toneOf
 import org.junit.Assert.assertEquals
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -52,5 +56,17 @@ class StatusTest {
             SmsForwarderTheme(ThemeMode.LIGHT, dynamicColor = false) { StatusPill(StatusTone.OK, "x") }
         }
         compose.onNodeWithText("x").assertIsDisplayed()
+    }
+
+    @Test fun longPillTextIsEllipsizedWithinItsWidth() {
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.LIGHT, dynamicColor = false) {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.width(120.dp)) {
+                    StatusPill(StatusTone.OK, "L".repeat(80), androidx.compose.ui.Modifier.testTag("pill"))
+                }
+            }
+        }
+        val w = compose.onNodeWithTag("pill").fetchSemanticsNode().boundsInRoot.width
+        assertTrue("pill width $w", w <= with(androidx.compose.ui.unit.Density(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>())) { 120.dp.toPx() } + 1f)
     }
 }

@@ -40,7 +40,22 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.text.style.TextOverflow
+import dev.smsforwarder.core.StatusLabel
+import dev.smsforwarder.ui.components.EmptyState
+import dev.smsforwarder.ui.components.InsetDivider
+import dev.smsforwarder.ui.theme.StatusPill
+import dev.smsforwarder.ui.theme.toneOf
+import java.time.ZoneId
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
@@ -135,25 +150,41 @@ fun MainScreen(
 ) {
     // While searching, the panel and the banner give the room to the results.
     val searching = state.query.isNotBlank()
-    run {
+    val listState = rememberLazyListState()
+    // Showing the panel again (search closed) inserts it above the anchored item: go back to the top.
+    LaunchedEffect(searching) { listState.scrollToItem(0) }
+    val filtering = searching || state.filter != StatusFilter.ALL || state.destinationFilter != null
+    val groups = remember(state.rows) { groupByDay(state.rows, System.currentTimeMillis(), ZoneId.systemDefault()) }
+    Column(Modifier.fillMaxSize()) {
+        // The banner lives outside the list: an item inserted above the first visible one (issues load after
+        // the rows) would be scrolled off by the list's key anchoring.
+        if (!searching && state.issues.isNotEmpty()) {
+            Box(
+                Modifier.padding(
+                    start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 8.dp,
+                ),
+            ) { HealthBanner(state.issues, onOpenIssue) }
+        }
         LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            state = listState,
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
-                top = padding.calculateTopPadding() + 8.dp,
+                top = if (!searching && state.issues.isNotEmpty()) 8.dp else padding.calculateTopPadding() + 8.dp,
                 bottom = padding.calculateBottomPadding() + 8.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (!searching && state.issues.isNotEmpty()) {
-                item(key = "banner") { HealthBanner(state.issues, onOpenIssue) }
-            }
             if (!searching) {
                 item(key = "status") { StatusPanel(state, onSweepNow, onFilterChange) }
             }
             item(key = "filters") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     StatusFilter.entries.forEach { option ->
                         FilterChip(
                             selected = state.filter == option,
@@ -161,15 +192,9 @@ fun MainScreen(
                             label = { Text(filterLabel(option)) },
                         )
                     }
-                }
-            }
-            // A single destination has nothing to filter by.
-            if (state.destinations.size > 1) {
-                item(key = "destination-filters") {
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
+                    // A single destination has nothing to filter by.
+                    if (state.destinations.size > 1) {
+                        VerticalDivider(Modifier.height(24.dp))
                         FilterChip(
                             selected = state.destinationFilter == null,
                             onClick = { onDestinationFilterChange(null) },
@@ -179,46 +204,113 @@ fun MainScreen(
                             FilterChip(
                                 selected = state.destinationFilter == id,
                                 onClick = { onDestinationFilterChange(id) },
-                                label = { Text(name) },
+                                label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             )
                         }
                     }
                 }
             }
             if (state.rows.isEmpty()) {
-                val filtering = state.query.isNotBlank() || state.filter != StatusFilter.ALL ||
-                    state.destinationFilter != null
                 item(key = "empty") {
-                    Text(
-                        stringResource(if (filtering) R.string.main_no_results else R.string.main_empty),
-                        style = MaterialTheme.typography.bodyMedium,
+                    EmptyState(
+                        icon = rememberVectorPainter(if (filtering) Icons.Filled.Search else Icons.Filled.Email),
+                        title = stringResource(if (filtering) R.string.main_no_results else R.string.main_empty),
+                        body = stringResource(if (filtering) R.string.main_no_results_body else R.string.main_empty_body),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        actionLabel = if (filtering) stringResource(R.string.main_clear_filters) else null,
+                        onAction = if (filtering) onClearFilters else null,
                     )
                 }
             }
-            items(state.rows, key = { it.id }) { row ->
-                SmsRow(row, hideText = state.hideText, onClick = { onOpen(row.id) })
-                HorizontalDivider()
+            groups.forEach { group ->
+                item(key = "day-${group.day}") { DayHeader(group) }
+                itemsIndexed(group.rows, key = { _, row -> row.id }) { index, row ->
+                    SmsRow(row, group.kind, hideText = state.hideText, onClick = { onOpen(row.id) })
+                    if (index < group.rows.lastIndex) InsetDivider()
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SmsRow(row: RowUi, hideText: Boolean, onClick: () -> Unit) {
+private fun DayHeader(group: DayGroup) {
+    val locale = LocalConfiguration.current.locales[0]
+    val text = when (group.kind) {
+        DayKind.TODAY -> stringResource(R.string.main_day_today)
+        DayKind.YESTERDAY -> stringResource(R.string.main_day_yesterday)
+        DayKind.OTHER -> DateFormat.getDateInstance(DateFormat.MEDIUM, locale)
+            .format(Date.from(group.day.atStartOfDay(ZoneId.systemDefault()).toInstant()))
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+/** Short time for today and yesterday, short date for older days. */
+@Composable
+internal fun rowTime(millis: Long, kind: DayKind): String {
+    val locale = LocalConfiguration.current.locales[0]
+    val format = if (kind == DayKind.OTHER) {
+        DateFormat.getDateInstance(DateFormat.SHORT, locale)
+    } else {
+        DateFormat.getTimeInstance(DateFormat.SHORT, locale)
+    }
+    return format.format(Date(millis))
+}
+
+/** One pill per destination; without deliveries, a single pill from the SMS status. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun DeliveryPills(chips: List<DeliveryChipUi>, fallback: StatusLabel) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (chips.isEmpty()) {
+            StatusPill(toneOf(fallback.kind), statusText(fallback))
+        } else {
+            chips.forEach { StatusPill(toneOf(it.status), deliveryChipText(it)) }
+        }
+    }
+}
+
+@Composable
+private fun SmsRow(row: RowUi, kind: DayKind, hideText: Boolean, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         val senderLine = row.subId?.let { stringResource(R.string.row_sender_sim, row.sender, it) } ?: row.sender
-        Text(senderLine, style = MaterialTheme.typography.titleSmall)
-        Text(formatDateTime(row.receivedAt), style = MaterialTheme.typography.bodySmall)
-        if (!hideText) Text(row.preview, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-        Text(statusText(row.label), style = MaterialTheme.typography.labelMedium)
-        if (row.deliveries.isNotEmpty()) {
-            Text(deliveryLine(row.deliveries), style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                senderLine,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                rowTime(row.receivedAt, kind),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
         }
+        if (!hideText) {
+            Text(
+                row.preview,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        DeliveryPills(row.deliveries, row.label)
     }
 }
 
@@ -268,12 +360,17 @@ private fun StatusPanel(state: MainUiState, onSweepNow: () -> Unit, onFilterChan
                 Text(
                     stringResource(if (state.paused) R.string.forwarding_paused else R.string.main_forwarding),
                     style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
                     stringResource(R.string.main_last_sweep, agoLabel(state.lastSweepAt, System.currentTimeMillis())),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 IconButton(onClick = onSweepNow) {
                     Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.main_sweep_now))
@@ -321,6 +418,8 @@ private fun HealthBanner(issues: Set<HealthIssue>, onOpenIssue: (HealthIssue) ->
     val colors = toneColors(tone)
     val sorted = issues.sortedBy { it.ordinal }
     var sheet by remember { mutableStateOf(false) }
+    // A sheet left open must not come back when the issues grow again.
+    if (sorted.size < 2) sheet = false
     val text = if (sorted.size == 1) {
         issueTitle(sorted.first())
     } else {

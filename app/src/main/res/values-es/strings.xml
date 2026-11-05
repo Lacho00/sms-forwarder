@@ -55,11 +55,11 @@
     <string name="detail_field_status">Estado</string>
     <string name="detail_field_text">Texto</string>
     <string name="detail_retry">Reintentar</string>
-    <string name="delivery_sent">%1$s ✓%2$d</string>
-    <string name="delivery_sent_nocode">%1$s ✓</string>
+    <string name="delivery_sent">%1$s %2$d</string>
+    <string name="delivery_sent_nocode">%1$s</string>
     <string name="delivery_queued">%1$s en cola</string>
-    <string name="delivery_error">%1$s ✗%2$d</string>
-    <string name="delivery_error_nocode">%1$s ✗</string>
+    <string name="delivery_error">%1$s %2$d</string>
+    <string name="delivery_error_nocode">%1$s</string>
     <string name="delivery_config">%1$s: revisar destino</string>
     <string name="delivery_canceled">%1$s: cancelado</string>
     <string name="detail_deliveries">Destinos</string>
@@ -184,6 +184,11 @@
     <string name="main_filter_all">Todos</string>
     <string name="main_filter_queued">En cola</string>
     <string name="main_filter_error">Error</string>
+    <string name="main_day_today">Hoy</string>
+    <string name="main_day_yesterday">Ayer</string>
+    <string name="main_clear_filters">Quitar filtros</string>
+    <string name="main_empty_body">Aquí aparecerán los mensajes de tus remitentes.</string>
+    <string name="main_no_results_body">Prueba otra búsqueda u otro filtro.</string>
     <string name="main_no_results">Ningún SMS coincide</string>
     <string name="detail_show_text">Mostrar</string>
     <string name="detail_delete">Borrar</string>

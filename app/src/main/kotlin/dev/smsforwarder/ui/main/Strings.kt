@@ -29,7 +29,7 @@ fun statusText(label: StatusLabel): String {
     }
 }
 
-/** One destination's state, e.g. `Main ✓200` or `T2 queued`. */
+/** One destination's state, e.g. `Main 200` or `T2 queued`. */
 @Composable
 fun deliveryChipText(chip: DeliveryChipUi): String {
     val name = chip.destinationName
@@ -45,11 +45,4 @@ fun deliveryChipText(chip: DeliveryChipUi): String {
         }
         DeliveryStatus.CANCELED -> stringResource(R.string.delivery_canceled, name)
     }
-}
-
-/** The per-destination line of a row: each destination's state joined by " · ". */
-@Composable
-fun deliveryLine(chips: List<DeliveryChipUi>): String {
-    val texts = chips.map { deliveryChipText(it) }
-    return texts.joinToString(" · ")
 }

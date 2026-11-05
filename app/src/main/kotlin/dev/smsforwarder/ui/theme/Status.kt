@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 import dev.smsforwarder.core.DeliveryStatus
@@ -87,7 +88,7 @@ fun StatusPill(tone: StatusTone, text: String, modifier: Modifier = Modifier) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(toneIcon(tone), contentDescription = null, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
-            Text(text, style = MaterialTheme.typography.labelMedium)
+            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

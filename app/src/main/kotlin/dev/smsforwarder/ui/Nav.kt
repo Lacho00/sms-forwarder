@@ -28,6 +28,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
+import dev.smsforwarder.core.StatusFilter
 import dev.smsforwarder.health.HealthIssue
 import dev.smsforwarder.ui.about.AboutScreen
 import dev.smsforwarder.ui.about.AboutViewModel
@@ -256,6 +257,11 @@ fun AppNavHost(
                     padding = padding,
                     onFilterChange = mainViewModel::setFilter,
                     onDestinationFilterChange = mainViewModel::setDestinationFilter,
+                    onClearFilters = {
+                        mainViewModel.setQuery("")
+                        mainViewModel.setFilter(StatusFilter.ALL)
+                        mainViewModel.setDestinationFilter(null)
+                    },
                 )
             }
         }
