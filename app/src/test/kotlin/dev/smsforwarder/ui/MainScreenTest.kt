@@ -13,6 +13,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.onRoot
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import java.text.DateFormat
+import java.util.Date
 import androidx.compose.runtime.setValue
 import dev.smsforwarder.R
 import dev.smsforwarder.core.StatusKind
@@ -241,7 +244,7 @@ class MainScreenTest {
         val row = chipRow().copy(sender = "S".repeat(60), receivedAt = now)
         show(state(rows = listOf(row)))
         val locale = RuntimeEnvironment.getApplication().resources.configuration.locales[0]
-        val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, locale).format(java.util.Date(now))
+        val time = DateFormat.getTimeInstance(DateFormat.SHORT, locale).format(Date(now))
         compose.onNodeWithText(time).assertIsDisplayed()
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
         val timeBounds = compose.onNodeWithText(time).fetchSemanticsNode().boundsInRoot
@@ -278,7 +281,7 @@ class MainScreenTest {
     }
 
     @Test fun bannerStaysVisibleWhenRowsAndIssuesArriveLater() {
-        var current by androidx.compose.runtime.mutableStateOf(state(rows = listOf(previewRow)))
+        var current by mutableStateOf(state(rows = listOf(previewRow)))
         compose.setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {
                 MainScreen(state = current, onOpenIssue = {}, onSweepNow = {}, onOpen = {})
@@ -291,7 +294,7 @@ class MainScreenTest {
     }
 
     @Test fun staleSheetClosesWhenIssuesDrop() {
-        var current by androidx.compose.runtime.mutableStateOf(
+        var current by mutableStateOf(
             state(issues = setOf(HealthIssue.AUTOSTART_OFF, HealthIssue.BATTERY_OPTIMIZED)),
         )
         val res = RuntimeEnvironment.getApplication().resources

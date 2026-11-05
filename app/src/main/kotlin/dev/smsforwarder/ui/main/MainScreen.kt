@@ -55,7 +55,14 @@ import dev.smsforwarder.ui.components.EmptyState
 import dev.smsforwarder.ui.components.InsetDivider
 import dev.smsforwarder.ui.theme.StatusPill
 import dev.smsforwarder.ui.theme.toneOf
+import java.time.LocalDate
 import java.time.ZoneId
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
@@ -154,7 +161,17 @@ fun MainScreen(
     // Showing the panel again (search closed) inserts it above the anchored item: go back to the top.
     LaunchedEffect(searching) { listState.scrollToItem(0) }
     val filtering = searching || state.filter != StatusFilter.ALL || state.destinationFilter != null
-    val groups = remember(state.rows) { groupByDay(state.rows, System.currentTimeMillis(), ZoneId.systemDefault()) }
+    // "Today" must follow the clock: re-group when the date changes (checked on every resume).
+    val zone = ZoneId.systemDefault()
+    var resumes by remember { mutableIntStateOf(0) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) resumes++ }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    val today = remember(resumes) { LocalDate.now(zone) }
+    val groups = remember(state.rows, today) { groupByDay(state.rows, System.currentTimeMillis(), zone) }
     Column(Modifier.fillMaxSize()) {
         // The banner lives outside the list: an item inserted above the first visible one (issues load after
         // the rows) would be scrolled off by the list's key anchoring.
@@ -362,15 +379,15 @@ private fun StatusPanel(state: MainUiState, onSweepNow: () -> Unit, onFilterChan
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
                 )
                 Text(
                     stringResource(R.string.main_last_sweep, agoLabel(state.lastSweepAt, System.currentTimeMillis())),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    textAlign = TextAlign.End,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                 )
                 IconButton(onClick = onSweepNow) {
                     Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.main_sweep_now))
@@ -419,7 +436,8 @@ private fun HealthBanner(issues: Set<HealthIssue>, onOpenIssue: (HealthIssue) ->
     val sorted = issues.sortedBy { it.ordinal }
     var sheet by remember { mutableStateOf(false) }
     // A sheet left open must not come back when the issues grow again.
-    if (sorted.size < 2) sheet = false
+    val showSheet = sheet && sorted.size >= 2
+    LaunchedEffect(showSheet) { if (!showSheet) sheet = false }
     val text = if (sorted.size == 1) {
         issueTitle(sorted.first())
     } else {
@@ -442,7 +460,7 @@ private fun HealthBanner(issues: Set<HealthIssue>, onOpenIssue: (HealthIssue) ->
             Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null)
         }
     }
-    if (sheet) {
+    if (showSheet) {
         ModalBottomSheet(onDismissRequest = { sheet = false }) {
             Column(modifier = Modifier.padding(bottom = 16.dp)) {
                 sorted.forEach { issue ->
