@@ -48,11 +48,6 @@
     <string name="status_manual_code">Manual · %d</string>
     <string name="detail_title">SMS details</string>
     <string name="detail_not_found">SMS not found</string>
-    <string name="detail_field_sim">SIM</string>
-    <string name="detail_sim_unknown">Unknown</string>
-    <string name="detail_field_time">Time</string>
-    <string name="detail_field_origin">Origin</string>
-    <string name="detail_field_status">Status</string>
     <string name="detail_field_text">Text</string>
     <string name="detail_retry">Retry</string>
     <string name="delivery_sent">%1$s %2$d</string>
@@ -62,7 +57,7 @@
     <string name="delivery_error_nocode">%1$s</string>
     <string name="delivery_config">%1$s: check destination</string>
     <string name="delivery_canceled">%1$s: canceled</string>
-    <string name="detail_deliveries">Destinations</string>
+    <string name="detail_destinations">Destinations</string>
     <string name="detail_resend_to">Resend to a destination</string>
     <string name="detail_resend_to_title">Choose a destination</string>
     <string name="detail_attempt_destination">%1$s · %2$s</string>

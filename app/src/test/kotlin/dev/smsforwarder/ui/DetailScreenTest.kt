@@ -54,7 +54,7 @@ class DetailScreenTest {
         firstSeenAt = 1_800_000_000_000L,
     )
 
-    @Test fun retryVisibleOnlyOnError() {
+    @Test fun retryOnlyWhenItApplies() {
         val retry = RuntimeEnvironment.getApplication().getString(R.string.detail_retry)
         var state by mutableStateOf(DetailUiState(sms(SmsStatus.ERROR), emptyList()))
         compose.setContent {
@@ -73,7 +73,7 @@ class DetailScreenTest {
 
     private fun str(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
 
-    @Test fun deleteAsksForConfirmationAndOnlyConfirmCallsOnDelete() {
+    @Test fun deleteIsDestructiveAndStillConfirms() {
         var deleted = 0
         compose.setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {
@@ -96,6 +96,50 @@ class DetailScreenTest {
         compose.onNodeWithText(str(R.string.detail_delete)).performScrollTo().performClick()
         compose.onNode(hasText(str(R.string.detail_delete_confirm)) and hasAnyAncestor(isDialog())).performClick()
         compose.runOnIdle { assertEquals(1, deleted) }
+    }
+
+    @Test fun headerShowsSenderAndStatusPill() {
+        val state = DetailUiState(sms(SmsStatus.SENT), emptyList())
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(state = state, onRetry = {}, onDelete = {}, onBack = {})
+            }
+        }
+        compose.onNode(hasText("OPERADOR", substring = true) and !hasText("Se ha comprado", substring = true)).assertExists()
+        compose.onNodeWithText(str(R.string.status_sent)).assertExists()
+    }
+
+    @Test fun destinationsSectionListsEachDeliveryWithPill() {
+        val deliveries = listOf(
+            DeliveryEntity(id = 10, smsId = 1, destinationId = 1, destinationName = "Main", status = DeliveryStatus.SENT, lastHttpCode = 204),
+            DeliveryEntity(id = 11, smsId = 1, destinationId = 2, destinationName = "T2", status = DeliveryStatus.ERROR, lastHttpCode = 500),
+        )
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(
+                    state = DetailUiState(sms(SmsStatus.ERROR), emptyList(), deliveries = deliveries),
+                    onRetry = {}, onDelete = {}, onBack = {},
+                )
+            }
+        }
+        compose.onNodeWithText(str(R.string.detail_destinations)).assertExists()
+        compose.onNodeWithText(str(R.string.delivery_sent, "Main", 204)).assertExists()
+        compose.onNodeWithText(str(R.string.delivery_error, "T2", 500)).assertExists()
+    }
+
+    @Test fun attemptsSectionShowsHttpCode() {
+        val attempts = listOf(
+            AttemptEntity(id = 1, smsId = 1, at = 1_800_000_000_000L, httpCode = 204, error = null, deliveryId = null),
+            AttemptEntity(id = 2, smsId = 1, at = 1_800_000_100_000L, httpCode = null, error = "timeout", deliveryId = null),
+        )
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(state = DetailUiState(sms(SmsStatus.SENT), attempts), onRetry = {}, onDelete = {}, onBack = {})
+            }
+        }
+        compose.onNodeWithText(str(R.string.detail_attempts)).assertExists()
+        compose.onNodeWithText("204").assertExists()
+        compose.onNodeWithText(str(R.string.attempt_no_response)).assertExists()
     }
 
     @Test fun hiddenTextIsRevealedByShow() {
@@ -140,6 +184,7 @@ class DetailScreenTest {
             }
         }
         compose.onNodeWithText(str(R.string.delivery_sent, "Main", 204)).performScrollTo().assertExists()
+        compose.onNodeWithText(str(R.string.detail_destinations)).assertExists()
         compose.onNodeWithText(str(R.string.delivery_queued, "T2")).performScrollTo().assertExists()
         compose.onNodeWithText("Main · ", substring = true).performScrollTo().assertExists()
 
