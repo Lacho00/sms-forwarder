@@ -56,8 +56,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import dev.smsforwarder.ui.components.BottomActionBar
 import dev.smsforwarder.ui.components.DestructiveButton
+import dev.smsforwarder.ui.components.DropdownField
 import dev.smsforwarder.R
 import dev.smsforwarder.core.DestinationError
 import dev.smsforwarder.core.DestinationTestResult
@@ -66,7 +68,7 @@ import dev.smsforwarder.core.SuccessPolicy
 import dev.smsforwarder.core.TemplateKind
 import dev.smsforwarder.core.TestVerdict
 
-const val STORED_LOCK_TAG = "stored_lock"
+internal const val STORED_LOCK_TAG = "stored_lock"
 
 private fun errorRes(e: DestinationError): Int = when (e) {
     DestinationError.NAME_EMPTY -> R.string.destination_error_name_empty
@@ -232,6 +234,7 @@ private fun EditorForm(state: DestinationEditorState, vm: DestinationEditorViewM
     }
 
     if (!state.isNew) {
+        Spacer(Modifier.height(8.dp))
         DestructiveButton(
             text = stringResource(R.string.destination_delete),
             onClick = vm::requestDelete,
@@ -301,38 +304,6 @@ private fun PresetField(value: String, label: Int, hidden: Boolean, onChange: (S
         visualTransformation = if (hidden) PasswordVisualTransformation() else VisualTransformation.None,
         modifier = Modifier.fillMaxWidth(),
     )
-}
-
-/** Read-only field that opens a list; same size and label as the other fields. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun <T> DropdownField(
-    label: String,
-    options: List<T>,
-    selected: T,
-    optionLabel: @Composable (T) -> String,
-    onSelect: (T) -> Unit,
-) {
-    var open by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
-        OutlinedTextField(
-            value = optionLabel(selected),
-            onValueChange = {},
-            readOnly = true,
-            singleLine = true,
-            label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = open) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-        )
-        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            options.forEach { option ->
-                DropdownMenuItem(text = { Text(optionLabel(option)) }, onClick = {
-                    open = false
-                    onSelect(option)
-                })
-            }
-        }
-    }
 }
 
 @Composable

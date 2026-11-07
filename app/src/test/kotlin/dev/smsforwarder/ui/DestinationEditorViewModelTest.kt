@@ -140,6 +140,18 @@ class DestinationEditorViewModelTest {
         assertEquals(TemplateKind.CUSTOM, vm.state.value.template)
     }
 
+    @Test fun savingWithAnEmptyNameReportsNameEmpty() = runBlocking {
+        val vm = vm()
+        vm.chooseTemplate(TemplateKind.CUSTOM)
+        vm.setName("  ")
+        vm.setUrl("https://h.example/x")
+        vm.setBody("{}")
+        vm.save()
+        assertTrue(DestinationError.NAME_EMPTY in vm.state.value.errors)
+        assertFalse(vm.state.value.done)
+        assertEquals(0, liveCount())
+    }
+
     @Test fun telegramPresetFillsForm() {
         val vm = vm()
         vm.chooseTemplate(TemplateKind.TELEGRAM)

@@ -32,6 +32,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
@@ -190,6 +200,38 @@ fun <T> SegmentedChoice(
                 shape = SegmentedButtonDefaults.itemShape(index, options.size),
                 label = { Text(label(option), maxLines = 1, overflow = TextOverflow.Ellipsis) },
             )
+        }
+    }
+}
+
+/** Read-only field that opens a list; same size and label as the other fields. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> DropdownField(
+    label: String,
+    options: List<T>,
+    selected: T,
+    optionLabel: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
+        OutlinedTextField(
+            value = optionLabel(selected),
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = open) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+        )
+        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(text = { Text(optionLabel(option)) }, onClick = {
+                    open = false
+                    onSelect(option)
+                })
+            }
         }
     }
 }

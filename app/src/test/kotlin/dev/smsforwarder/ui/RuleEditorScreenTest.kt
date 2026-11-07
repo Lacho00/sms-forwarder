@@ -92,7 +92,7 @@ class RuleEditorScreenTest {
         val vm = vm()
         show(vm, null)
         compose.onNodeWithText(app.getString(R.string.rule_body_help_contains)).assertDoesNotExist()
-        compose.onNodeWithText(app.getString(R.string.rule_body_not_contains)).performScrollTo().performClick()
+        chooseBodyMode(R.string.rule_body_any, R.string.rule_body_not_contains)
         compose.onNodeWithText(app.getString(R.string.rule_body_help_not_contains)).assertExists()
         assertEquals(BodyMode.NOT_CONTAINS, vm.state.value.draft.bodyMode)
     }
@@ -146,18 +146,40 @@ class RuleEditorScreenTest {
         compose.onNodeWithContentDescription(app.getString(R.string.rule_delete)).assertExists()
     }
 
-    @Test fun matchModeIsSegmented() {
+    /** Opens the body-mode dropdown (showing [current]) and picks [target], all in the merged tree. */
+    private fun chooseBodyMode(current: Int, target: Int) {
+        compose.onNode(hasClickAction() and hasText(app.getString(R.string.rule_body)) and hasText(app.getString(current)))
+            .performScrollTo().performClick()
+        compose.onNode(hasClickAction() and hasText(app.getString(target)) and !hasText(app.getString(R.string.rule_body)) and
+                !SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+            .performClick()
+        compose.waitForIdle()
+    }
+
+    @Test fun bodyModeDropdownChoosesEachMode() {
         val vm = vm()
         show(vm)
-        val node = hasClickAction() and hasText(app.getString(R.string.rule_body_not_contains))
-        compose.onNode(node and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)).assertExists()
-        compose.onNode(node).performScrollTo().performClick()
-        assertEquals(BodyMode.NOT_CONTAINS, vm.state.value.draft.bodyMode)
-        val sender = hasClickAction() and hasText(app.getString(R.string.rule_sender_regex))
-        // "Regex" is offered by both rows; the sender row comes first.
-        compose.onAllNodes(sender and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))[0].assertExists()
-        compose.onAllNodes(sender)[0].performScrollTo().performClick()
-        assertEquals(SenderMode.REGEX, vm.state.value.draft.senderMode)
+        var current = R.string.rule_body_any
+        listOf(
+            BodyMode.CONTAINS to R.string.rule_body_contains,
+            BodyMode.NOT_CONTAINS to R.string.rule_body_not_contains,
+            BodyMode.REGEX to R.string.rule_body_regex,
+            null to R.string.rule_body_any,
+        ).forEach { (mode, label) ->
+            chooseBodyMode(current, label)
+            assertEquals(mode, vm.state.value.draft.bodyMode)
+            current = label
+        }
+    }
+
+    @Test fun senderModeIsSegmented() {
+        val vm = vm()
+        show(vm)
+        val exact = hasClickAction() and hasText(app.getString(R.string.rule_sender_exact))
+        compose.onNode(exact and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)).assertExists()
+        val contains = hasClickAction() and hasText(app.getString(R.string.rule_sender_contains))
+        compose.onNode(contains and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)).performScrollTo().performClick()
+        assertEquals(SenderMode.CONTAINS, vm.state.value.draft.senderMode)
     }
 
     @Test fun saveIsPinnedAtBottom() {

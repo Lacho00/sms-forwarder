@@ -41,6 +41,7 @@ import dev.smsforwarder.core.RuleError
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
 import dev.smsforwarder.ui.components.BottomActionBar
+import dev.smsforwarder.ui.components.DropdownField
 import dev.smsforwarder.ui.components.SegmentedChoice
 
 private fun errorRes(e: RuleError): Int = when (e) {
@@ -187,11 +188,12 @@ private fun EditorForm(state: RuleEditorState, vm: RuleEditorViewModel) {
     )
 
     HorizontalDivider()
-    Text(stringResource(R.string.rule_body), style = MaterialTheme.typography.titleMedium)
-    SegmentedChoice(
+    // A dropdown: four labels do not fit one segmented row at 360 dp (measured).
+    DropdownField(
+        label = stringResource(R.string.rule_body),
         options = listOf<BodyMode?>(null, BodyMode.CONTAINS, BodyMode.NOT_CONTAINS, BodyMode.REGEX),
         selected = d.bodyMode,
-        label = {
+        optionLabel = {
             stringResource(
                 when (it) {
                     null -> R.string.rule_body_any

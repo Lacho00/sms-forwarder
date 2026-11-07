@@ -189,6 +189,15 @@ class DestinationEditorScreenTest {
         assertTrue(vm.state.value.headers.isEmpty())
     }
 
+    @Test fun emptyHeaderNameLabelDoesNotRepeatTheWord() {
+        val state = DestinationEditorState(loaded = true, headers = listOf(HeaderRowUi("", "", false, false)))
+        show(vm(null), state)
+        // "Remove header 1" / "Quitar cabecera 1": the number only, so the word is not doubled.
+        val label = app.getString(R.string.destination_header_remove, app.getString(R.string.destination_header_fallback_name, 1))
+        assertEquals(app.getString(R.string.destination_header_remove, "1"), label)
+        compose.onNodeWithContentDescription(label).assertExists()
+    }
+
     @Test fun addHeaderButtonAddsARow() {
         val vm = vm(null)
         show(vm)
