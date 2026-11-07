@@ -4,22 +4,35 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -30,6 +43,12 @@ import dev.smsforwarder.core.Retention
 import dev.smsforwarder.core.StuckAfter
 import dev.smsforwarder.core.SweepInterval
 import dev.smsforwarder.health.HealthIssue
+import dev.smsforwarder.ui.components.SectionTitle
+import dev.smsforwarder.ui.components.SegmentedChoice
+import dev.smsforwarder.ui.components.SettingRow
+import dev.smsforwarder.ui.components.SingleChoiceDialog
+import dev.smsforwarder.ui.theme.StatusTone
+import dev.smsforwarder.ui.theme.toneColors
 import dev.smsforwarder.ui.theme.ThemeMode
 
 @Composable
@@ -54,6 +73,10 @@ class SettingsActions(
     var setLanguage: (Language) -> Unit = {},
 )
 
+internal const val TOKEN_NOTE_ICON_TAG = "token_note_icon"
+
+private val RowInset = Modifier.padding(horizontal = 16.dp)
+
 /**
  * Groups, in order: forwarding, history, notifications, appearance, maintenance.
  */
@@ -70,31 +93,33 @@ fun SettingsScreen(
             .fillMaxSize()
             .padding(padding)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(bottom = 16.dp),
     ) {
-        Text(stringResource(R.string.settings_group_forwarding), style = MaterialTheme.typography.titleMedium)
-        SwitchRow(stringResource(R.string.settings_forward_sms), prefs.forwarding, actions.setForwarding)
-        Text(stringResource(R.string.settings_forward_sms_hint), style = MaterialTheme.typography.bodySmall)
-        Text(stringResource(R.string.settings_sweep_interval), style = MaterialTheme.typography.bodyLarge)
-        ChoiceGroup(
+        SectionTitle(stringResource(R.string.settings_group_forwarding), RowInset)
+        SwitchRow(
+            stringResource(R.string.settings_forward_sms),
+            prefs.forwarding,
+            actions.setForwarding,
+            supporting = stringResource(R.string.settings_forward_sms_hint),
+        )
+        ChoiceRow(
+            title = stringResource(R.string.settings_sweep_interval),
             options = SweepInterval.entries,
             selected = prefs.sweepInterval,
             label = { stringResource(R.string.settings_sweep_option, it.minutes.toInt()) },
             onSelect = actions.setSweepInterval,
         )
-        Text(stringResource(R.string.settings_stuck_after), style = MaterialTheme.typography.bodyLarge)
-        ChoiceGroup(
+        ChoiceRow(
+            title = stringResource(R.string.settings_stuck_after),
             options = StuckAfter.entries,
             selected = prefs.stuckAfter,
             label = { stringResource(R.string.settings_stuck_option, it.hours.toInt()) },
             onSelect = actions.setStuckAfter,
         )
 
-        HorizontalDivider()
-        Text(stringResource(R.string.settings_group_history), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.settings_retention), style = MaterialTheme.typography.bodyLarge)
-        ChoiceGroup(
+        SectionTitle(stringResource(R.string.settings_group_history), RowInset)
+        ChoiceRow(
+            title = stringResource(R.string.settings_retention),
             options = Retention.entries,
             selected = prefs.retention,
             label = { retention ->
@@ -103,11 +128,15 @@ fun SettingsScreen(
             },
             onSelect = actions.setRetention,
         )
-        Text(stringResource(R.string.settings_retention_hint), style = MaterialTheme.typography.bodySmall)
+        Text(
+            stringResource(R.string.settings_retention_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = RowInset,
+        )
         SwitchRow(stringResource(R.string.settings_hide_text), prefs.hideText, actions.setHideText)
 
-        HorizontalDivider()
-        Text(stringResource(R.string.settings_group_notifications), style = MaterialTheme.typography.titleMedium)
+        SectionTitle(stringResource(R.string.settings_group_notifications), RowInset)
         NotifyKind.entries.forEach { kind ->
             SwitchRow(
                 label = stringResource(
@@ -121,20 +150,24 @@ fun SettingsScreen(
                 onChange = { actions.setNotify(kind, it) },
             )
         }
-        Text(stringResource(R.string.settings_notify_token_note), style = MaterialTheme.typography.bodySmall)
+        TokenNote()
 
-        HorizontalDivider()
-        Text(stringResource(R.string.settings_group_appearance), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.settings_theme), style = MaterialTheme.typography.bodyLarge)
-        ChoiceGroup(
+        SectionTitle(stringResource(R.string.settings_group_appearance), RowInset)
+        Text(
+            stringResource(R.string.settings_theme),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = RowInset.padding(bottom = 8.dp),
+        )
+        SegmentedChoice(
             options = ThemeMode.entries,
             selected = prefs.themeMode,
             label = { themeLabel(it) },
             onSelect = actions.setTheme,
+            modifier = RowInset,
         )
         SwitchRow(stringResource(R.string.settings_dynamic_color), prefs.dynamicColor, actions.setDynamicColor)
-        Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.bodyLarge)
-        ChoiceGroup(
+        ChoiceRow(
+            title = stringResource(R.string.settings_language),
             options = Language.entries,
             selected = prefs.language,
             label = {
@@ -149,47 +182,74 @@ fun SettingsScreen(
             onSelect = actions.setLanguage,
         )
 
-        HorizontalDivider()
-        Text(stringResource(R.string.settings_group_maintenance), style = MaterialTheme.typography.titleMedium)
-        OutlinedButton(onClick = onOpenRecovery) { Text(stringResource(R.string.recover_sms)) }
+        SectionTitle(stringResource(R.string.settings_group_maintenance), RowInset)
+        SettingRow(
+            title = stringResource(R.string.recover_sms),
+            leadingIcon = rememberVectorPainter(Icons.Filled.Refresh),
+            chevron = true,
+            onClick = onOpenRecovery,
+        )
         // SMS_PERMISSION opens the permissions screen (the MIUI one on Xiaomi), which reaches the rest from there.
-        OutlinedButton(onClick = { onOpenSystemIssue(HealthIssue.SMS_PERMISSION) }) {
-            Text(stringResource(R.string.settings_permissions_button))
+        SettingRow(
+            title = stringResource(R.string.settings_permissions_button),
+            leadingIcon = rememberVectorPainter(Icons.Filled.Settings),
+            chevron = true,
+            onClick = { onOpenSystemIssue(HealthIssue.SMS_PERMISSION) },
+        )
+    }
+}
+
+/** The rejected-token alert cannot be turned off: a real warning, so icon plus PENDING tone. */
+@Composable
+private fun TokenNote() {
+    val tone = toneColors(StatusTone.PENDING)
+    Surface(
+        color = tone.container,
+        contentColor = tone.onContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+            Icon(
+                Icons.Filled.Info,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp).testTag(TOKEN_NOTE_ICON_TAG),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(stringResource(R.string.settings_notify_token_note), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
 
-/** The radio-row list the v1 theme selector used, generalised to any option list. */
+/** A row with the current value as supporting text; tapping opens a dialog with the radio list. */
 @Composable
-private fun <T> ChoiceGroup(
+private fun <T> ChoiceRow(
+    title: String,
     options: List<T>,
     selected: T,
     label: @Composable (T) -> String,
     onSelect: (T) -> Unit,
 ) {
-    options.forEach { option ->
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .selectable(selected = option == selected, role = Role.RadioButton) { onSelect(option) },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            RadioButton(selected = option == selected, onClick = null)
-            Text(label(option), modifier = Modifier.padding(start = 8.dp))
-        }
+    var open by remember { mutableStateOf(false) }
+    SettingRow(title = title, supporting = label(selected), onClick = { open = true })
+    if (open) {
+        SingleChoiceDialog(
+            title = title,
+            options = options,
+            selected = selected,
+            label = label,
+            onSelect = onSelect,
+            onDismiss = { open = false },
+        )
     }
 }
 
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = null)
-    }
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit, supporting: String? = null) {
+    ListItem(
+        headlineContent = { Text(label) },
+        supportingContent = supporting?.let { { Text(it) } },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
+        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
+    )
 }

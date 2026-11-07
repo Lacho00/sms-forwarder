@@ -3,7 +3,11 @@ package dev.smsforwarder.ui
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -35,6 +39,7 @@ import dev.smsforwarder.ui.settings.SettingsActions
 import dev.smsforwarder.ui.settings.SettingsPrefs
 import dev.smsforwarder.ui.settings.SettingsScreen
 import dev.smsforwarder.ui.settings.SettingsViewModel
+import dev.smsforwarder.ui.settings.TOKEN_NOTE_ICON_TAG
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
 import kotlinx.coroutines.CoroutineScope
@@ -118,16 +123,128 @@ class SettingsScreenTest {
         assertEquals(5, ys.toSet().size)
     }
 
-    @Test fun maintenanceButtonsCallTheirCallbacks() {
+    private fun row(title: String) = hasClickAction() and hasText(title)
+
+    @Test fun maintenanceRowsOpenTheirScreens() {
         var recovery = 0
         val issues = mutableListOf<HealthIssue>()
         showGroups(onSystem = { issues += it }, onRecovery = { recovery++ })
 
-        compose.onNodeWithText(str(R.string.recover_sms)).performScrollTo().performClick()
-        compose.onNodeWithText(str(R.string.settings_permissions_button)).performScrollTo().performClick()
+        compose.onNode(row(str(R.string.recover_sms))).performScrollTo().performClick()
+        compose.onNode(row(str(R.string.settings_permissions_button))).performScrollTo().performClick()
 
         assertEquals(1, recovery)
         assertEquals(listOf(HealthIssue.SMS_PERMISSION), issues)
+    }
+
+    @Test fun clickableRowsAreButtons() {
+        showGroups()
+        val button = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)
+        compose.onNode(row(str(R.string.recover_sms)) and button).assertExists()
+        compose.onNode(row(str(R.string.settings_sweep_interval)) and button).assertExists()
+    }
+
+    @Test fun sectionTitlesAreHeadings() {
+        showGroups()
+        listOf(
+            R.string.settings_group_forwarding,
+            R.string.settings_group_history,
+            R.string.settings_group_notifications,
+            R.string.settings_group_appearance,
+            R.string.settings_group_maintenance,
+        ).forEach {
+            compose.onNode(hasText(str(it)) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()
+        }
+    }
+
+    /** The row shows [current] as its value; tapping it opens a dialog with every option; picking [pick] closes it. */
+    private fun chooseFromRow(title: String, current: String, options: List<String>, pick: String) {
+        compose.onNode(row(title) and hasText(current)).performScrollTo().assertExists()
+        compose.onNode(row(title)).performClick()
+        val inDialog = hasAnyAncestor(isDialog())
+        options.forEach { compose.onNode(hasText(it) and inDialog).assertExists() }
+        compose.onNode(hasText(pick) and inDialog).performClick()
+        compose.onAllNodes(isDialog()).assertCountEquals(0)
+    }
+
+    @Test fun sweepIntervalRowShowsCurrentValueAndOpensDialog() {
+        val seen = mutableListOf<SweepInterval>()
+        actions.setSweepInterval = { seen += it }
+        showGroups(SettingsPrefs(sweepInterval = SweepInterval.M15))
+        chooseFromRow(
+            str(R.string.settings_sweep_interval),
+            str(R.string.settings_sweep_option, 15),
+            listOf(15, 30, 60).map { str(R.string.settings_sweep_option, it) },
+            str(R.string.settings_sweep_option, 30),
+        )
+        assertEquals(listOf(SweepInterval.M30), seen)
+    }
+
+    @Test fun stuckAfterRowShowsCurrentValueAndOpensDialog() {
+        val seen = mutableListOf<StuckAfter>()
+        actions.setStuckAfter = { seen += it }
+        showGroups(SettingsPrefs(stuckAfter = StuckAfter.H1))
+        chooseFromRow(
+            str(R.string.settings_stuck_after),
+            str(R.string.settings_stuck_option, 1),
+            listOf(1, 6, 24).map { str(R.string.settings_stuck_option, it) },
+            str(R.string.settings_stuck_option, 24),
+        )
+        assertEquals(listOf(StuckAfter.H24), seen)
+    }
+
+    @Test fun retentionRowShowsCurrentValueAndOpensDialog() {
+        val seen = mutableListOf<Retention>()
+        actions.setRetention = { seen += it }
+        showGroups(SettingsPrefs(retention = Retention.D30))
+        chooseFromRow(
+            str(R.string.settings_retention),
+            str(R.string.settings_retention_days, 30),
+            listOf(str(R.string.settings_retention_days, 30), str(R.string.settings_retention_days, 90), str(R.string.settings_retention_days, 365), str(R.string.settings_retention_forever)),
+            str(R.string.settings_retention_forever),
+        )
+        assertEquals(listOf(Retention.FOREVER), seen)
+    }
+
+    @Test fun languageRowShowsCurrentValueAndOpensDialog() {
+        val seen = mutableListOf<Language>()
+        actions.setLanguage = { seen += it }
+        showGroups(SettingsPrefs(language = Language.SYSTEM))
+        chooseFromRow(
+            str(R.string.settings_language),
+            str(R.string.language_system),
+            listOf(R.string.language_system, R.string.language_es, R.string.language_en).map { str(it) },
+            str(R.string.language_es),
+        )
+        assertEquals(listOf(Language.ES), seen)
+    }
+
+    @Test fun dismissingAChoiceDialogChangesNothing() {
+        val seen = mutableListOf<SweepInterval>()
+        actions.setSweepInterval = { seen += it }
+        showGroups()
+        compose.onNode(row(str(R.string.settings_sweep_interval))).performScrollTo().performClick()
+        compose.onNode(hasText(str(R.string.detail_delete_cancel)) and hasAnyAncestor(isDialog())).performClick()
+        compose.onAllNodes(isDialog()).assertCountEquals(0)
+        assertTrue(seen.isEmpty())
+    }
+
+    @Test fun themeIsSegmented() {
+        val seen = mutableListOf<ThemeMode>()
+        actions.setTheme = { seen += it }
+        showGroups()
+        val radio = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+        listOf(R.string.theme_system, R.string.theme_light, R.string.theme_dark).forEach {
+            compose.onNode(hasClickAction() and hasText(str(it)) and radio).performScrollTo().assertExists()
+        }
+        compose.onNode(hasClickAction() and hasText(str(R.string.theme_dark))).performClick()
+        assertEquals(listOf(ThemeMode.DARK), seen)
+    }
+
+    @Test fun tokenAlertWarningHasIcon() {
+        showGroups()
+        compose.onNodeWithText(str(R.string.settings_notify_token_note)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag(TOKEN_NOTE_ICON_TAG, useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test fun turningOffForwardingReportsFalse() {
@@ -136,30 +253,6 @@ class SettingsScreenTest {
         showGroups()
         compose.onNodeWithText(str(R.string.settings_forward_sms)).performScrollTo().performClick()
         assertEquals(listOf(false), seen)
-    }
-
-    @Test fun choosingThirtyMinutesReportsM30() {
-        val seen = mutableListOf<SweepInterval>()
-        actions.setSweepInterval = { seen += it }
-        showGroups()
-        compose.onNodeWithText(str(R.string.settings_sweep_option, 30)).performScrollTo().performClick()
-        assertEquals(listOf(SweepInterval.M30), seen)
-    }
-
-    @Test fun choosingStuckRetentionAndLanguageReportTheirValues() {
-        val stuck = mutableListOf<StuckAfter>()
-        val retention = mutableListOf<Retention>()
-        val language = mutableListOf<Language>()
-        actions.setStuckAfter = { stuck += it }
-        actions.setRetention = { retention += it }
-        actions.setLanguage = { language += it }
-        showGroups()
-        compose.onNodeWithText(str(R.string.settings_stuck_option, 24)).performScrollTo().performClick()
-        compose.onNodeWithText(str(R.string.settings_retention_forever)).performScrollTo().performClick()
-        compose.onNodeWithText(str(R.string.language_es)).performScrollTo().performClick()
-        assertEquals(listOf(StuckAfter.H24), stuck)
-        assertEquals(listOf(Retention.FOREVER), retention)
-        assertEquals(listOf(Language.ES), language)
     }
 
     @Test fun togglesReportTheirKind() {

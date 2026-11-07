@@ -141,7 +141,7 @@ fun SettingRow(
         trailingContent = if (chevron) {
             { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) }
         } else null,
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier.clickable(role = Role.Button, onClick = onClick),
     )
 }
 
