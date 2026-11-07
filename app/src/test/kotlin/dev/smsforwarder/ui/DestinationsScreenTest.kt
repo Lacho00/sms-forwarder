@@ -4,13 +4,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.smsforwarder.R
+import dev.smsforwarder.ui.components.EMPTY_STATE_ACTION_TAG
 import dev.smsforwarder.core.TemplateKind
 import dev.smsforwarder.ui.destinations.DestinationRowUi
 import dev.smsforwarder.ui.destinations.DestinationsScreen
@@ -80,16 +83,20 @@ class DestinationsScreenTest {
 
     @Test fun emptyStateAddOpensEditor() {
         show(emptyList())
-        // Two "Add" nodes: the empty-state action and the FAB.
-        val adds = compose.onAllNodesWithText(app.getString(R.string.action_add), useUnmergedTree = true)
-        adds.assertCountEquals(2)
-        adds[0].performClick()
+        compose.onNodeWithTag(EMPTY_STATE_ACTION_TAG).performClick()
+        assertEquals(1, added)
+    }
+
+    @Test fun fabHasAccessibleNameInMergedTree() {
+        show(emptyList())
+        compose.onNode(hasClickAction() and hasText(app.getString(R.string.action_add)) and !hasTestTag(EMPTY_STATE_ACTION_TAG))
+            .assertExists().performClick()
         assertEquals(1, added)
     }
 
     @Test fun fabIsExtendedWithAddText() {
         show(listOf(DestinationRowUi(1, "Alpha", TemplateKind.CUSTOM, enabled = true, queued = 0, errors = 0)))
-        compose.onNodeWithText(app.getString(R.string.action_add), useUnmergedTree = true).performClick()
+        compose.onNode(hasClickAction() and hasText(app.getString(R.string.action_add))).performClick()
         assertEquals(1, added)
     }
 
@@ -105,7 +112,7 @@ class DestinationsScreenTest {
 
     @Test fun tapAddAndRowAndSwitchReportTheirCallbacks() {
         show(listOf(DestinationRowUi(1, "Alpha", TemplateKind.CUSTOM, enabled = true, queued = 0, errors = 0)))
-        compose.onNodeWithText(app.getString(R.string.action_add), useUnmergedTree = true).performClick()
+        compose.onNode(hasClickAction() and hasText(app.getString(R.string.action_add))).performClick()
         compose.onNodeWithText("Alpha").performClick()
         assertEquals(1, added)
         assertEquals(listOf(1L), opened)

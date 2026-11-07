@@ -33,6 +33,9 @@ import dev.smsforwarder.ui.main.formatDateTime
 import dev.smsforwarder.ui.theme.StatusPill
 import dev.smsforwarder.ui.theme.StatusTone
 
+/** Material disabled-content alpha, used for rows the app already has. */
+private const val DisabledAlpha = 0.38f
+
 /** Explanation + checklist, shared by the Recovery screen and the last onboarding step. */
 @Composable
 fun RecoveryList(
@@ -58,7 +61,7 @@ fun RecoveryList(
         }
         items(items, key = { it.key }) { item ->
             val textColor = if (item.alreadyKnown) {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                MaterialTheme.colorScheme.onSurface.copy(alpha = DisabledAlpha)
             } else {
                 MaterialTheme.colorScheme.onSurface
             }

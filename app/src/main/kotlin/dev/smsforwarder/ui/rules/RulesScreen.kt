@@ -23,6 +23,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
@@ -109,11 +111,12 @@ fun RulesScreen(
                 }
             }
         }
+        val addLabel = stringResource(R.string.action_add)
         ExtendedFloatingActionButton(
             onClick = onAdd,
             icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            text = { Text(stringResource(R.string.action_add)) },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            text = { Text(addLabel) },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).semantics(mergeDescendants = true) { text = AnnotatedString(addLabel) },
         )
     }
 }

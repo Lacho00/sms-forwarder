@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
@@ -40,6 +41,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
+
+const val EMPTY_STATE_ACTION_TAG = "empty_state_action"
 
 @Composable
 fun EmptyState(
@@ -67,7 +70,7 @@ fun EmptyState(
         )
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.size(8.dp))
-            TextButton(onClick = onAction) { Text(actionLabel) }
+            TextButton(onClick = onAction, modifier = Modifier.testTag(EMPTY_STATE_ACTION_TAG)) { Text(actionLabel) }
         }
     }
 }

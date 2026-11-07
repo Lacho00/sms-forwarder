@@ -1,5 +1,7 @@
 package dev.smsforwarder.ui
 
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollAction
@@ -88,5 +90,11 @@ class RecoveryScreenTest {
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
         val pill = compose.onNodeWithText(app.getString(R.string.recovery_already_saved)).fetchSemanticsNode().boundsInRoot
         assertTrue(pill.right <= root.right)
+        val node = compose.onNodeWithText("S".repeat(60), useUnmergedTree = true).fetchSemanticsNode()
+        val results = mutableListOf<TextLayoutResult>()
+        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+        assertEquals(1, results[0].lineCount)
+        assertTrue(results[0].hasVisualOverflow)
+        assertTrue(node.boundsInRoot.right <= root.right)
     }
 }
