@@ -11,7 +11,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onRoot
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import dev.smsforwarder.R
 import dev.smsforwarder.core.SmsOrigin
 import dev.smsforwarder.core.SmsStatus
@@ -73,7 +75,7 @@ class DetailScreenTest {
 
     private fun str(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
 
-    @Test fun deleteIsDestructiveAndStillConfirms() {
+    @Test fun deleteAsksForConfirmationAndOnlyConfirmCallsOnDelete() {
         var deleted = 0
         compose.setContent {
             SmsForwarderTheme(ThemeMode.SYSTEM) {
@@ -107,6 +109,18 @@ class DetailScreenTest {
         }
         compose.onNode(hasText("OPERADOR", substring = true) and !hasText("Se ha comprado", substring = true)).assertExists()
         compose.onNodeWithText(str(R.string.status_sent)).assertExists()
+    }
+
+    @Test fun longSenderKeepsStatusPillInsideScreen() {
+        val long = sms(SmsStatus.SENT).copy(sender = "A".repeat(60))
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(state = DetailUiState(long, emptyList()), onRetry = {}, onDelete = {}, onBack = {})
+            }
+        }
+        val pill = compose.onNodeWithText(str(R.string.status_sent)).assertExists().fetchSemanticsNode().boundsInRoot
+        val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        assertTrue("pill $pill inside $root", pill.left >= root.left && pill.right <= root.right && pill.top >= root.top && pill.bottom <= root.bottom)
     }
 
     @Test fun destinationsSectionListsEachDeliveryWithPill() {

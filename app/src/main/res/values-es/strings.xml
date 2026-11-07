@@ -58,7 +58,7 @@
     <string name="delivery_config">%1$s: revisar destino</string>
     <string name="delivery_canceled">%1$s: cancelado</string>
     <string name="detail_destinations">Destinos</string>
-    <string name="detail_resend_to">Reenviar a un destino</string>
+    <string name="detail_resend_to">Reenviar</string>
     <string name="detail_resend_to_title">Elige un destino</string>
     <string name="detail_attempt_destination">%1$s · %2$s</string>
     <string name="detail_attempts">Intentos</string>
