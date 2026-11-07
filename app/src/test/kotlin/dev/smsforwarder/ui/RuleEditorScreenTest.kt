@@ -2,6 +2,12 @@ package dev.smsforwarder.ui
 
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -138,5 +144,25 @@ class RuleEditorScreenTest {
         show(vm(), RuleEditorState(loaded = true, isNew = false, deleteAsked = true))
         compose.onNodeWithText(app.getString(R.string.rule_delete_title)).assertExists()
         compose.onNodeWithContentDescription(app.getString(R.string.rule_delete)).assertExists()
+    }
+
+    @Test fun matchModeIsSegmented() {
+        val vm = vm()
+        show(vm)
+        val node = hasClickAction() and hasText(app.getString(R.string.rule_body_not_contains))
+        compose.onNode(node and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)).assertExists()
+        compose.onNode(node).performScrollTo().performClick()
+        assertEquals(BodyMode.NOT_CONTAINS, vm.state.value.draft.bodyMode)
+        val sender = hasClickAction() and hasText(app.getString(R.string.rule_sender_regex))
+        // "Regex" is offered by both rows; the sender row comes first.
+        compose.onAllNodes(sender and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))[0].assertExists()
+        compose.onAllNodes(sender)[0].performScrollTo().performClick()
+        assertEquals(SenderMode.REGEX, vm.state.value.draft.senderMode)
+    }
+
+    @Test fun saveIsPinnedAtBottom() {
+        show(vm())
+        // Never scrolled to: the bar sits outside the scrolling form.
+        compose.onNode(hasClickAction() and hasText(app.getString(R.string.rule_save))).assertIsDisplayed()
     }
 }

@@ -119,8 +119,25 @@ class DestinationEditorViewModelTest {
         create.await { it.loaded }
         assertFalse(create.state.value.done)
         assertEquals("", create.state.value.url)
-        assertEquals("", create.state.value.name)
+        assertEquals(defaultName(TemplateKind.STANDARD_JSON), create.state.value.name)
         assertEquals(PresetFields(), create.state.value.preset)
+    }
+
+    @Test fun newDestinationDefaultsToStandardJson() {
+        val vm = vm()
+        vm.reset()
+        vm.await { it.loaded }
+        assertEquals(TemplateKind.STANDARD_JSON, vm.state.value.template)
+        assertEquals(defaultName(TemplateKind.STANDARD_JSON), vm.state.value.name)
+    }
+
+    @Test fun editingKeepsSavedTemplate() = runBlocking {
+        val id = repos.destinations.create(draft("One"))
+        val vm = loaded(id)
+        assertEquals(TemplateKind.CUSTOM, vm.state.value.template)
+        vm.reset()
+        vm.await { it.loaded }
+        assertEquals(TemplateKind.CUSTOM, vm.state.value.template)
     }
 
     @Test fun telegramPresetFillsForm() {

@@ -47,7 +47,7 @@ data class HeaderRowUi(
 data class DestinationEditorState(
     val loaded: Boolean = false,
     val isNew: Boolean = true,
-    val template: TemplateKind = TemplateKind.CUSTOM,
+    val template: TemplateKind = TemplateKind.STANDARD_JSON,
     val preset: PresetFields = PresetFields(),
     val name: String = "",
     val enabled: Boolean = true,
@@ -85,8 +85,14 @@ class DestinationEditorViewModel(
     private val scope: CoroutineScope? = null,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(DestinationEditorState(isNew = id == null))
+    private val _state = MutableStateFlow(initialState())
     val state: StateFlow<DestinationEditorState> = _state.asStateFlow()
+
+    /** A new destination starts on Standard JSON with that template's name; an existing one is filled by load(). */
+    private fun initialState() = DestinationEditorState(
+        isNew = id == null,
+        name = if (id == null) defaultName(TemplateKind.STANDARD_JSON) else "",
+    )
 
     private fun launch(block: suspend () -> Unit): Job = (scope ?: viewModelScope).launch { block() }
 
@@ -118,7 +124,7 @@ class DestinationEditorViewModel(
         saveJob?.cancel()
         deleteJob?.cancel()
         requestJob?.cancel()
-        _state.value = DestinationEditorState(isNew = id == null)
+        _state.value = initialState()
         load()
     }
 

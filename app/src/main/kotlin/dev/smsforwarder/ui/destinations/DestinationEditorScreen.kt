@@ -1,7 +1,6 @@
 package dev.smsforwarder.ui.destinations
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,15 +12,20 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,12 +45,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import dev.smsforwarder.ui.components.BottomActionBar
+import dev.smsforwarder.ui.components.DestructiveButton
 import dev.smsforwarder.R
 import dev.smsforwarder.core.DestinationError
 import dev.smsforwarder.core.DestinationTestResult
@@ -54,6 +65,8 @@ import dev.smsforwarder.core.HttpMethod
 import dev.smsforwarder.core.SuccessPolicy
 import dev.smsforwarder.core.TemplateKind
 import dev.smsforwarder.core.TestVerdict
+
+const val STORED_LOCK_TAG = "stored_lock"
 
 private fun errorRes(e: DestinationError): Int = when (e) {
     DestinationError.NAME_EMPTY -> R.string.destination_error_name_empty
@@ -88,7 +101,7 @@ private fun testText(r: DestinationTestResult): String {
     return r.httpCode?.let { "$verdict · $it" } ?: verdict
 }
 
-/** Full-screen form, no bottom bar. Stored secrets are never shown: only a hint that they are kept. */
+/** Full-screen form; Test and Save are pinned in the bottom bar. Stored secrets are never shown: only a hint that they are kept. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DestinationEditorScreen(
@@ -108,15 +121,9 @@ fun DestinationEditorScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
-                actions = {
-                    if (!state.isNew && state.loaded && !state.loadFailed) {
-                        IconButton(onClick = vm::requestDelete) {
-                            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.destination_delete))
-                        }
-                    }
-                },
             )
         },
+        bottomBar = { if (state.loaded && !state.loadFailed) ActionBar(state, vm) },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -152,10 +159,14 @@ fun DestinationEditorScreen(
 private fun EditorForm(state: DestinationEditorState, vm: DestinationEditorViewModel) {
     val errors = state.errors
     if (state.isNew) {
-        Text(stringResource(R.string.destination_template), style = MaterialTheme.typography.titleMedium)
-        TemplateKind.entries.forEach { kind ->
-            RadioRow(stringResource(templateLabelRes(kind)), state.template == kind) { vm.chooseTemplate(kind) }
-        }
+        // A dropdown, not a segmented row: the four labels do not fit at 360 dp (measured), they ellipsize.
+        DropdownField(
+            label = stringResource(R.string.destination_template),
+            options = TemplateKind.entries,
+            selected = state.template,
+            optionLabel = { stringResource(templateLabelRes(it)) },
+            onSelect = vm::chooseTemplate,
+        )
         PresetFields(state, vm)
         HorizontalDivider()
     }
@@ -170,7 +181,13 @@ private fun EditorForm(state: DestinationEditorState, vm: DestinationEditorViewM
         modifier = Modifier.fillMaxWidth(),
     )
     SwitchRow(stringResource(R.string.destination_enabled), state.enabled, vm::setEnabled)
-    MethodPicker(state.method, vm::setMethod)
+    DropdownField(
+        label = stringResource(R.string.destination_method),
+        options = HttpMethod.entries,
+        selected = state.method,
+        optionLabel = { it.name },
+        onSelect = vm::setMethod,
+    )
 
     val urlError = errorText(
         errors, DestinationError.URL_MISSING, DestinationError.URL_INVALID, DestinationError.URL_NOT_HTTPS,
@@ -183,7 +200,7 @@ private fun EditorForm(state: DestinationEditorState, vm: DestinationEditorViewM
         isError = urlError != null,
         supportingText = when {
             urlError != null -> ({ Text(urlError) })
-            state.urlStored && state.url.isEmpty() -> ({ Text(stringResource(R.string.destination_secret_kept)) })
+            state.urlStored && state.url.isEmpty() -> ({ StoredHelper() })
             else -> null
         },
         modifier = Modifier.fillMaxWidth(),
@@ -201,6 +218,7 @@ private fun EditorForm(state: DestinationEditorState, vm: DestinationEditorViewM
         isError = bodyError != null,
         supportingText = bodyError?.let { { Text(it) } },
         minLines = 3,
+        textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
         modifier = Modifier.fillMaxWidth(),
     )
     SwitchRow(stringResource(R.string.destination_body_json), state.bodyIsJson, vm::setBodyIsJson)
@@ -213,17 +231,43 @@ private fun EditorForm(state: DestinationEditorState, vm: DestinationEditorViewM
         vm.setSuccessPolicy(SuccessPolicy.STATUS_200)
     }
 
-    OutlinedButton(onClick = vm::test, enabled = !state.busy) { Text(stringResource(R.string.destination_test)) }
-    state.test?.let { Text(testText(it), style = MaterialTheme.typography.bodyMedium) }
-    if (state.saveFailed) {
-        Text(
-            stringResource(R.string.destination_save_failed),
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodyMedium,
+    if (!state.isNew) {
+        DestructiveButton(
+            text = stringResource(R.string.destination_delete),
+            onClick = vm::requestDelete,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
-    Button(onClick = vm::save, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.destination_save))
+}
+
+/** Test above Save, pinned; the test result and a failed save are shown right above the buttons. */
+@Composable
+private fun ActionBar(state: DestinationEditorState, vm: DestinationEditorViewModel) {
+    BottomActionBar {
+        state.test?.let { Text(testText(it), style = MaterialTheme.typography.bodyMedium) }
+        if (state.saveFailed) {
+            Text(
+                stringResource(R.string.destination_save_failed),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        OutlinedButton(onClick = vm::test, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.destination_test))
+        }
+        Button(onClick = vm::save, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.destination_save))
+        }
+    }
+}
+
+/** "Stored. Leave empty to keep it." with a lock, so it reads as a kept secret and not as an error. */
+@Composable
+private fun StoredHelper() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(16.dp).testTag(STORED_LOCK_TAG))
+        Spacer(Modifier.width(4.dp))
+        Text(stringResource(R.string.destination_secret_kept))
     }
 }
 
@@ -259,24 +303,33 @@ private fun PresetField(value: String, label: Int, hidden: Boolean, onChange: (S
     )
 }
 
+/** Read-only field that opens a list; same size and label as the other fields. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MethodPicker(method: HttpMethod, onSelect: (HttpMethod) -> Unit) {
+private fun <T> DropdownField(
+    label: String,
+    options: List<T>,
+    selected: T,
+    optionLabel: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.destination_method), modifier = Modifier.weight(1f))
-        Box {
-            OutlinedButton(onClick = { open = true }) {
-                Text(method.name)
-                // The arrow tells the button opens a list, like other dropdowns.
-                Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-            }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                HttpMethod.entries.forEach { m ->
-                    DropdownMenuItem(text = { Text(m.name) }, onClick = {
-                        open = false
-                        onSelect(m)
-                    })
-                }
+    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
+        OutlinedTextField(
+            value = optionLabel(selected),
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = open) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+        )
+        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(text = { Text(optionLabel(option)) }, onClick = {
+                    open = false
+                    onSelect(option)
+                })
             }
         }
     }
@@ -289,33 +342,40 @@ private fun HeadersSection(state: DestinationEditorState, vm: DestinationEditorV
     Text(stringResource(R.string.destination_headers), style = MaterialTheme.typography.titleMedium)
     headers.forEachIndexed { index, h ->
         fun change(next: HeaderRowUi) = vm.setHeaders(headers.toMutableList().also { it[index] = next })
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = h.name,
-                onValueChange = { change(h.copy(name = it)) },
-                label = { Text(stringResource(R.string.destination_header_name)) },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = { vm.setHeaders(headers.filterIndexed { i, _ -> i != index }) }) {
-                val who = h.name.ifBlank { stringResource(R.string.destination_header_fallback_name, index + 1) }
-                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.destination_header_remove, who))
+        OutlinedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // The name field takes the remaining width: a long name scrolls inside it and never moves the remove button.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = h.name,
+                        onValueChange = { change(h.copy(name = it)) },
+                        label = { Text(stringResource(R.string.destination_header_name)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { vm.setHeaders(headers.filterIndexed { i, _ -> i != index }) }) {
+                        val who = h.name.ifBlank { stringResource(R.string.destination_header_fallback_name, index + 1) }
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.destination_header_remove, who))
+                    }
+                }
+                val keeps = h.secret && h.stored && h.value.isEmpty() && h.storedName == h.name
+                OutlinedTextField(
+                    value = h.value,
+                    onValueChange = { change(h.copy(value = it)) },
+                    label = { Text(stringResource(R.string.destination_header_value)) },
+                    singleLine = true,
+                    visualTransformation = if (h.secret) PasswordVisualTransformation() else VisualTransformation.None,
+                    supportingText = if (keeps) ({ StoredHelper() }) else null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SwitchRow(stringResource(R.string.destination_header_secret), h.secret) { change(h.copy(secret = it)) }
             }
         }
-        val keeps = h.secret && h.stored && h.value.isEmpty() && h.storedName == h.name
-        OutlinedTextField(
-            value = h.value,
-            onValueChange = { change(h.copy(value = it)) },
-            label = { Text(stringResource(R.string.destination_header_value)) },
-            singleLine = true,
-            visualTransformation = if (h.secret) PasswordVisualTransformation() else VisualTransformation.None,
-            supportingText = if (keeps) ({ Text(stringResource(R.string.destination_secret_kept)) }) else null,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        SwitchRow(stringResource(R.string.destination_header_secret), h.secret) { change(h.copy(secret = it)) }
     }
     error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-    TextButton(onClick = { vm.setHeaders(headers + HeaderRowUi("", "", secret = false, stored = false)) }) {
+    OutlinedButton(onClick = { vm.setHeaders(headers + HeaderRowUi("", "", secret = false, stored = false)) }) {
+        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
         Text(stringResource(R.string.destination_header_add))
     }
 }

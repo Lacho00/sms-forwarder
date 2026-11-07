@@ -2,8 +2,6 @@ package dev.smsforwarder.ui.rules
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,7 +17,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +40,8 @@ import dev.smsforwarder.core.BodyMode
 import dev.smsforwarder.core.RuleError
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
+import dev.smsforwarder.ui.components.BottomActionBar
+import dev.smsforwarder.ui.components.SegmentedChoice
 
 private fun errorRes(e: RuleError): Int = when (e) {
     RuleError.NAME_EMPTY -> R.string.rule_error_name_empty
@@ -60,7 +59,7 @@ private fun errorText(errors: Set<RuleError>, vararg mine: RuleError): String? {
     return found.map { stringResource(errorRes(it)) }.joinToString("\n")
 }
 
-/** Full-screen form, no bottom bar. */
+/** Full-screen form; Save is pinned in the bottom bar. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RuleEditorScreen(
@@ -86,6 +85,22 @@ fun RuleEditorScreen(
                     }
                 },
             )
+        },
+        bottomBar = {
+            if (state.loaded && !state.loadFailed) {
+                BottomActionBar {
+                    if (state.saveFailed) {
+                        Text(
+                            stringResource(R.string.rule_save_failed),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Button(onClick = vm::save, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.rule_save))
+                    }
+                }
+            }
         },
     ) { padding ->
         Column(
@@ -118,7 +133,6 @@ fun RuleEditorScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EditorForm(state: RuleEditorState, vm: RuleEditorViewModel) {
     val d = state.draft
@@ -137,25 +151,20 @@ private fun EditorForm(state: RuleEditorState, vm: RuleEditorViewModel) {
 
     HorizontalDivider()
     Text(stringResource(R.string.rule_sender), style = MaterialTheme.typography.titleMedium)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SenderMode.entries.forEach { mode ->
-            FilterChip(
-                selected = d.senderMode == mode,
-                onClick = { vm.update { it.copy(senderMode = mode) } },
-                label = {
-                    Text(
-                        stringResource(
-                            when (mode) {
-                                SenderMode.EXACT -> R.string.rule_sender_exact
-                                SenderMode.CONTAINS -> R.string.rule_sender_contains
-                                SenderMode.REGEX -> R.string.rule_sender_regex
-                            },
-                        ),
-                    )
+    SegmentedChoice(
+        options = SenderMode.entries,
+        selected = d.senderMode,
+        label = {
+            stringResource(
+                when (it) {
+                    SenderMode.EXACT -> R.string.rule_sender_exact
+                    SenderMode.CONTAINS -> R.string.rule_sender_contains
+                    SenderMode.REGEX -> R.string.rule_sender_regex
                 },
             )
-        }
-    }
+        },
+        onSelect = { mode -> vm.update { it.copy(senderMode = mode) } },
+    )
     val senderError = errorText(errors, RuleError.SENDER_EMPTY, RuleError.SENDER_REGEX_INVALID)
     OutlinedTextField(
         value = d.senderPattern,
@@ -179,26 +188,21 @@ private fun EditorForm(state: RuleEditorState, vm: RuleEditorViewModel) {
 
     HorizontalDivider()
     Text(stringResource(R.string.rule_body), style = MaterialTheme.typography.titleMedium)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf<BodyMode?>(null, BodyMode.CONTAINS, BodyMode.NOT_CONTAINS, BodyMode.REGEX).forEach { mode ->
-            FilterChip(
-                selected = d.bodyMode == mode,
-                onClick = { vm.setBodyMode(mode) },
-                label = {
-                    Text(
-                        stringResource(
-                            when (mode) {
-                                null -> R.string.rule_body_any
-                                BodyMode.CONTAINS -> R.string.rule_body_contains
-                                BodyMode.NOT_CONTAINS -> R.string.rule_body_not_contains
-                                BodyMode.REGEX -> R.string.rule_body_regex
-                            },
-                        ),
-                    )
+    SegmentedChoice(
+        options = listOf<BodyMode?>(null, BodyMode.CONTAINS, BodyMode.NOT_CONTAINS, BodyMode.REGEX),
+        selected = d.bodyMode,
+        label = {
+            stringResource(
+                when (it) {
+                    null -> R.string.rule_body_any
+                    BodyMode.CONTAINS -> R.string.rule_body_contains
+                    BodyMode.NOT_CONTAINS -> R.string.rule_body_not_contains
+                    BodyMode.REGEX -> R.string.rule_body_regex
                 },
             )
-        }
-    }
+        },
+        onSelect = vm::setBodyMode,
+    )
     val bodyMode = d.bodyMode
     if (bodyMode != null) {
         val bodyError = errorText(errors, RuleError.BODY_EMPTY, RuleError.BODY_REGEX_INVALID)
@@ -256,17 +260,6 @@ private fun EditorForm(state: RuleEditorState, vm: RuleEditorViewModel) {
     }
     errorText(errors, RuleError.NO_DESTINATIONS)?.let {
         Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-    }
-
-    if (state.saveFailed) {
-        Text(
-            stringResource(R.string.rule_save_failed),
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
-    Button(onClick = vm::save, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.rule_save))
     }
 }
 
