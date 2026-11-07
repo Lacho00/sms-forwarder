@@ -1,7 +1,9 @@
 package dev.smsforwarder.ui.destinations
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -9,8 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Switch
@@ -18,13 +19,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 import dev.smsforwarder.core.TemplateKind
+import dev.smsforwarder.ui.components.EmptyState
+import dev.smsforwarder.ui.components.InsetDivider
+import dev.smsforwarder.ui.theme.StatusPill
+import dev.smsforwarder.ui.theme.StatusTone
 
 fun templateLabelRes(kind: TemplateKind): Int = when (kind) {
     TemplateKind.STANDARD_JSON -> R.string.template_standard_json
@@ -33,7 +40,7 @@ fun templateLabelRes(kind: TemplateKind): Int = when (kind) {
     TemplateKind.CUSTOM -> R.string.template_custom
 }
 
-/** Template label plus, when paused, "Paused"; otherwise the queued and error counters that are not zero. */
+/** Template label plus, when paused, "Paused"; otherwise the queued counter when not zero. Errors are an ERROR pill. */
 @Composable
 private fun supportingLine(row: DestinationRowUi): String {
     val parts = mutableListOf(stringResource(templateLabelRes(row.template)))
@@ -42,7 +49,6 @@ private fun supportingLine(row: DestinationRowUi): String {
         parts += stringResource(R.string.destination_paused)
     } else {
         if (row.queued > 0) parts += pluralStringResource(R.plurals.destination_queued_count, row.queued, row.queued)
-        if (row.errors > 0) parts += pluralStringResource(R.plurals.destination_error_count, row.errors, row.errors)
     }
     return parts.joinToString(" · ")
 }
@@ -57,35 +63,46 @@ fun DestinationsScreen(
 ) {
     Box(Modifier.fillMaxSize().padding(padding)) {
         if (rows.isEmpty()) {
-            Text(
-                stringResource(R.string.destinations_empty),
-                modifier = Modifier.align(Alignment.Center).padding(16.dp),
+            EmptyState(
+                icon = painterResource(R.drawable.ic_tab_destinations),
+                title = stringResource(R.string.destinations_empty),
+                body = stringResource(R.string.destinations_empty_body),
+                actionLabel = stringResource(R.string.action_add),
+                onAction = onAdd,
             )
         } else {
-            // Room below the last row for the FAB (56dp) and its 16dp margins.
+            // Room below the last row for the extended FAB (56dp) and its 16dp margins.
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(rows, key = { it.id }) { row ->
                     ListItem(
-                        headlineContent = { Text(row.name) },
+                        headlineContent = { Text(row.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         supportingContent = { Text(supportingLine(row)) },
                         trailingContent = {
-                            Switch(
-                                checked = row.enabled,
-                                onCheckedChange = { onToggle(row.id, it) },
-                                modifier = Modifier.semantics { contentDescription = row.name },
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (row.enabled && row.errors > 0) {
+                                    StatusPill(
+                                        StatusTone.ERROR,
+                                        pluralStringResource(R.plurals.destination_error_count, row.errors, row.errors),
+                                    )
+                                }
+                                Switch(
+                                    checked = row.enabled,
+                                    onCheckedChange = { onToggle(row.id, it) },
+                                    modifier = Modifier.semantics { contentDescription = row.name },
+                                )
+                            }
                         },
                         modifier = Modifier.clickable { onOpen(row.id) },
                     )
-                    HorizontalDivider()
+                    InsetDivider()
                 }
             }
         }
-        FloatingActionButton(
+        ExtendedFloatingActionButton(
             onClick = onAdd,
+            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+            text = { Text(stringResource(R.string.action_add)) },
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.destination_add))
-        }
+        )
     }
 }

@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 
@@ -161,6 +162,6 @@ fun <T> SingleChoiceDialog(
 }
 
 @Composable
-fun InsetDivider() {
-    HorizontalDivider(Modifier.padding(start = 16.dp))
+fun InsetDivider(start: Dp = 16.dp) {
+    HorizontalDivider(Modifier.padding(start = start))
 }

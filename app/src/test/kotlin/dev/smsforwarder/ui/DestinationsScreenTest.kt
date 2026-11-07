@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.smsforwarder.R
@@ -14,6 +17,7 @@ import dev.smsforwarder.ui.destinations.DestinationsScreen
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,7 +60,8 @@ class DestinationsScreenTest {
         val queued = app.resources.getQuantityString(R.plurals.destination_queued_count, 2, 2)
         val errors = app.resources.getQuantityString(R.plurals.destination_error_count, 1, 1)
         compose.onNodeWithText("Alpha").assertExists()
-        compose.onNodeWithText(json + sep + queued + sep + errors).assertExists()
+        compose.onNodeWithText(json + sep + queued).assertExists()
+        compose.onNodeWithText(errors).assertExists()
         compose.onNodeWithText(app.getString(R.string.template_telegram) + sep + app.getString(R.string.destination_paused)).assertExists()
         // Zero counters are omitted.
         compose.onNodeWithText(app.getString(R.string.template_custom)).assertExists()
@@ -65,11 +70,42 @@ class DestinationsScreenTest {
     @Test fun emptyStateShown() {
         show(emptyList())
         compose.onNodeWithText(app.getString(R.string.destinations_empty)).assertExists()
+        compose.onNodeWithText(app.getString(R.string.destinations_empty_body)).assertExists()
+    }
+
+    @Test fun errorCountIsAnErrorPill() {
+        show(listOf(DestinationRowUi(1, "Alpha", TemplateKind.CUSTOM, enabled = true, queued = 0, errors = 3)))
+        compose.onNodeWithText(app.resources.getQuantityString(R.plurals.destination_error_count, 3, 3)).assertIsDisplayed()
+    }
+
+    @Test fun emptyStateAddOpensEditor() {
+        show(emptyList())
+        // Two "Add" nodes: the empty-state action and the FAB.
+        val adds = compose.onAllNodesWithText(app.getString(R.string.action_add), useUnmergedTree = true)
+        adds.assertCountEquals(2)
+        adds[0].performClick()
+        assertEquals(1, added)
+    }
+
+    @Test fun fabIsExtendedWithAddText() {
+        show(listOf(DestinationRowUi(1, "Alpha", TemplateKind.CUSTOM, enabled = true, queued = 0, errors = 0)))
+        compose.onNodeWithText(app.getString(R.string.action_add), useUnmergedTree = true).performClick()
+        assertEquals(1, added)
+    }
+
+    @Test fun longNameKeepsSwitchAndPillOnScreen() {
+        val name = "N".repeat(60)
+        show(listOf(DestinationRowUi(1, name, TemplateKind.CUSTOM, enabled = true, queued = 0, errors = 3)))
+        val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val pill = compose.onNodeWithText(app.resources.getQuantityString(R.plurals.destination_error_count, 3, 3), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val sw = compose.onNode(hasContentDescription(name) and isToggleable(), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue(pill.right <= root.right && pill.left >= root.left)
+        assertTrue(sw.right <= root.right && sw.left >= pill.right)
     }
 
     @Test fun tapAddAndRowAndSwitchReportTheirCallbacks() {
         show(listOf(DestinationRowUi(1, "Alpha", TemplateKind.CUSTOM, enabled = true, queued = 0, errors = 0)))
-        compose.onNodeWithContentDescription(app.getString(R.string.destination_add)).performClick()
+        compose.onNodeWithText(app.getString(R.string.action_add), useUnmergedTree = true).performClick()
         compose.onNodeWithText("Alpha").performClick()
         assertEquals(1, added)
         assertEquals(listOf(1L), opened)

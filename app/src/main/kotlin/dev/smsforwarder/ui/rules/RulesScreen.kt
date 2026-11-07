@@ -1,6 +1,7 @@
 package dev.smsforwarder.ui.rules
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,24 +11,28 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 import dev.smsforwarder.core.BodyMode
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
+import dev.smsforwarder.ui.components.EmptyState
+import dev.smsforwarder.ui.components.InsetDivider
+import dev.smsforwarder.ui.theme.StatusPill
+import dev.smsforwarder.ui.theme.StatusTone
 
 /** Sender, text filter, SIM (only when not "any") and destination names, in that order. */
 @Composable
@@ -70,24 +75,24 @@ fun RulesScreen(
 ) {
     Box(Modifier.fillMaxSize().padding(padding)) {
         if (rows.isEmpty()) {
-            Text(
-                stringResource(R.string.rules_empty),
-                modifier = Modifier.align(Alignment.Center).padding(16.dp),
+            EmptyState(
+                icon = painterResource(R.drawable.ic_tab_rules),
+                title = stringResource(R.string.rules_empty),
+                body = stringResource(R.string.rules_empty_body),
+                actionLabel = stringResource(R.string.action_add),
+                onAction = onAdd,
             )
         } else {
-            // Room below the last row for the FAB (56dp) and its 16dp margins.
+            // Room below the last row for the extended FAB (56dp) and its 16dp margins.
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(rows, key = { it.id }) { row ->
                     ListItem(
-                        headlineContent = { Text(row.name) },
+                        headlineContent = { Text(row.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         supportingContent = {
-                            Column {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(summaryLine(row))
                                 if (row.destinationNames.isEmpty()) {
-                                    Text(
-                                        stringResource(R.string.rule_no_destinations),
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
+                                    StatusPill(StatusTone.ERROR, stringResource(R.string.rule_no_destinations))
                                 }
                             }
                         },
@@ -100,15 +105,15 @@ fun RulesScreen(
                         },
                         modifier = Modifier.clickable { onOpen(row.id) },
                     )
-                    HorizontalDivider()
+                    InsetDivider()
                 }
             }
         }
-        FloatingActionButton(
+        ExtendedFloatingActionButton(
             onClick = onAdd,
+            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+            text = { Text(stringResource(R.string.action_add)) },
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.rule_add))
-        }
+        )
     }
 }

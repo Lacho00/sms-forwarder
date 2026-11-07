@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.smsforwarder.R
@@ -16,6 +19,7 @@ import dev.smsforwarder.ui.rules.RulesScreen
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -55,9 +59,9 @@ class RulesScreenTest {
         }
     }
 
-    @Test fun ruleWithoutDestinationsWarns() {
+    @Test fun noDestinationsIsAnErrorPill() {
         show(listOf(row(destinations = emptyList())))
-        compose.onNodeWithText(app.getString(R.string.rule_no_destinations)).assertExists()
+        compose.onNodeWithText(app.getString(R.string.rule_no_destinations)).assertIsDisplayed()
     }
 
     @Test fun ruleWithDestinationsDoesNotWarn() {
@@ -68,6 +72,24 @@ class RulesScreenTest {
     @Test fun emptyStateShown() {
         show(emptyList())
         compose.onNodeWithText(app.getString(R.string.rules_empty)).assertExists()
+        compose.onNodeWithText(app.getString(R.string.rules_empty_body)).assertExists()
+    }
+
+    @Test fun emptyStateAddOpensEditor() {
+        show(emptyList())
+        // Two "Add" nodes: the empty-state action and the extended FAB.
+        val adds = compose.onAllNodesWithText(app.getString(R.string.action_add), useUnmergedTree = true)
+        adds.assertCountEquals(2)
+        adds[0].performClick()
+        assertEquals(1, added)
+    }
+
+    @Test fun longNameAndSenderStayOnScreen() {
+        val name = "N".repeat(60)
+        show(listOf(RuleRowUi(1, name, true, SenderMode.EXACT, "S".repeat(60), null, null, SimMatch.ANY, listOf("Dest"))))
+        val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val sw = compose.onNode(hasContentDescription(name) and isToggleable(), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue(sw.right <= root.right && sw.left >= root.left)
     }
 
     @Test fun summaryShowsSenderBodyFilterSimAndDestinations() {
@@ -102,7 +124,7 @@ class RulesScreenTest {
 
     @Test fun tapAddRowAndSwitchReportTheirCallbacks() {
         show(listOf(row()))
-        compose.onNodeWithContentDescription(app.getString(R.string.rule_add)).performClick()
+        compose.onNodeWithText(app.getString(R.string.action_add), useUnmergedTree = true).performClick()
         compose.onNodeWithText("Alpha").performClick()
         assertEquals(1, added)
         assertEquals(listOf(1L), opened)

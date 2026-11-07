@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -25,9 +24,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
+import dev.smsforwarder.ui.components.BottomActionBar
+import dev.smsforwarder.ui.components.InsetDivider
 import dev.smsforwarder.ui.main.formatDateTime
+import dev.smsforwarder.ui.theme.StatusPill
+import dev.smsforwarder.ui.theme.StatusTone
 
 /** Explanation + checklist, shared by the Recovery screen and the last onboarding step. */
 @Composable
@@ -37,7 +41,7 @@ fun RecoveryList(
     onToggle: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    LazyColumn(modifier = modifier) {
         item(key = "intro") {
             Text(
                 stringResource(R.string.recovery_intro),
@@ -53,6 +57,11 @@ fun RecoveryList(
             item(key = "empty") { Text(stringResource(R.string.recovery_empty)) }
         }
         items(items, key = { it.key }) { item ->
+            val textColor = if (item.alreadyKnown) {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -65,16 +74,23 @@ fun RecoveryList(
                     onCheckedChange = { onToggle(item.key) },
                     enabled = !item.alreadyKnown,
                 )
-                Column(modifier = Modifier.padding(start = 8.dp)) {
-                    Text(item.sender, style = MaterialTheme.typography.titleSmall)
-                    Text(formatDateTime(item.receivedAt), style = MaterialTheme.typography.bodySmall)
-                    Text(item.preview, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                    Text(
+                        item.sender,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(formatDateTime(item.receivedAt), style = MaterialTheme.typography.bodySmall, color = textColor)
+                    Text(item.preview, style = MaterialTheme.typography.bodyMedium, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (item.alreadyKnown) {
-                        Text(stringResource(R.string.recovery_already_saved), style = MaterialTheme.typography.labelMedium)
+                        StatusPill(StatusTone.NEUTRAL, stringResource(R.string.recovery_already_saved), Modifier.padding(top = 4.dp))
                     }
                 }
             }
-            HorizontalDivider()
+            // Starts at the text column: 48dp checkbox + 8dp gap.
+            InsetDivider(start = 56.dp)
         }
     }
 }
@@ -89,6 +105,7 @@ fun RecoveryScreen(
     onSend: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val count = items.count { it.selected }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -100,15 +117,15 @@ fun RecoveryScreen(
                 },
             )
         },
+        bottomBar = {
+            BottomActionBar {
+                resultMessage?.let { Text(it) }
+                Button(onClick = onSend, enabled = count > 0, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.recovery_send_selected, count))
+                }
+            }
+        },
     ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            RecoveryList(items, unreadable, onToggle, modifier = Modifier.weight(1f))
-            resultMessage?.let { Text(it) }
-            val count = items.count { it.selected }
-            Button(onClick = onSend, enabled = count > 0) { Text(stringResource(R.string.recovery_send_selected, count)) }
-        }
+        RecoveryList(items, unreadable, onToggle, modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp))
     }
 }

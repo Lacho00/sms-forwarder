@@ -205,8 +205,8 @@
         <item>kotlinx.serialization (Apache-2.0)</item>
     </string-array>
     <string name="tab_destinations">Destinations</string>
-    <string name="destinations_empty">No destinations yet. Tap + to add one.</string>
-    <string name="destination_add">Add destination</string>
+    <string name="destinations_empty">No destinations yet</string>
+    <string name="destinations_empty_body">A destination is where SMS are sent.</string>
     <string name="destination_paused">Paused</string>
     <plurals name="destination_queued_count">
         <item quantity="one">%d queued</item>
@@ -267,8 +267,8 @@
     <string name="destination_error_body_not_json">The body is not valid JSON once the variables are filled in</string>
     <string name="destination_error_body_with_get">A GET request cannot have a body</string>
     <string name="tab_rules">Rules</string>
-    <string name="rules_empty">No rules yet. Tap + to add one.</string>
-    <string name="rule_add">Add rule</string>
+    <string name="rules_empty">No rules yet</string>
+    <string name="rules_empty_body">A rule picks which SMS go to which destination.</string>
     <string name="rule_no_destinations">No destinations: this rule forwards nothing</string>
     <string name="rule_row_sender_exact">Sender: %1$s</string>
     <string name="rule_row_sender_contains">Sender contains: %1$s</string>
