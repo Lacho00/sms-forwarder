@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import dev.smsforwarder.R
 
 /**
@@ -118,6 +119,6 @@ private fun RowScope.TabItem(selected: Boolean, onClick: () -> Unit, label: Int,
         selected = selected,
         onClick = onClick,
         icon = { Icon(icon(selected), contentDescription = null) },
-        label = { Text(stringResource(label)) },
+        label = { Text(stringResource(label), maxLines = 1, overflow = TextOverflow.Ellipsis) },
     )
 }
