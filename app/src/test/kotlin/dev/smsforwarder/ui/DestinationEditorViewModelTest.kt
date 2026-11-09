@@ -165,6 +165,38 @@ class DestinationEditorViewModelTest {
         assertEquals(defaultName(TemplateKind.TELEGRAM), s.name)
     }
 
+    @Test fun editingTheRequestFlipsTheTemplateToCustom() {
+        val vm = vm()
+        assertEquals(TemplateKind.STANDARD_JSON, vm.state.value.template)
+        vm.setMethod(dev.smsforwarder.core.HttpMethod.PUT)
+        assertEquals(TemplateKind.CUSTOM, vm.state.value.template)
+        listOf<(DestinationEditorViewModel) -> Unit>(
+            { it.setBody("x") },
+            { it.setBodyIsJson(false) },
+            { it.setSuccessPolicy(dev.smsforwarder.core.SuccessPolicy.ANY_2XX) },
+        ).forEach { change ->
+            val fresh = vm()
+            change(fresh)
+            assertEquals(TemplateKind.CUSTOM, fresh.state.value.template)
+        }
+    }
+
+    @Test fun applyingAPresetKeepsTheTemplate() {
+        val vm = vm()
+        vm.setPreset(PresetFields(url = "https://h.example/x", token = "tok"))
+        vm.applyPreset()
+        assertEquals(TemplateKind.STANDARD_JSON, vm.state.value.template)
+    }
+
+    @Test fun editingNameUrlOrHeadersKeepsTheTemplate() {
+        val vm = vm()
+        vm.setName("n")
+        vm.setUrl("https://h.example/y")
+        vm.setHeaders(listOf(HeaderRowUi("X", "1", false, stored = false)))
+        vm.setEnabled(false)
+        assertEquals(TemplateKind.STANDARD_JSON, vm.state.value.template)
+    }
+
     @Test fun saveRejectsUnquotedSim() = runBlocking {
         val vm = vm()
         vm.chooseTemplate(TemplateKind.CUSTOM)

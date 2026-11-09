@@ -231,12 +231,16 @@ class DestinationEditorViewModel(
 
     fun setName(v: String) = edit { it.copy(name = v) }
     fun setEnabled(v: Boolean) = edit { it.copy(enabled = v) }
-    fun setMethod(v: HttpMethod) = edit { it.copy(method = v) }
+    fun setMethod(v: HttpMethod) = edit { it.copy(method = v).custom() }
     fun setUrl(v: String) = edit { it.copy(url = v) }
     fun setHeaders(v: List<HeaderRowUi>) = edit { it.copy(headers = v) }
-    fun setBody(v: String) = edit { it.copy(body = v) }
-    fun setBodyIsJson(v: Boolean) = edit { it.copy(bodyIsJson = v) }
-    fun setSuccessPolicy(v: SuccessPolicy) = edit { it.copy(successPolicy = v) }
+    fun setBody(v: String) = edit { it.copy(body = v).custom() }
+    fun setBodyIsJson(v: Boolean) = edit { it.copy(bodyIsJson = v).custom() }
+    fun setSuccessPolicy(v: SuccessPolicy) = edit { it.copy(successPolicy = v).custom() }
+
+    // Method, body and success policy only take effect on a custom destination (the tester and the sender
+    // ignore them for the presets), so editing one by hand makes the template honest about it.
+    private fun DestinationEditorState.custom() = if (template == TemplateKind.CUSTOM) this else copy(template = TemplateKind.CUSTOM)
 
     /** Sends a sample request with what the form holds. Blocked, with the errors shown, while the form is invalid. */
     fun test() {
