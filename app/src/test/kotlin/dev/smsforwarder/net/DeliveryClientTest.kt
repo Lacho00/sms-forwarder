@@ -73,4 +73,24 @@ class DeliveryClientTest {
         assertEquals(SendOutcome.Invalid("request"), client.send(bad, SuccessPolicy.ANY_2XX))
         assertEquals(0, server.requestCount)
     }
+
+    @Test fun redirectToOtherHostIsNotFollowed() = runBlocking {
+        val other = MockWebServer()
+        other.start()
+        try {
+            other.enqueue(MockResponse.Builder().code(200).build())
+            server.enqueue(MockResponse.Builder().code(307).addHeader("Location", other.url("/stolen").toString()).build())
+            assertEquals(SendOutcome.Invalid("redirect"), client.send(request(), SuccessPolicy.ANY_2XX))
+            assertEquals(0, other.requestCount)
+        } finally {
+            other.close()
+        }
+    }
+
+    @Test fun movedPermanentlyIsNotAccepted() = runBlocking {
+        server.enqueue(MockResponse.Builder().code(301).addHeader("Location", server.url("/next").toString()).build())
+        server.enqueue(MockResponse.Builder().code(200).build())
+        assertEquals(SendOutcome.Invalid("redirect"), client.send(request(), SuccessPolicy.ANY_2XX))
+        assertEquals(1, server.requestCount)
+    }
 }

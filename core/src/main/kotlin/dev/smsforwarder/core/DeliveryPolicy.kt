@@ -2,10 +2,14 @@ package dev.smsforwarder.core
 
 enum class DeliveryStatus { QUEUED, SENT, ERROR, CANCELED }
 
-/** `httpCode == null` means a network error. Under [SuccessPolicy.STATUS_200] any other 2xx is retried. */
+/**
+ * `httpCode == null` means a network error. A 3xx is never followed, so it is a config error: the stored URL
+ * should point at the final endpoint. Under [SuccessPolicy.STATUS_200] any other 2xx is retried.
+ */
 fun classifyDelivery(httpCode: Int?, responseBody: String?, policy: SuccessPolicy): SendOutcome = when {
     httpCode == null -> SendOutcome.Retry(null, "network")
     httpCode == 200 || (policy == SuccessPolicy.ANY_2XX && httpCode in 200..299) -> SendOutcome.Accepted(httpCode)
+    httpCode in 300..399 -> SendOutcome.Invalid("redirect")
     httpCode == 400 || isAuthRejection(httpCode) -> SendOutcome.Rejected(httpCode, errorCodeOf(responseBody))
     else -> SendOutcome.Retry(httpCode, "http_$httpCode")
 }
