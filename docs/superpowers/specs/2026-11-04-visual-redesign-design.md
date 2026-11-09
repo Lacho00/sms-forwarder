@@ -1,6 +1,6 @@
 # Visual redesign — design
 
-Date: 2026-11-04. Status: approved by the user on 2026-11-05. Plan: `docs/superpowers/plans/2026-11-05-visual-redesign.md`.
+Date: 2026-11-04. Status: implemented (2.1.0). Approved by the user on 2026-11-05. Plan: `docs/superpowers/plans/2026-11-05-visual-redesign.md`.
 
 ## Why
 
