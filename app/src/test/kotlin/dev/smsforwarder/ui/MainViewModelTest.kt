@@ -252,4 +252,18 @@ class MainViewModelTest {
         val s = await { it.query == "zzz" && it.filter == StatusFilter.ERROR && it.rows.isEmpty() }
         assertEquals(3, s.sentToday)
     }
+
+    @Test fun sentTodayResetsAfterMidnightOnResume() {
+        seedSentToday()
+        var now = at(2026, 11, 5, 23, 0)
+        vm = MainViewModel(
+            sms, settings,
+            HealthChecker(RuntimeEnvironment.getApplication(), sms, repos.destinations, repos.rules, settings),
+            repos.destinations, repos.rules, clock = { now }, zone = { havana },
+        )
+        assertEquals(3, await { it.rows.size >= 9 && it.sentToday > 0 }.sentToday)
+        now = at(2026, 11, 6, 0, 5)
+        vm.onResume()
+        assertEquals(0, await { it.sentToday == 0 }.sentToday)
+    }
 }

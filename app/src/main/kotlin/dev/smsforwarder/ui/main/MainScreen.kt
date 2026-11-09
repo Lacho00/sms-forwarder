@@ -158,6 +158,7 @@ fun MainScreen(
     onFilterChange: (StatusFilter) -> Unit = {},
     onDestinationFilterChange: (Long?) -> Unit = {},
     onClearFilters: () -> Unit = {},
+    onResume: () -> Unit = {},
 ) {
     // While searching, the panel and the banner give the room to the results.
     val searching = state.query.isNotBlank()
@@ -174,8 +175,14 @@ fun MainScreen(
     val zone = ZoneId.systemDefault()
     var resumes by remember { mutableIntStateOf(0) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val onResumeNow by rememberUpdatedState(onResume)
     DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) resumes++ }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                resumes++
+                onResumeNow()
+            }
+        }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }

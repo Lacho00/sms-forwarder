@@ -153,20 +153,35 @@ class MainViewModel(
         filter.value = f
     }
 
+    // The current day, refreshed on resume: without it the "sent today" count would keep yesterday's
+    // value after midnight until some other source emitted.
+    private val today = MutableStateFlow(Instant.ofEpochMilli(clock()).atZone(zone()).toLocalDate())
+
+    /** Called when the screen comes back to the foreground: re-evaluates which day "today" is. */
+    fun onResume() {
+        today.value = Instant.ofEpochMilli(clock()).atZone(zone()).toLocalDate()
+    }
+
     private val destinationFilter = MutableStateFlow<Long?>(null)
 
     fun setDestinationFilter(id: Long?) {
         destinationFilter.value = id
     }
 
-    private class Controls(val query: String, val filter: StatusFilter, val hideText: Boolean, val destinationFilter: Long?)
+    private class Controls(
+        val query: String,
+        val filter: StatusFilter,
+        val hideText: Boolean,
+        val destinationFilter: Long?,
+        val today: java.time.LocalDate,
+    )
 
     private class Deliveries(val bySms: Map<Long, List<DeliveryEntity>>, val destinations: List<DestinationEntity>)
 
     // Everything but the SMS list, the sweep time, the issues and the pause switch travels in these two groups
     // so the main combine stays at five flows.
-    private val controls = combine(query, filter, settings.hideText, destinationFilter) { q, f, hide, d ->
-        Controls(q, f, hide, d)
+    private val controls = combine(query, filter, settings.hideText, destinationFilter, today) { q, f, hide, d, day ->
+        Controls(q, f, hide, d, day)
     }
     private val deliveries = combine(smsRepository.observeDeliveries(), destinationRepository.observeLive()) { all, live ->
         Deliveries(all.groupBy { it.smsId }, live)
@@ -189,7 +204,7 @@ class MainViewModel(
             // The counters describe the whole queue, not what the search leaves on screen.
             queued = all.count { it.status == SmsStatus.QUEUED },
             errors = all.count { it.status == SmsStatus.ERROR },
-            sentToday = startOfDay(clock(), zone()).let { start ->
+            sentToday = c.today.atStartOfDay(zone()).toInstant().toEpochMilli().let { start ->
                 all.count { it.status == SmsStatus.SENT && it.receivedAt >= start }
             },
             rows = all

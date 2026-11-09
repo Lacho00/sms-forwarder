@@ -257,6 +257,7 @@ fun AppNavHost(
                     padding = padding,
                     onFilterChange = mainViewModel::setFilter,
                     onDestinationFilterChange = mainViewModel::setDestinationFilter,
+                    onResume = mainViewModel::onResume,
                     onClearFilters = {
                         mainViewModel.setQuery("")
                         mainViewModel.setFilter(StatusFilter.ALL)
