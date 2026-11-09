@@ -39,7 +39,8 @@ class TransferDialogsTest {
     private fun show(initial: TransferUi) {
         compose.setContent {
             var state by remember { mutableStateOf(initial) }
-            SmsForwarderTheme(ThemeMode.SYSTEM) {
+            // Light theme on purpose: the expected tone below is the light PENDING one.
+            SmsForwarderTheme(ThemeMode.LIGHT) {
                 TransferDialogs(
                     state = state,
                     onIncludeSecrets = { state = TransferUi.AskExport(it) },

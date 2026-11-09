@@ -151,7 +151,7 @@ fun OnboardingScreen(
         },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val total = OnboardingStep.entries.size
@@ -234,7 +234,7 @@ private fun PermissionsStep(state: OnboardingUiState, vm: OnboardingViewModel) {
                 R.string.onboarding_permissions_pending
             },
         ),
-        maxLines = Int.MAX_VALUE,
+        maxLines = UNLIMITED_LINES,
     )
     FilledTonalButton(onClick = { launcher.launch(toRequest) }, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.onboarding_grant_permissions))
@@ -353,15 +353,15 @@ private fun ConnectionStep(state: OnboardingUiState, vm: OnboardingViewModel, on
         Text(stringResource(R.string.action_test_connection))
     }
     if (state.testing) {
-        StatusPill(StatusTone.PENDING, stringResource(R.string.onboarding_conn_testing), maxLines = Int.MAX_VALUE)
+        StatusPill(StatusTone.PENDING, stringResource(R.string.onboarding_conn_testing), maxLines = UNLIMITED_LINES)
     } else {
         when (state.testResult) {
             ConnectionTestResult.OK ->
-                StatusPill(StatusTone.OK, stringResource(R.string.onboarding_conn_ok), maxLines = Int.MAX_VALUE)
+                StatusPill(StatusTone.OK, stringResource(R.string.onboarding_conn_ok), maxLines = UNLIMITED_LINES)
             ConnectionTestResult.BAD_TOKEN ->
-                StatusPill(StatusTone.ERROR, stringResource(R.string.onboarding_conn_bad_token), maxLines = Int.MAX_VALUE)
+                StatusPill(StatusTone.ERROR, stringResource(R.string.onboarding_conn_bad_token), maxLines = UNLIMITED_LINES)
             ConnectionTestResult.UNREACHABLE ->
-                StatusPill(StatusTone.ERROR, stringResource(R.string.onboarding_conn_unreachable), maxLines = Int.MAX_VALUE)
+                StatusPill(StatusTone.ERROR, stringResource(R.string.onboarding_conn_unreachable), maxLines = UNLIMITED_LINES)
             null -> Unit
         }
     }
@@ -379,3 +379,6 @@ private fun ColumnScope.RecoveryStep(recoveryVm: RecoveryViewModel) {
         modifier = Modifier.weight(1f),
     )
 }
+
+/** Pills in the wizard wrap instead of ellipsizing. */
+private const val UNLIMITED_LINES = Int.MAX_VALUE

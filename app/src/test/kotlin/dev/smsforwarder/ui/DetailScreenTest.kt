@@ -243,7 +243,6 @@ class DetailScreenTest {
         compose.onNodeWithText(back).assertDoesNotExist()
         val raw = compose.onNodeWithContentDescription(back).fetchSemanticsNode().boundsInRoot
         val bounds = Pair(raw.width / compose.density.density, raw.height / compose.density.density)
-        println("MEASURE detail back after w=${bounds.first}dp h=${bounds.second}dp")
         compose.onNodeWithContentDescription(back).performClick()
         assertEquals(1, backs)
     }

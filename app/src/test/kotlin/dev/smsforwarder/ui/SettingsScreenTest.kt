@@ -224,7 +224,7 @@ class SettingsScreenTest {
         actions.setSweepInterval = { seen += it }
         showGroups()
         compose.onNode(row(str(R.string.settings_sweep_interval))).performScrollTo().performClick()
-        compose.onNode(hasText(str(R.string.detail_delete_cancel)) and hasAnyAncestor(isDialog())).performClick()
+        compose.onNode(hasText(str(R.string.action_cancel)) and hasAnyAncestor(isDialog())).performClick()
         compose.onAllNodes(isDialog()).assertCountEquals(0)
         assertTrue(seen.isEmpty())
     }

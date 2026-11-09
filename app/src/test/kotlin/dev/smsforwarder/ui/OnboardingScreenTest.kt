@@ -2,6 +2,7 @@ package dev.smsforwarder.ui
 
 import android.Manifest
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -165,6 +166,12 @@ class OnboardingScreenTest {
         assertEquals(OnboardingStep.MIUI, vm.state.value.step)
     }
 
+    @Test fun continueIsDisabledWhenTheStepCannotContinue() {
+        reach(OnboardingStep.PERMISSIONS)
+        show()
+        compose.onNode(clickable(str(R.string.onboarding_continue))).assertIsNotEnabled()
+    }
+
     @Test fun noBackArrow() {
         reach(OnboardingStep.BATTERY)
         show()
@@ -194,7 +201,7 @@ class OnboardingScreenTest {
         assertTrue(bounds.bottom > root.bottom - 80 * d)
         node.performClick()
         compose.waitUntil(5_000) { finished == 1 }
-        assertTrue(true)
+        assertEquals(1, finished)
     }
 
     @Test fun sendersAddButtonStaysUsable() {

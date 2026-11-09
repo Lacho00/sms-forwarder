@@ -81,7 +81,6 @@ class AboutScreenTest {
         compose.onNodeWithText(context.getString(R.string.back)).assertDoesNotExist()
         val raw = compose.onNodeWithContentDescription(context.getString(R.string.back)).fetchSemanticsNode().boundsInRoot
         val bounds = Pair(raw.width / compose.density.density, raw.height / compose.density.density)
-        println("MEASURE about back after w=${bounds.first}dp h=${bounds.second}dp")
         assertEquals(40f, bounds.first, 0.5f)
         assertEquals(40f, bounds.second, 0.5f)
         val touch = compose.onNodeWithContentDescription(context.getString(R.string.back)).fetchSemanticsNode().touchBoundsInRoot
@@ -129,7 +128,6 @@ class AboutScreenTest {
         show()
         val title = compose.onNodeWithText(context.getString(R.string.about_source_code), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.left
         val link = compose.onNodeWithText(REPO_URL, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.left
-        println("MEASURE about link left=$link title left=$title")
         assertEquals(title, link, 0.5f)
     }
 

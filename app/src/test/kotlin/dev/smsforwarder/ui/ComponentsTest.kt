@@ -9,7 +9,9 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import org.robolectric.RuntimeEnvironment
 import dev.smsforwarder.ui.components.EmptyState
 import dev.smsforwarder.ui.components.SectionTitle
 import dev.smsforwarder.ui.components.SettingRow
@@ -61,6 +63,37 @@ class ComponentsTest {
         }
         compose.onNodeWithText("B").performClick()
         assertEquals("b", picked)
+    }
+
+    @Test fun singleChoiceDialogIgnoresTheSelectedOption() {
+        var picked: String? = null
+        var dismissed = 0
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.LIGHT, dynamicColor = false) {
+                SingleChoiceDialog("Pick", listOf("a", "b"), "a", { it.uppercase() }, { picked = it }, { dismissed++ })
+            }
+        }
+        compose.onNodeWithText("A").performClick()
+        assertEquals(null, picked)
+        assertEquals(1, dismissed)
+    }
+
+    @Test fun singleChoiceDialogCancelIsGeneric() {
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.LIGHT, dynamicColor = false) {
+                SingleChoiceDialog("Pick", listOf("a", "b"), "a", { it.uppercase() }, {}, {})
+            }
+        }
+        compose.onNodeWithText(RuntimeEnvironment.getApplication().getString(dev.smsforwarder.R.string.action_cancel)).assertExists()
+    }
+
+    @Test fun segmentedChoiceExposesItsGroupLabel() {
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.LIGHT, dynamicColor = false) {
+                dev.smsforwarder.ui.components.SegmentedChoice(listOf("a", "b"), "a", { it.uppercase() }, {}, groupLabel = "Grp")
+            }
+        }
+        compose.onNodeWithContentDescription("Grp").assertExists()
     }
 
     @Test fun settingRowShowsSupportingText() {

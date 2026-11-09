@@ -48,6 +48,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
@@ -164,7 +165,7 @@ fun <T> SingleChoiceDialog(
                 options.forEach { option ->
                     Row(
                         Modifier.fillMaxWidth()
-                            .selectable(selected = option == selected, role = Role.RadioButton) { onSelect(option); onDismiss() }
+                            .selectable(selected = option == selected, role = Role.RadioButton) { if (option != selected) onSelect(option); onDismiss() }
                             .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -176,7 +177,7 @@ fun <T> SingleChoiceDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.detail_delete_cancel)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 
@@ -193,8 +194,11 @@ fun <T> SegmentedChoice(
     label: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    groupLabel: String? = null,
 ) {
-    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
+    SingleChoiceSegmentedButtonRow(
+        modifier.fillMaxWidth().semantics { groupLabel?.let { contentDescription = it } },
+    ) {
         options.forEachIndexed { index, option ->
             SegmentedButton(
                 selected = option == selected,

@@ -164,6 +164,7 @@ fun SettingsScreen(
             label = { themeLabel(it) },
             onSelect = actions.setTheme,
             modifier = RowInset,
+            groupLabel = stringResource(R.string.settings_theme),
         )
         SwitchRow(stringResource(R.string.settings_dynamic_color), prefs.dynamicColor, actions.setDynamicColor)
         ChoiceRow(
