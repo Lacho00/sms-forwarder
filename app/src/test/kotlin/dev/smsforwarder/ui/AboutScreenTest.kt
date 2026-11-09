@@ -16,7 +16,6 @@ import dev.smsforwarder.R
 import dev.smsforwarder.ui.about.AboutScreen
 import dev.smsforwarder.ui.about.AboutState
 import dev.smsforwarder.ui.about.DiagnosticMessage
-import dev.smsforwarder.ui.about.LICENSE_URL
 import dev.smsforwarder.ui.about.REPO_LABEL
 import dev.smsforwarder.ui.about.REPO_URL
 import dev.smsforwarder.ui.about.splitLibrary
@@ -78,7 +77,7 @@ class AboutScreenTest {
         val opened = mutableListOf<String>()
         show(onOpenLink = { opened += it })
         compose.onNode(hasClickAction() and hasText(context.getString(R.string.about_license_hint))).performScrollTo().performClick()
-        assertEquals(listOf(LICENSE_URL), opened)
+        assertEquals(listOf("https://github.com/Lacho00/sms-forwarder/blob/main/LICENSE"), opened)
     }
 
     @Test fun splitLibraryReadsNameAndLicense() {
