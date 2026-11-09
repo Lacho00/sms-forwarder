@@ -26,6 +26,20 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > "$SIGNING_STORE_FILE"
+      - name: Verify tag matches app version
+        run: |
+          version_name=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' app/build.gradle.kts)
+          version_code=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' app/build.gradle.kts)
+          if [ "$GITHUB_REF_NAME" != "v${version_name}" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match versionName \"$version_name\" in app/build.gradle.kts. Bump the version, commit, and tag again."
+            exit 1
+          fi
+          IFS=. read -r x y z <<< "$version_name"
+          expected=$((x * 10000 + y * 100 + z))
+          if [ "$version_code" != "$expected" ]; then
+            echo "::error::versionCode $version_code does not match $expected (x*10000+y*100+z) for versionName $version_name."
+            exit 1
+          fi
       - name: Test and assemble
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
