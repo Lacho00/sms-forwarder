@@ -153,6 +153,18 @@ class ConfigFileTest {
     }
 
     @Test
+    fun importedItemsAreDisabled() {
+        val file = ConfigFile(
+            listOf(ConfigDestination("d1", dest("Main").copy(enabled = true))),
+            listOf(ConfigRule(rule("R").copy(enabled = true), listOf("d1"))),
+            true,
+        )
+        val plan = planImport(file, emptyList(), emptyList())
+        assertFalse(plan.destinations.single().draft.enabled)
+        assertFalse(plan.rules.single().draft.enabled)
+    }
+
+    @Test
     fun renamesDuplicatesInsideFile() {
         val plan = planImport(named("A", "A"), emptyList(), emptyList())
         assertEquals(listOf("A", "A (2)"), plan.destinations.map { it.draft.name })

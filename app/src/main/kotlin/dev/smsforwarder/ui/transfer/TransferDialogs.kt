@@ -138,6 +138,7 @@ fun TransferDialogs(
                                 Modifier.padding(top = 8.dp),
                             )
                         }
+                        Text(stringResource(R.string.import_disabled_notice), Modifier.padding(top = 8.dp))
                     } else {
                         Text(stringResource(messageRes(m)))
                     }
@@ -161,6 +162,14 @@ fun TransferDialogs(
 private fun SummaryBody(plan: ImportPlan) {
     Text(pluralStringResource(R.plurals.import_summary_destinations, plan.destinations.size, plan.destinations.size))
     Text(pluralStringResource(R.plurals.import_summary_rules, plan.rules.size, plan.rules.size))
+    val noUrl = stringResource(R.string.import_no_url)
+    if (plan.destinations.isNotEmpty()) {
+        Text(plan.destinations.joinToString("\n") { destinationLine(it, noUrl) }, Modifier.padding(top = 8.dp))
+    }
+    if (plan.rules.isNotEmpty()) {
+        Text(plan.rules.joinToString("\n") { ruleLine(it) }, Modifier.padding(top = 8.dp))
+    }
+    Text(stringResource(R.string.import_disabled_notice), Modifier.padding(top = 8.dp))
     plan.renamed.forEach { (from, to) ->
         Text(stringResource(R.string.import_renamed, from, to), Modifier.padding(top = 8.dp))
     }

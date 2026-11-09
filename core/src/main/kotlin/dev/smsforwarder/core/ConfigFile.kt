@@ -292,7 +292,8 @@ fun planImport(
         val (dropped, kept) = c.draft.headers.partition { it.secret && (noUrl || it.value == null) }
         PlannedDestination(
             key = c.key,
-            draft = c.draft.copy(name = name, headers = kept),
+            // Imported items start disabled so nothing forwards before the user reviews it.
+            draft = c.draft.copy(name = name, enabled = false, headers = kept),
             originalName = c.draft.name,
             withoutCredentials = noUrl,
             droppedSecretHeaders = dropped.map { it.name },
@@ -302,7 +303,7 @@ fun planImport(
     val rules = file.rules.map { r ->
         val name = uniqueName(r.draft.name, ruleTaken)
         ruleTaken += name
-        PlannedRule(r.draft.copy(name = name), r.draft.name, r.destinationKeys)
+        PlannedRule(r.draft.copy(name = name, enabled = false), r.draft.name, r.destinationKeys)
     }
     return ImportPlan(destinations, rules)
 }
