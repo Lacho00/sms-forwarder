@@ -1,0 +1,2 @@
+Rediseño visual 2.1: nuevo inicio con panel de estado, etiquetas de entrega, agrupación por día y contador de enviados hoy; ajustes compactos; editores con opciones segmentadas; progreso en la bienvenida; Acerca de centrado.
+Correcciones: la lista conserva el scroll, el contador sigue el cambio de día, editar un destino lo pasa a Personalizado, etiquetas de la barra inferior en una línea, iconos de estado según el tema, lectores de pantalla anuncian enviado o error.

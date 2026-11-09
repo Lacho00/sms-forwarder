@@ -1,0 +1,2 @@
+2.1 visual redesign: new home with status panel, delivery pills, day grouping and sent-today count; compact settings; editors with segmented choices and pinned save; onboarding progress; centered About screen.
+Fixes: home list keeps its scroll position, sent-today follows the day change, editing a destination's method, body or policy switches it to Custom, bottom bar labels stay on one line, status bar icons follow the app theme, screen readers announce sent or error.
