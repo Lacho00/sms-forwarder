@@ -71,7 +71,7 @@
     <string name="theme_system">Sistema</string>
     <string name="theme_light">Claro</string>
     <string name="theme_dark">Oscuro</string>
-    <string name="onboarding_progress">Paso %1$d de %2$d · %3$s</string>
+    <string name="onboarding_progress">Paso %1$d de %2$d</string>
     <string name="onboarding_step_cutover">App anterior</string>
     <string name="onboarding_step_permissions">Permisos</string>
     <string name="onboarding_step_battery">Batería</string>
@@ -102,6 +102,7 @@
     <string name="onboarding_miui_battery">Abrir ahorro de batería de MIUI</string>
     <string name="onboarding_senders_body">Escribe el remitente tal como aparece en el SMS. Añade al menos uno para continuar.</string>
     <string name="onboarding_connection_body">Introduce la URL del Worker (solo https) y el token. Después prueba la conexión.</string>
+    <string name="onboarding_conn_testing">Probando la conexión…</string>
     <string name="onboarding_conn_ok">Conexión correcta: URL y token válidos.</string>
     <string name="onboarding_conn_bad_token">Token rechazado (401). Revísalo.</string>
     <string name="onboarding_conn_unreachable">No se pudo conectar: revisa la URL y la red.</string>

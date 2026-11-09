@@ -23,11 +23,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -51,8 +52,11 @@ import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
 import dev.smsforwarder.core.ConnectionTestResult
 import dev.smsforwarder.health.MiuiIntents
+import dev.smsforwarder.ui.components.BottomActionBar
 import dev.smsforwarder.ui.recovery.RecoveryList
 import dev.smsforwarder.ui.recovery.RecoveryViewModel
+import dev.smsforwarder.ui.theme.StatusPill
+import dev.smsforwarder.ui.theme.StatusTone
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -101,38 +105,68 @@ fun OnboardingScreen(
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { vm.load() }
 
+    val recoveryStep = state.step == OnboardingStep.RECOVERY
+    val recoveryItems by recoveryVm.candidates.collectAsState()
+    val selectedCount = recoveryItems.count { it.selected }
+
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
+        bottomBar = {
+            BottomActionBar {
+                if (recoveryStep) {
+                    state.finishError?.let { Text(stringResource(it), color = MaterialTheme.colorScheme.error) }
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                vm.setFinishError(null)
+                                try {
+                                    recoveryVm.sendSelected()
+                                    vm.finish(recoveryVm.loadedAt)
+                                    onFinished()
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    vm.setFinishError(R.string.onboarding_finish_error)
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (selectedCount > 0) {
+                                stringResource(R.string.onboarding_send_and_finish, selectedCount)
+                            } else {
+                                stringResource(R.string.onboarding_finish_without)
+                            },
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = { scope.launch { vm.next() } },
+                        enabled = state.canContinue,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.onboarding_continue)) }
+                }
+            }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                stringResource(
-                    R.string.onboarding_progress,
-                    state.step.ordinal + 1,
-                    OnboardingStep.entries.size,
-                    stepTitle(state.step),
-                ),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            if (state.step == OnboardingStep.RECOVERY) {
-                RecoveryStep(recoveryVm) {
-                    scope.launch {
-                        vm.setFinishError(null)
-                        try {
-                            recoveryVm.sendSelected()
-                            vm.finish(recoveryVm.loadedAt)
-                            onFinished()
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            vm.setFinishError(R.string.onboarding_finish_error)
-                        }
-                    }
-                }
-                state.finishError?.let { Text(stringResource(it), color = MaterialTheme.colorScheme.error) }
+            val total = OnboardingStep.entries.size
+            val number = state.step.ordinal + 1
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.onboarding_progress, number, total),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LinearProgressIndicator(progress = { number / total.toFloat() }, modifier = Modifier.fillMaxWidth())
+            }
+            Text(stepTitle(state.step), style = MaterialTheme.typography.headlineSmall)
+            if (recoveryStep) {
+                RecoveryStep(recoveryVm)
             } else {
                 Column(
                     modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
@@ -153,11 +187,6 @@ fun OnboardingScreen(
                         OnboardingStep.RECOVERY -> Unit
                     }
                 }
-                Button(
-                    onClick = { scope.launch { vm.next() } },
-                    enabled = state.canContinue,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(stringResource(R.string.onboarding_continue)) }
             }
         }
     }
@@ -196,7 +225,8 @@ private fun PermissionsStep(state: OnboardingUiState, vm: OnboardingViewModel) {
     }
 
     Text(stringResource(R.string.onboarding_permissions_intro))
-    Text(
+    StatusPill(
+        if (state.smsPermissionGranted) StatusTone.OK else StatusTone.PENDING,
         stringResource(
             if (state.smsPermissionGranted) {
                 R.string.onboarding_permissions_granted
@@ -204,26 +234,30 @@ private fun PermissionsStep(state: OnboardingUiState, vm: OnboardingViewModel) {
                 R.string.onboarding_permissions_pending
             },
         ),
-        style = MaterialTheme.typography.titleSmall,
+        maxLines = Int.MAX_VALUE,
     )
-    Button(onClick = { launcher.launch(toRequest) }) { Text(stringResource(R.string.onboarding_grant_permissions)) }
-    OutlinedButton(
+    FilledTonalButton(onClick = { launcher.launch(toRequest) }, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.onboarding_grant_permissions))
+    }
+    FilledTonalButton(
         onClick = {
             vm.onPermissionResult(smsGranted = smsPermissions.all { isGranted(context, it) }, restrictedHint = false)
         },
+        modifier = Modifier.fillMaxWidth(),
     ) { Text(stringResource(R.string.onboarding_check_again)) }
     if (state.restrictedHint) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.onboarding_restricted_title), style = MaterialTheme.typography.titleSmall)
                 Text(stringResource(R.string.onboarding_restricted_body))
-                Button(
+                FilledTonalButton(
                     onClick = {
                         startSafely(
                             context,
                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
                         )
                     },
+                    modifier = Modifier.fillMaxWidth(),
                 ) { Text(stringResource(R.string.onboarding_open_app_info)) }
             }
         }
@@ -234,7 +268,7 @@ private fun PermissionsStep(state: OnboardingUiState, vm: OnboardingViewModel) {
 private fun BatteryStep() {
     val context = LocalContext.current
     Text(stringResource(R.string.onboarding_battery_body))
-    Button(
+    FilledTonalButton(
         onClick = {
             startSafely(
                 context,
@@ -242,6 +276,7 @@ private fun BatteryStep() {
                     .setData(Uri.parse("package:${context.packageName}")),
             )
         },
+        modifier = Modifier.fillMaxWidth(),
     ) { Text(stringResource(R.string.onboarding_battery_button)) }
 }
 
@@ -249,11 +284,13 @@ private fun BatteryStep() {
 private fun MiuiStep() {
     val context = LocalContext.current
     Text(stringResource(R.string.onboarding_miui_body))
-    Button(onClick = { startSafely(context, MiuiIntents.autostart(context)) }) { Text(stringResource(R.string.onboarding_miui_autostart)) }
-    OutlinedButton(onClick = { startSafely(context, MiuiIntents.permissions(context)) }) {
+    FilledTonalButton(onClick = { startSafely(context, MiuiIntents.autostart(context)) }, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.onboarding_miui_autostart))
+    }
+    FilledTonalButton(onClick = { startSafely(context, MiuiIntents.permissions(context)) }, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.onboarding_miui_permissions))
     }
-    OutlinedButton(onClick = { startSafely(context, MiuiIntents.battery(context)) }) {
+    FilledTonalButton(onClick = { startSafely(context, MiuiIntents.battery(context)) }, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.onboarding_miui_battery))
     }
 }
@@ -280,7 +317,7 @@ private fun SendersStep(senders: List<String>, onAdd: (String) -> Unit, onRemove
             singleLine = true,
             modifier = Modifier.weight(1f).testTag("field_sender"),
         )
-        Button(
+        FilledTonalButton(
             onClick = {
                 onAdd(draft)
                 draft = ""
@@ -312,20 +349,26 @@ private fun ConnectionStep(state: OnboardingUiState, vm: OnboardingViewModel, on
         supportingText = state.tokenError?.let { error -> { Text(stringResource(error)) } },
         modifier = Modifier.fillMaxWidth().testTag("field_token"),
     )
-    Button(onClick = onTest, enabled = !state.testing) { Text(stringResource(R.string.action_test_connection)) }
-    when (state.testResult) {
-        ConnectionTestResult.OK -> Text(stringResource(R.string.onboarding_conn_ok))
-        ConnectionTestResult.BAD_TOKEN -> Text(stringResource(R.string.onboarding_conn_bad_token))
-        ConnectionTestResult.UNREACHABLE -> Text(stringResource(R.string.onboarding_conn_unreachable))
-        null -> Unit
+    FilledTonalButton(onClick = onTest, enabled = !state.testing, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.action_test_connection))
+    }
+    if (state.testing) {
+        StatusPill(StatusTone.PENDING, stringResource(R.string.onboarding_conn_testing), maxLines = Int.MAX_VALUE)
+    } else {
+        when (state.testResult) {
+            ConnectionTestResult.OK ->
+                StatusPill(StatusTone.OK, stringResource(R.string.onboarding_conn_ok), maxLines = Int.MAX_VALUE)
+            ConnectionTestResult.BAD_TOKEN ->
+                StatusPill(StatusTone.ERROR, stringResource(R.string.onboarding_conn_bad_token), maxLines = Int.MAX_VALUE)
+            ConnectionTestResult.UNREACHABLE ->
+                StatusPill(StatusTone.ERROR, stringResource(R.string.onboarding_conn_unreachable), maxLines = Int.MAX_VALUE)
+            null -> Unit
+        }
     }
 }
 
 @Composable
-private fun ColumnScope.RecoveryStep(
-    recoveryVm: RecoveryViewModel,
-    onDone: () -> Unit,
-) {
+private fun ColumnScope.RecoveryStep(recoveryVm: RecoveryViewModel) {
     val items by recoveryVm.candidates.collectAsState()
     val unreadable by recoveryVm.unreadable.collectAsState()
     LaunchedEffect(Unit) { recoveryVm.load() }
@@ -335,14 +378,4 @@ private fun ColumnScope.RecoveryStep(
         onToggle = recoveryVm::toggle,
         modifier = Modifier.weight(1f),
     )
-    val count = items.count { it.selected }
-    Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-        Text(
-            if (count > 0) {
-                stringResource(R.string.onboarding_send_and_finish, count)
-            } else {
-                stringResource(R.string.onboarding_finish_without)
-            },
-        )
-    }
 }

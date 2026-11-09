@@ -82,13 +82,13 @@ fun toneIcon(tone: StatusTone): Painter = when (tone) {
 
 /** The icon is decorative: the text carries the meaning, so state is never colour alone. */
 @Composable
-fun StatusPill(tone: StatusTone, text: String, modifier: Modifier = Modifier) {
+fun StatusPill(tone: StatusTone, text: String, modifier: Modifier = Modifier, maxLines: Int = 1) {
     val colors = toneColors(tone)
     Surface(modifier = modifier, shape = RoundedCornerShape(50), color = colors.container, contentColor = colors.onContainer) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(toneIcon(tone), contentDescription = null, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
-            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
         }
     }
 }
