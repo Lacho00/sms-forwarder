@@ -34,22 +34,31 @@ import dev.smsforwarder.ui.rules.RulesScreen
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
 import java.io.File
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.GraphicsMode.Mode.NATIVE
 
 /**
- * Renders the main screens in light and dark with fake data and writes PNGs to `app/build/screenshots/`.
+ * Renders the main screens in light and dark with fake data and writes PNGs to `app/build/screenshots/<locale>/`.
+ * The device is a 411x891 dp phone at xhdpi, so each PNG is 822x1782 px.
  * Not part of the normal suite: `app/build.gradle.kts` skips it unless `-Pscreenshots` is given. See
  * docs/screenshots.md.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(NATIVE)
+@Config(qualifiers = "w411dp-h891dp-xhdpi")
 class ScreenshotsTest {
     @get:Rule val compose = createComposeRule()
+
+    private val locale = System.getProperty("screenshots.locale", "en")
+
+    @Before fun setLocale() = RuntimeEnvironment.setQualifiers("+$locale")
 
     private val at = 1_800_000_000_000L
 
@@ -64,7 +73,7 @@ class ScreenshotsTest {
             compose.runOnIdle { dark = mode }
             compose.waitForIdle()
             val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
-            val dir = File("build/screenshots").apply { mkdirs() }
+            val dir = File("build/screenshots/$locale").apply { mkdirs() }
             File(dir, "$name-${if (mode) "dark" else "light"}.png").outputStream().use {
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
             }

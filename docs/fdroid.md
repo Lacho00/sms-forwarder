@@ -14,8 +14,9 @@ CI environment variables) and its `checkupdates` can read it.
    does not follow the scheme, before building anything.
 
 Store metadata (title, descriptions, icon, screenshots, changelogs) is in `fastlane/metadata/android/`.
-Screenshots come from `docs/screenshots.md` (fake data); copy new ones into
-`en-US/images/phoneScreenshots/` when the UI changes.
+Screenshots come from `docs/screenshots.md` (fake data). When the UI changes, render both locales and copy
+`main-light`, `detail-light`, `rules-light`, `destinations-light` and `main-dark` as `1.png` to `5.png`
+into `en-US/images/phoneScreenshots/` (from `en/`) and `es-ES/images/phoneScreenshots/` (from `es/`).
 
 ## F-Droid
 

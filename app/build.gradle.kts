@@ -97,7 +97,9 @@ tasks.withType<Test>().configureEach {
     maxParallelForks = (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
     maxHeapSize = "1g"
     // Screenshots are rendered on demand: ./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotsTest'
+    // -Pscreenshots=es renders the Spanish UI; a bare -Pscreenshots renders English.
     if (project.hasProperty("screenshots")) {
+        systemProperty("screenshots.locale", project.property("screenshots").toString().ifBlank { "en" })
         // Always render again: never UP-TO-DATE or FROM-CACHE, so the PNGs are really written.
         outputs.upToDateWhen { false }
         outputs.cacheIf { false }
