@@ -78,13 +78,21 @@ class RulesTest {
     }
 
     @Test fun catastrophicRegexTimesOut() {
-        val r = rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = "(a+)+\\1$")  // backreference defeats the JDK memoization of "(a+)+$"
+        val r = rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = SLOW)  // passes the validator, polynomial backtracking
+        assertTrue(RuleEngine.validatePattern(SLOW))
         val start = System.nanoTime()
-        val m = RuleEngine.destinationsFor(sms("abc", "a".repeat(40) + "!"), listOf(r))
+        val m = RuleEngine.destinationsFor(sms("abc", "1".repeat(2000)), listOf(r))
         val ms = (System.nanoTime() - start) / 1_000_000
         assertTrue(m.destinationIds.isEmpty())
         assertEquals(setOf(7L), m.timedOutRuleIds)
         assertTrue(ms < 1000, "took $ms ms")
+    }
+
+    @Test fun storedUnsafePatternNeverRuns() {
+        val r = rule(id = 3, dest = setOf(9L), bodyMode = BodyMode.REGEX, bodyPattern = "(a+)+")
+        val m = RuleEngine.destinationsFor(sms("abc", "aaa"), listOf(r))
+        assertEquals(setOf(3L), m.timedOutRuleIds)
+        assertTrue(m.destinationIds.isEmpty())
     }
 
     @Test fun invalidPatternRejected() {
@@ -93,13 +101,15 @@ class RulesTest {
     }
 
     @Test fun nestedUnboundedQuantifiersRejected() {
-        for (p in listOf("(a+)+", "(a*)*", "(a+)+\\1$", "((ab)+c)*", "(a{2,})+", "(?:x+y?)+", "(,\\d+)*")) {
+        for (p in listOf("(a+)+", "(a*)*", "(a+)+\\1$", "((ab)+c)*", "(a{2,})+", "(?:x+y?)+", "(,\\d+)*",
+            "(a|aa)+$", "(\\w|\\d)+$", "(a|a)*b", "\\Q[\\E(a+)+$", ".*.*.*x", "(ab|cd)+")) {
             assertFalse(RuleEngine.validatePattern(p), p)
         }
     }
 
     @Test fun safePatternsAccepted() {
-        for (p in listOf("^a.*", "(ab)+", "(a+)?", "[+*]+", "(\\+)+", "a+b+", "(a|b)+", "(\\d{3})+", "([)+]+)")) {
+        for (p in listOf("^a.*", "(ab)+", "(a+)?", "[+*]+", "(\\+)+", "a+b+", "(a|b)+", "(\\d{3})+", "([)+]+)",
+            "(a|b)+", "(a|b|c)*x", "(ab|cd)?", "(ab|cd){2}", "\\Q(a+)+\\E", ".*foo.*", "[.*]+")) {
             assertTrue(RuleEngine.validatePattern(p), p)
         }
     }
@@ -111,10 +121,10 @@ class RulesTest {
     }
 
     @Test fun timeoutDoesNotBlockLaterRules() {
-        val slow = rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = "(a+)+\\1$")
+        val slow = rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = "\\d*\\d*\\d*\\d*\\d*\\d*\\d*!")
         val ok = rule(id = 8, dest = setOf(5L))
         val start = System.nanoTime()
-        val m = RuleEngine.destinationsFor(sms("abc", "a".repeat(30) + "b"), listOf(slow, ok))
+        val m = RuleEngine.destinationsFor(sms("abc", "1".repeat(2000)), listOf(slow, ok))
         val ms = (System.nanoTime() - start) / 1_000_000
         assertEquals(setOf(7L), m.timedOutRuleIds)
         assertEquals(setOf(5L), m.destinationIds)
@@ -133,5 +143,9 @@ class RulesTest {
         assertEquals(setOf(5L), m.destinationIds)
         // Input is capped at MAX_REGEX_INPUT, so the overflow may no longer trigger; either way it is contained.
         assertTrue(m.timedOutRuleIds.all { it == 9L })
+    }
+
+    private companion object {
+        const val SLOW = "\\d*\\d*\\d*\\d*\\d*\\d*!"
     }
 }

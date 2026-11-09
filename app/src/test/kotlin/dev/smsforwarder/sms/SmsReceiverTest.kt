@@ -77,12 +77,12 @@ class SmsReceiverTest {
         val ruleId = graph.ruleRepository.create(
             dev.smsforwarder.core.RuleDraft(
                 name = "R", enabled = true, senderMode = dev.smsforwarder.core.SenderMode.CONTAINS, senderPattern = "OPERADOR",
-                bodyMode = dev.smsforwarder.core.BodyMode.REGEX, bodyPattern = "(a|aa)+\\1$",  // overlapping alternation: slow but passes the nested-quantifier check
+                bodyMode = dev.smsforwarder.core.BodyMode.REGEX, bodyPattern = "\\d*\\d*\\d*\\d*\\d*\\d*!",  // slow but passes the validator
                 sim = dev.smsforwarder.core.SimMatch.ANY, destinationIds = setOf(1L),
             ),
         )
 
-        receiver.process(context, smsIntent("OPERADOR", "a".repeat(40) + "!"))
+        receiver.process(context, smsIntent("OPERADOR", "1".repeat(2000)))
 
         val events = graph.engineLog.recent(10)
         assertTrue(events.toString(), events.any { it.type == dev.smsforwarder.core.EngineEventType.RULE_TIMEOUT && it.ruleId == ruleId })
