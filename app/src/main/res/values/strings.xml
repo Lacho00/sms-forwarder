@@ -199,6 +199,11 @@
     <string name="about_source_code">Source code</string>
     <string name="about_license">License</string>
     <string name="about_license_value">MIT</string>
+    <string name="about_tagline">Forwards your SMS to the services you choose</string>
+    <string name="about_section_project">Project</string>
+    <string name="about_section_support">Support</string>
+    <string name="about_license_hint">Free to use, change and share</string>
+    <string name="about_opens_in_browser">Opens in the browser</string>
     <string name="about_libraries_title">Libraries</string>
     <string-array name="about_libraries">
         <item>AndroidX (Apache-2.0)</item>

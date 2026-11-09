@@ -16,7 +16,10 @@ import dev.smsforwarder.R
 import dev.smsforwarder.ui.about.AboutScreen
 import dev.smsforwarder.ui.about.AboutState
 import dev.smsforwarder.ui.about.DiagnosticMessage
+import dev.smsforwarder.ui.about.LICENSE_URL
+import dev.smsforwarder.ui.about.REPO_LABEL
 import dev.smsforwarder.ui.about.REPO_URL
+import dev.smsforwarder.ui.about.splitLibrary
 import dev.smsforwarder.ui.theme.SmsForwarderTheme
 import dev.smsforwarder.ui.theme.ThemeMode
 import org.junit.Assert.assertEquals
@@ -51,22 +54,37 @@ class AboutScreenTest {
     @Test fun showsVersionAndLink() {
         show()
         compose.onNodeWithText(context.getString(R.string.about_version, "9.8.7")).assertExists()
-        compose.onNodeWithText(REPO_URL).assertExists()
+        compose.onNodeWithText(REPO_LABEL).assertExists()
     }
 
     @Test fun tappingLinkOpensRepo() {
         val opened = mutableListOf<String>()
         show(onOpenLink = { opened += it })
-        compose.onNodeWithText(REPO_URL).performClick()
+        compose.onNodeWithText(REPO_LABEL).performClick()
         assertEquals(listOf("https://github.com/Lacho00/sms-forwarder"), opened)
     }
 
     @Test fun showsLicenseAndLibraries() {
         show()
-        compose.onNodeWithText(context.getString(R.string.about_license_value)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.about_license_value), substring = true).assertExists()
         context.resources.getStringArray(R.array.about_libraries).forEach {
-            compose.onNodeWithText(it).assertExists()
+            val (name, license) = splitLibrary(it)
+            compose.onNodeWithText(name).performScrollTo().assertExists()
+            assertTrue("library without license: $it", license != null)
         }
+    }
+
+    @Test fun licenseRowOpensLicense() {
+        val opened = mutableListOf<String>()
+        show(onOpenLink = { opened += it })
+        compose.onNode(hasClickAction() and hasText(context.getString(R.string.about_license_hint))).performScrollTo().performClick()
+        assertEquals(listOf(LICENSE_URL), opened)
+    }
+
+    @Test fun splitLibraryReadsNameAndLicense() {
+        assertEquals("Room" to "Apache-2.0", splitLibrary("Room (Apache-2.0)"))
+        assertEquals("kotlinx.serialization" to "Apache-2.0", splitLibrary("kotlinx.serialization (Apache-2.0)"))
+        assertEquals("Plain" to null, splitLibrary("Plain"))
     }
 
     @Test fun backCallsOnBack() {
@@ -117,7 +135,7 @@ class AboutScreenTest {
     @Test fun aboutLinkOpensCode() {
         val opened = mutableListOf<String>()
         show(onOpenLink = { opened += it })
-        val link = compose.onNode(hasClickAction() and hasText(REPO_URL))
+        val link = compose.onNode(hasClickAction() and hasText(REPO_LABEL))
         link.assertExists()
         assertEquals(Role.Button, link.fetchSemanticsNode().config[SemanticsProperties.Role])
         link.performClick()
@@ -127,7 +145,7 @@ class AboutScreenTest {
     @Test fun aboutLinkAlignsWithTheText() {
         show()
         val title = compose.onNodeWithText(context.getString(R.string.about_source_code), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.left
-        val link = compose.onNodeWithText(REPO_URL, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.left
+        val link = compose.onNodeWithText(REPO_LABEL, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.left
         assertEquals(title, link, 0.5f)
     }
 
