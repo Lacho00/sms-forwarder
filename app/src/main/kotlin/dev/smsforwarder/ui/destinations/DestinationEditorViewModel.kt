@@ -238,8 +238,8 @@ class DestinationEditorViewModel(
     fun setBodyIsJson(v: Boolean) = edit { it.copy(bodyIsJson = v).custom() }
     fun setSuccessPolicy(v: SuccessPolicy) = edit { it.copy(successPolicy = v).custom() }
 
-    // Method, body and success policy only take effect on a custom destination (the tester and the sender
-    // ignore them for the presets), so editing one by hand makes the template honest about it.
+    // A preset template stands for the fields it filled in (the tester sends its own probe for Standard JSON), so
+    // editing method, body or success policy by hand makes the destination Custom.
     private fun DestinationEditorState.custom() = if (template == TemplateKind.CUSTOM) this else copy(template = TemplateKind.CUSTOM)
 
     /** Sends a sample request with what the form holds. Blocked, with the errors shown, while the form is invalid. */
