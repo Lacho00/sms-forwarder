@@ -303,7 +303,9 @@ fun DeliveryPills(chips: List<DeliveryChipUi>, fallback: StatusLabel) {
         if (chips.isEmpty()) {
             StatusPill(toneOf(fallback.kind), statusText(fallback))
         } else {
-            chips.forEach { StatusPill(toneOf(it.status), deliveryChipText(it)) }
+            chips.forEach {
+                StatusPill(toneOf(it.status), deliveryChipText(it), iconDescription = deliveryStateWord(it.status))
+            }
         }
     }
 }

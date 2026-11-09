@@ -246,6 +246,16 @@ class MainScreenTest {
         compose.onNodeWithText(str(R.string.delivery_queued, "T2")).assertExists()
     }
 
+    @Test fun sentAndErrorPillsWithoutCodeAreDistinguishableToScreenReaders() {
+        val row = chipRow(
+            DeliveryChipUi("Main", DeliveryStatus.SENT, null, false),
+            DeliveryChipUi("T2", DeliveryStatus.ERROR, null, false),
+        )
+        show(state(rows = listOf(row)))
+        compose.onNodeWithContentDescription(str(R.string.delivery_state_sent), useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription(str(R.string.delivery_state_error), useUnmergedTree = true).assertExists()
+    }
+
     @Test fun pillsCoverErrorConfigAndCanceled() {
         val row = chipRow(
             DeliveryChipUi("A", DeliveryStatus.ERROR, 403, false),

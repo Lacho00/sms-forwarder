@@ -123,6 +123,23 @@ class DetailScreenTest {
         assertTrue("pill $pill inside $root", pill.left >= root.left && pill.right <= root.right && pill.top >= root.top && pill.bottom <= root.bottom)
     }
 
+    @Test fun sentAndErrorPillsWithoutCodeAreDistinguishableToScreenReaders() {
+        val deliveries = listOf(
+            DeliveryEntity(id = 10, smsId = 1, destinationId = 1, destinationName = "Main", status = DeliveryStatus.SENT),
+            DeliveryEntity(id = 11, smsId = 1, destinationId = 2, destinationName = "T2", status = DeliveryStatus.ERROR),
+        )
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                DetailScreen(
+                    state = DetailUiState(sms(SmsStatus.ERROR), emptyList(), deliveries = deliveries),
+                    onRetry = {}, onDelete = {}, onBack = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription(str(R.string.delivery_state_sent), useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription(str(R.string.delivery_state_error), useUnmergedTree = true).assertExists()
+    }
+
     @Test fun destinationsSectionListsEachDeliveryWithPill() {
         val deliveries = listOf(
             DeliveryEntity(id = 10, smsId = 1, destinationId = 1, destinationName = "Main", status = DeliveryStatus.SENT, lastHttpCode = 204),

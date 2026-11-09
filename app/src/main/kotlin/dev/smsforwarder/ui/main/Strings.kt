@@ -29,6 +29,17 @@ fun statusText(label: StatusLabel): String {
     }
 }
 
+/**
+ * The status word a screen reader needs when the pill text alone does not say it ("Main" is the same text for a sent
+ * and a failed delivery); null where the text already does (queued, canceled).
+ */
+@Composable
+fun deliveryStateWord(status: DeliveryStatus): String? = when (status) {
+    DeliveryStatus.SENT -> stringResource(R.string.delivery_state_sent)
+    DeliveryStatus.ERROR -> stringResource(R.string.delivery_state_error)
+    DeliveryStatus.QUEUED, DeliveryStatus.CANCELED -> null
+}
+
 /** One destination's state, e.g. `Main 200` or `T2 queued`. */
 @Composable
 fun deliveryChipText(chip: DeliveryChipUi): String {

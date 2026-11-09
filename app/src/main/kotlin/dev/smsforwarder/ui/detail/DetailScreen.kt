@@ -45,6 +45,7 @@ import dev.smsforwarder.data.SmsEntity
 import dev.smsforwarder.ui.components.DestructiveButton
 import dev.smsforwarder.ui.components.SectionTitle
 import dev.smsforwarder.ui.main.deliveryChipText
+import dev.smsforwarder.ui.main.deliveryStateWord
 import dev.smsforwarder.ui.main.formatDateTime
 import dev.smsforwarder.ui.main.statusText
 import dev.smsforwarder.ui.main.toChip
@@ -151,7 +152,9 @@ private fun DetailContent(
     if (state.deliveries.isNotEmpty()) {
         SectionTitle(stringResource(R.string.detail_destinations))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.deliveries.forEach { StatusPill(toneOf(it.status), deliveryChipText(it.toChip())) }
+            state.deliveries.forEach {
+                StatusPill(toneOf(it.status), deliveryChipText(it.toChip()), iconDescription = deliveryStateWord(it.status))
+            }
         }
     }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
