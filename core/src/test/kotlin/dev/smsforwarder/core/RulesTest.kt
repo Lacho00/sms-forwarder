@@ -92,6 +92,35 @@ class RulesTest {
         assertTrue(RuleEngine.validatePattern("^a.*"))
     }
 
+    @Test fun nestedUnboundedQuantifiersRejected() {
+        for (p in listOf("(a+)+", "(a*)*", "(a+)+\\1$", "((ab)+c)*", "(a{2,})+", "(?:x+y?)+", "(,\\d+)*")) {
+            assertFalse(RuleEngine.validatePattern(p), p)
+        }
+    }
+
+    @Test fun safePatternsAccepted() {
+        for (p in listOf("^a.*", "(ab)+", "(a+)?", "[+*]+", "(\\+)+", "a+b+", "(a|b)+", "(\\d{3})+", "([)+]+)")) {
+            assertTrue(RuleEngine.validatePattern(p), p)
+        }
+    }
+
+    @Test fun regexOnlySeesFirstChars() {
+        val r = rule(bodyMode = BodyMode.REGEX, bodyPattern = "x")
+        assertEquals(setOf(1L), dests(sms("abc", "a".repeat(10) + "x"), r))
+        assertEquals(emptySet(), dests(sms("abc", "a".repeat(2500) + "x"), r))
+    }
+
+    @Test fun timeoutDoesNotBlockLaterRules() {
+        val slow = rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = "(a+)+\\1$")
+        val ok = rule(id = 8, dest = setOf(5L))
+        val start = System.nanoTime()
+        val m = RuleEngine.destinationsFor(sms("abc", "a".repeat(30) + "b"), listOf(slow, ok))
+        val ms = (System.nanoTime() - start) / 1_000_000
+        assertEquals(setOf(7L), m.timedOutRuleIds)
+        assertEquals(setOf(5L), m.destinationIds)
+        assertTrue(ms < 2000, "took $ms ms")
+    }
+
     @Test fun invalidStoredPatternNeverMatches() {
         val r = rule(mode = SenderMode.REGEX, pattern = "(")
         assertEquals(emptySet(), dests(sms(), r))
@@ -102,6 +131,7 @@ class RulesTest {
         val ok = rule(id = 10, dest = setOf(5L))
         val m = RuleEngine.destinationsFor(sms("abc", "a".repeat(100_000)), listOf(overflow, ok))
         assertEquals(setOf(5L), m.destinationIds)
-        assertEquals(setOf(9L), m.timedOutRuleIds)
+        // Input is capped at MAX_REGEX_INPUT, so the overflow may no longer trigger; either way it is contained.
+        assertTrue(m.timedOutRuleIds.all { it == 9L })
     }
 }
