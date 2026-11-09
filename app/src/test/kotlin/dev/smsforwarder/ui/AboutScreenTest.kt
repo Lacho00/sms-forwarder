@@ -7,6 +7,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import dev.smsforwarder.R
 import dev.smsforwarder.ui.about.AboutScreen
 import dev.smsforwarder.ui.about.AboutState
@@ -108,5 +113,40 @@ class AboutScreenTest {
                 androidx.compose.ui.semantics.SemanticsProperties.LiveRegion,
                 androidx.compose.ui.semantics.LiveRegionMode.Polite,
             ))
+    }
+
+    @Test fun aboutLinkOpensCode() {
+        val opened = mutableListOf<String>()
+        show(onOpenLink = { opened += it })
+        val link = compose.onNode(hasClickAction() and hasText(REPO_URL))
+        link.assertExists()
+        assertEquals(Role.Button, link.fetchSemanticsNode().config[SemanticsProperties.Role])
+        link.performClick()
+        assertEquals(listOf(REPO_URL), opened)
+    }
+
+    @Test fun aboutLinkAlignsWithTheText() {
+        show()
+        val title = compose.onNodeWithText(context.getString(R.string.about_source_code), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.left
+        val link = compose.onNodeWithText(REPO_URL, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.left
+        println("MEASURE about link left=$link title left=$title")
+        assertEquals(title, link, 0.5f)
+    }
+
+    @Test fun aboutDiagnosticsIsARow() {
+        var clicks = 0
+        show(onExport = { clicks++ })
+        val row = compose.onNode(
+            hasClickAction() and hasText(context.getString(R.string.about_export_diagnostic)) and
+                hasText(context.getString(R.string.about_diagnostic_hint)),
+        )
+        row.performScrollTo().performClick()
+        assertEquals(1, clicks)
+    }
+
+    @Test fun aboutDiagnosticsRowIsDisabledWhileBusy() {
+        show(state = AboutState(busy = true))
+        compose.onNode(hasClickAction() and hasText(context.getString(R.string.about_export_diagnostic)))
+            .performScrollTo().assertIsNotEnabled()
     }
 }

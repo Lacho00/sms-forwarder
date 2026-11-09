@@ -44,6 +44,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
@@ -132,6 +133,7 @@ fun SettingRow(
     supporting: String? = null,
     leadingIcon: Painter? = null,
     chevron: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     ListItem(
@@ -141,7 +143,7 @@ fun SettingRow(
         trailingContent = if (chevron) {
             { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) }
         } else null,
-        modifier = modifier.clickable(role = Role.Button, onClick = onClick),
+        modifier = modifier.alpha(if (enabled) 1f else 0.38f).clickable(enabled = enabled, role = Role.Button, onClick = onClick),
     )
 }
 

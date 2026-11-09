@@ -2,6 +2,7 @@ package dev.smsforwarder.ui.about
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,18 +15,20 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
@@ -33,6 +36,7 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
+import dev.smsforwarder.ui.components.SettingRow
 
 const val REPO_URL = "https://github.com/Lacho00/sms-forwarder"
 
@@ -75,13 +79,30 @@ fun AboutScreen(
             Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge)
             Text(stringResource(R.string.about_version, versionName), style = MaterialTheme.typography.bodyMedium)
             Text(stringResource(R.string.about_source_code), style = MaterialTheme.typography.titleSmall)
-            TextButton(onClick = { onOpenLink(REPO_URL) }) { Text(REPO_URL) }
+            // A link-styled text, not a TextButton: a button's inset would push it off the text column.
+            Text(
+                REPO_URL,
+                style = MaterialTheme.typography.bodyLarge.copy(textDecoration = TextDecoration.Underline),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clickable(role = Role.Button) { onOpenLink(REPO_URL) }
+                    .minimumInteractiveComponentSize(),
+            )
             Text(stringResource(R.string.about_license), style = MaterialTheme.typography.titleSmall)
             Text(stringResource(R.string.about_license_value), style = MaterialTheme.typography.bodyMedium)
-            OutlinedButton(onClick = onExportDiagnostic, enabled = !state.busy) {
-                Text(stringResource(R.string.about_export_diagnostic))
-            }
-            Text(stringResource(R.string.about_diagnostic_hint), style = MaterialTheme.typography.bodyMedium)
+            // Full-bleed row: the screen's 16 dp padding is cancelled so the row's own 16 dp lines up with the text above.
+            SettingRow(
+                title = stringResource(R.string.about_export_diagnostic),
+                supporting = stringResource(R.string.about_diagnostic_hint),
+                leadingIcon = painterResource(R.drawable.ic_upload),
+                modifier = Modifier.layout { measurable, constraints ->
+                    val bleed = 16.dp.roundToPx()
+                    val placeable = measurable.measure(constraints.copy(minWidth = constraints.maxWidth + 2 * bleed, maxWidth = constraints.maxWidth + 2 * bleed))
+                    layout(constraints.maxWidth, placeable.height) { placeable.place(-bleed, 0) }
+                },
+                enabled = !state.busy,
+                onClick = onExportDiagnostic,
+            )
             state.message?.let {
                 Text(
                     stringResource(

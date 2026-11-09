@@ -134,4 +134,21 @@ class TransferDialogsTest {
         show(TransferUi.Done(dev.smsforwarder.ui.transfer.TransferMessage.SecretsNotSaved))
         compose.onNodeWithText(app.getString(R.string.transfer_secrets_not_saved)).assertExists()
     }
+
+    @Test fun exportWarningAppearsOnlyWhenChecked() {
+        val warning = app.getString(R.string.export_secrets_warning)
+        show(TransferUi.AskExport(false))
+        compose.onNodeWithText(warning).assertDoesNotExist()
+        compose.onNode(isToggleable()).performClick()
+        compose.onNodeWithText(warning).assertExists()
+    }
+
+    @Test fun exportWarningUsesThePendingTone() {
+        show(TransferUi.AskExport(true))
+        val results = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        compose.onNodeWithText(app.getString(R.string.export_secrets_warning)).fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+        val color = results.single().layoutInput.style.color
+        assertEquals(dev.smsforwarder.ui.theme.LightStatusColors.pending.onContainer, color)
+    }
 }

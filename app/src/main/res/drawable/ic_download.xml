@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Download: arrow down over a base line (import, recover). Material Symbols outlined style, 24dp; not in material-icons-core. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,16l-5,-5 1.4,-1.45 2.6,2.6V4h2v8.15l2.6,-2.6L17,11l-5,5zM6,20v-2h12v2z"
+        android:fillColor="#FF000000" />
+</vector>

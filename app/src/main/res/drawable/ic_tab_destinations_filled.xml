@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Destinations tab, selected: the same fork as ic_tab_destinations with a bigger dot, heavier strokes and filled arrowheads. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M1 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0z" />
+    <path
+        android:pathData="M6.5 12h3.5c2 0 3-1 4-3l1-2h3M10 12c2 0 3 1 4 3l1 2h3"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M16.5 3.2L22 7l-5.5 3.8zM16.5 13.2L22 17l-5.5 3.8z" />
+</vector>

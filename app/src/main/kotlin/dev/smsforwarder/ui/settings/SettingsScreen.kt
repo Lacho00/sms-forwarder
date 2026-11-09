@@ -16,7 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -33,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -185,7 +185,7 @@ fun SettingsScreen(
         SectionTitle(stringResource(R.string.settings_group_maintenance), RowInset)
         SettingRow(
             title = stringResource(R.string.recover_sms),
-            leadingIcon = rememberVectorPainter(Icons.Filled.Refresh),
+            leadingIcon = painterResource(R.drawable.ic_download),
             chevron = true,
             onClick = onOpenRecovery,
         )

@@ -46,7 +46,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,6 +75,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.smsforwarder.R
@@ -230,7 +230,7 @@ fun MainScreen(
             if (state.rows.isEmpty()) {
                 item(key = "empty") {
                     EmptyState(
-                        icon = rememberVectorPainter(if (filtering) Icons.Filled.Search else Icons.Filled.Email),
+                        icon = if (filtering) rememberVectorPainter(Icons.Filled.Search) else painterResource(R.drawable.ic_tab_home),
                         title = stringResource(if (filtering) R.string.main_no_results else R.string.main_empty),
                         body = stringResource(if (filtering) R.string.main_no_results_body else R.string.main_empty_body),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
