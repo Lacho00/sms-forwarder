@@ -70,6 +70,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import androidx.compose.runtime.remember
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -159,7 +163,12 @@ fun MainScreen(
     val searching = state.query.isNotBlank()
     val listState = rememberLazyListState()
     // Showing the panel again (search closed) inserts it above the anchored item: go back to the top.
-    LaunchedEffect(searching) { listState.scrollToItem(0) }
+    // Only on the true -> false change: the first composition (rotation, theme change, coming back to the tab)
+    // must keep the scroll position restored by rememberLazyListState.
+    val searchingNow by rememberUpdatedState(searching)
+    LaunchedEffect(Unit) {
+        snapshotFlow { searchingNow }.drop(1).filter { !it }.collect { listState.scrollToItem(0) }
+    }
     val filtering = searching || state.filter != StatusFilter.ALL || state.destinationFilter != null
     // "Today" must follow the clock: re-group when the date changes (checked on every resume).
     val zone = ZoneId.systemDefault()

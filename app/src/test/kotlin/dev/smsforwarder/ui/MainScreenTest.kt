@@ -1,6 +1,9 @@
 package dev.smsforwarder.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
@@ -130,6 +133,39 @@ class MainScreenTest {
         // "Queued" is also a filter chip label; the panel counter comes first.
         compose.onAllNodesWithText(str(R.string.main_counter_queued))[0].performClick()
         compose.runOnIdle { assertEquals(StatusFilter.QUEUED, picked) }
+    }
+
+    private fun manyRows(n: Int) = (1..n).map {
+        RowUi(
+            id = it.toLong(), sender = "S$it", subId = null, receivedAt = 1_800_000_000_000L - it,
+            preview = "Row number $it", label = StatusLabel(StatusKind.SENT, 1, 200),
+        )
+    }
+
+    @Test fun scrollPositionSurvivesRecreation() {
+        val tester = StateRestorationTester(compose)
+        tester.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                MainScreen(state = state(rows = manyRows(60)), onOpenIssue = {}, onSweepNow = {}, onOpen = {})
+            }
+        }
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(40)
+        tester.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("Row number 40").assertIsDisplayed()
+        compose.onNodeWithText(str(R.string.main_forwarding)).assertDoesNotExist()
+    }
+
+    @Test fun closingSearchScrollsBackToTop() {
+        var query by mutableStateOf("Row")
+        compose.setContent {
+            SmsForwarderTheme(ThemeMode.SYSTEM) {
+                MainScreen(state = state(rows = manyRows(60)).copy(query = query), onOpenIssue = {}, onSweepNow = {}, onOpen = {})
+            }
+        }
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(40)
+        compose.runOnIdle { query = "" }
+        compose.waitForIdle()
+        compose.onNodeWithText(str(R.string.main_forwarding)).assertIsDisplayed()
     }
 
     @Test fun searchHidesPanelAndBanner() {
