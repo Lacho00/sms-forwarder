@@ -77,75 +77,45 @@ class RulesTest {
         assertEquals(setOf(1L, 2L, 3L), dests(sms(), a, b))
     }
 
-    @Test fun catastrophicRegexTimesOut() {
-        val r = rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = SLOW)  // passes the validator, polynomial backtracking
-        assertTrue(RuleEngine.validatePattern(SLOW))
+    @Test fun hostilePatternsRunInLinearTime() {
+        val inputs = mapOf(
+            "(a+)+$" to "a".repeat(100_000) + "!",
+            "(a|aa)+$" to "a".repeat(100_000) + "!",
+            "\\d+\\d+\\d+\\d+x" to "1".repeat(100_000),
+            "(?x)(a+) +$" to "a".repeat(100_000) + "!",
+        )
         val start = System.nanoTime()
-        val m = RuleEngine.destinationsFor(sms("abc", "1".repeat(2000)), listOf(r))
+        for ((p, text) in inputs) {
+            val m = RuleEngine.destinationsFor(sms("abc", text), listOf(rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = p)))
+            assertTrue(m.destinationIds.isEmpty(), p)
+            // RE2/J has no (?x) flag: that pattern is invalid and reported instead of run.
+            assertEquals(p.startsWith("(?x)"), m.timedOutRuleIds.isNotEmpty(), p)
+        }
         val ms = (System.nanoTime() - start) / 1_000_000
-        assertTrue(m.destinationIds.isEmpty())
-        assertEquals(setOf(7L), m.timedOutRuleIds)
         assertTrue(ms < 1000, "took $ms ms")
     }
 
-    @Test fun storedUnsafePatternNeverRuns() {
-        val r = rule(id = 3, dest = setOf(9L), bodyMode = BodyMode.REGEX, bodyPattern = "(a+)+")
-        val m = RuleEngine.destinationsFor(sms("abc", "aaa"), listOf(r))
-        assertEquals(setOf(3L), m.timedOutRuleIds)
-        assertTrue(m.destinationIds.isEmpty())
-    }
-
     @Test fun invalidPatternRejected() {
-        assertFalse(RuleEngine.validatePattern("("))
+        for (p in listOf("(", "(a)\\1", "a(?=b)", "(?<=a)b", "(?!a)b")) assertFalse(RuleEngine.validatePattern(p), p)
         assertTrue(RuleEngine.validatePattern("^a.*"))
     }
 
-    @Test fun nestedUnboundedQuantifiersRejected() {
-        for (p in listOf("(a+)+", "(a*)*", "(a+)+\\1$", "((ab)+c)*", "(a{2,})+", "(?:x+y?)+", "(,\\d+)*",
-            "(a|aa)+$", "(\\w|\\d)+$", "(a|a)*b", "\\Q[\\E(a+)+$", ".*.*.*x", "(ab|cd)+")) {
-            assertFalse(RuleEngine.validatePattern(p), p)
-        }
-    }
-
-    @Test fun safePatternsAccepted() {
-        for (p in listOf("^a.*", "(ab)+", "(a+)?", "[+*]+", "(\\+)+", "a+b+", "(a|b)+", "(\\d{3})+", "([)+]+)",
-            "(a|b)+", "(a|b|c)*x", "(ab|cd)?", "(ab|cd){2}", "\\Q(a+)+\\E", ".*foo.*", "[.*]+")) {
+    @Test fun patternsAccepted() {
+        for (p in listOf("(CUP|USD)+", ".*codigo.*\\d{6}.*", "^\\+?53\\d+", "(a|aa)+$", "(?i)saldo")) {
             assertTrue(RuleEngine.validatePattern(p), p)
         }
     }
 
-    @Test fun regexOnlySeesFirstChars() {
-        val r = rule(bodyMode = BodyMode.REGEX, bodyPattern = "x")
-        assertEquals(setOf(1L), dests(sms("abc", "a".repeat(10) + "x"), r))
-        assertEquals(emptySet(), dests(sms("abc", "a".repeat(2500) + "x"), r))
-    }
-
-    @Test fun timeoutDoesNotBlockLaterRules() {
-        val slow = rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = "\\d*\\d*\\d*\\d*\\d*\\d*\\d*!")
-        val ok = rule(id = 8, dest = setOf(5L))
-        val start = System.nanoTime()
-        val m = RuleEngine.destinationsFor(sms("abc", "1".repeat(2000)), listOf(slow, ok))
-        val ms = (System.nanoTime() - start) / 1_000_000
-        assertEquals(setOf(7L), m.timedOutRuleIds)
+    @Test fun storedUnrunnablePatternIsReportedAndLaterRulesStillMatch() {
+        val bad = rule(id = 3, dest = setOf(9L), bodyMode = BodyMode.REGEX, bodyPattern = "(a)\\1")
+        val ok = rule(id = 4, dest = setOf(5L), bodyMode = BodyMode.REGEX, bodyPattern = "aa")
+        val m = RuleEngine.destinationsFor(sms("abc", "aa"), listOf(bad, ok))
+        assertEquals(setOf(3L), m.timedOutRuleIds)
         assertEquals(setOf(5L), m.destinationIds)
-        assertTrue(ms < 2000, "took $ms ms")
     }
 
     @Test fun invalidStoredPatternNeverMatches() {
         val r = rule(mode = SenderMode.REGEX, pattern = "(")
         assertEquals(emptySet(), dests(sms(), r))
-    }
-
-    @Test fun stackOverflowInRegexIsContained() {
-        val overflow = rule(id = 9, bodyMode = BodyMode.REGEX, bodyPattern = "(?:a|b)*x")
-        val ok = rule(id = 10, dest = setOf(5L))
-        val m = RuleEngine.destinationsFor(sms("abc", "a".repeat(100_000)), listOf(overflow, ok))
-        assertEquals(setOf(5L), m.destinationIds)
-        // Input is capped at MAX_REGEX_INPUT, so the overflow may no longer trigger; either way it is contained.
-        assertTrue(m.timedOutRuleIds.all { it == 9L })
-    }
-
-    private companion object {
-        const val SLOW = "\\d*\\d*\\d*\\d*\\d*\\d*!"
     }
 }

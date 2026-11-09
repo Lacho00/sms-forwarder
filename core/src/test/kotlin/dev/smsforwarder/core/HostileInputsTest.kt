@@ -98,7 +98,7 @@ class HostileInputsTest {
     @Test fun catastrophicRegexInImportedRule() {
         val rule = "{\"name\":\"R\",\"enabled\":true,\"senderMode\":\"EXACT\",\"senderPattern\":\"AAA\"," +
             "\"bodyMode\":\"REGEX\",\"bodyPattern\":\"(a+)+\\\\1$\",\"sim\":\"ANY\",\"destinations\":[\"d1\"]}"
-        // Nested unbounded quantifiers are refused at import time.
+        // RE2 has no backreferences, so the pattern is refused at import time.
         val parsed = assertIs<ConfigParse.Invalid>(ConfigCodec.decode(file(dest("https://h.example/a"), rules = "[$rule]")))
         assertEquals(ConfigError.INVALID_RULE, parsed.error)
     }
