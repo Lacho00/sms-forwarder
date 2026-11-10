@@ -47,4 +47,16 @@ class ImportSummaryTest {
         val line = ruleLine(rule("A".repeat(50), BodyMode.REGEX, "b".repeat(50)))
         assertEquals("• R: " + ("A".repeat(50) + " / " + "b".repeat(50)).take(60) + "…", line)
     }
+
+    @Test fun importedNameAndPatternsCannotSpoofExtraLines() {
+        val r = PlannedRule(
+            RuleDraft("Evil\n• fake — legit.host", false, SenderMode.CONTAINS, "A\u202EB", BodyMode.CONTAINS, "x\u2028y\u2066z",
+                SimMatch.ANY, emptySet()), "R", emptyList(),
+        )
+        val line = ruleLine(r)
+        assertEquals("• Evil • fake — legit.host: A B / x y z", line)
+        assertFalse(line.any { it == '\n' || it == '\u202E' || it == '\u2028' || it == '\u2066' })
+        val d = destinationLine(dest("Evil\n• fake — legit.host", "https://h.example"), "no URL")
+        assertFalse('\n' in d)
+    }
 }

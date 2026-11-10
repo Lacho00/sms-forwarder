@@ -22,10 +22,23 @@ internal fun hostOf(url: String?, noUrl: String): String {
     }.getOrNull() ?: noUrl
 }
 
+/** Imported text is untrusted: line breaks, control and bidi/format characters could fake extra lines. */
+private fun flatten(s: String): String = buildString(s.length) {
+    for (c in s) {
+        val type = Character.getType(c)
+        val bad = Character.isISOControl(c) ||
+            type == Character.LINE_SEPARATOR.toInt() ||
+            type == Character.PARAGRAPH_SEPARATOR.toInt() ||
+            type == Character.FORMAT.toInt() ||
+            type == Character.CONTROL.toInt()
+        append(if (bad) ' ' else c)
+    }
+}
+
 internal fun destinationLine(d: PlannedDestination, noUrl: String): String =
-    "• ${d.draft.name} — ${hostOf(d.draft.url, noUrl)}"
+    "• ${flatten(d.draft.name)} — ${hostOf(d.draft.url, noUrl)}"
 
 internal fun ruleLine(r: PlannedRule): String {
-    val body = if (r.draft.bodyMode != null && r.draft.bodyPattern != null) " / ${r.draft.bodyPattern}" else ""
-    return "• ${r.draft.name}: ${truncate(r.draft.senderPattern + body)}"
+    val body = if (r.draft.bodyMode != null && r.draft.bodyPattern != null) " / ${flatten(r.draft.bodyPattern!!)}" else ""
+    return "• ${flatten(r.draft.name)}: ${truncate(flatten(r.draft.senderPattern) + body)}"
 }
