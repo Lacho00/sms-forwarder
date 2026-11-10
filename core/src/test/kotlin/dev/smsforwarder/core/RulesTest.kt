@@ -77,19 +77,41 @@ class RulesTest {
         assertEquals(setOf(1L, 2L, 3L), dests(sms(), a, b))
     }
 
-    @Test fun catastrophicRegexTimesOut() {
-        val r = rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = "(a+)+\\1$")  // backreference defeats the JDK memoization of "(a+)+$"
+    @Test fun hostilePatternsRunInLinearTime() {
+        val inputs = mapOf(
+            "(a+)+$" to "a".repeat(100_000) + "!",
+            "(a|aa)+$" to "a".repeat(100_000) + "!",
+            "\\d+\\d+\\d+\\d+x" to "1".repeat(100_000),
+            "(?x)(a+) +$" to "a".repeat(100_000) + "!",
+        )
         val start = System.nanoTime()
-        val m = RuleEngine.destinationsFor(sms("abc", "a".repeat(40) + "!"), listOf(r))
+        for ((p, text) in inputs) {
+            val m = RuleEngine.destinationsFor(sms("abc", text), listOf(rule(id = 7, bodyMode = BodyMode.REGEX, bodyPattern = p)))
+            assertTrue(m.destinationIds.isEmpty(), p)
+            // RE2/J has no (?x) flag: that pattern is invalid and reported instead of run.
+            assertEquals(p.startsWith("(?x)"), m.timedOutRuleIds.isNotEmpty(), p)
+        }
         val ms = (System.nanoTime() - start) / 1_000_000
-        assertTrue(m.destinationIds.isEmpty())
-        assertEquals(setOf(7L), m.timedOutRuleIds)
         assertTrue(ms < 1000, "took $ms ms")
     }
 
     @Test fun invalidPatternRejected() {
-        assertFalse(RuleEngine.validatePattern("("))
+        for (p in listOf("(", "(a)\\1", "a(?=b)", "(?<=a)b", "(?!a)b")) assertFalse(RuleEngine.validatePattern(p), p)
         assertTrue(RuleEngine.validatePattern("^a.*"))
+    }
+
+    @Test fun patternsAccepted() {
+        for (p in listOf("(CUP|USD)+", ".*codigo.*\\d{6}.*", "^\\+?53\\d+", "(a|aa)+$", "(?i)saldo")) {
+            assertTrue(RuleEngine.validatePattern(p), p)
+        }
+    }
+
+    @Test fun storedUnrunnablePatternIsReportedAndLaterRulesStillMatch() {
+        val bad = rule(id = 3, dest = setOf(9L), bodyMode = BodyMode.REGEX, bodyPattern = "(a)\\1")
+        val ok = rule(id = 4, dest = setOf(5L), bodyMode = BodyMode.REGEX, bodyPattern = "aa")
+        val m = RuleEngine.destinationsFor(sms("abc", "aa"), listOf(bad, ok))
+        assertEquals(setOf(3L), m.timedOutRuleIds)
+        assertEquals(setOf(5L), m.destinationIds)
     }
 
     @Test fun invalidStoredPatternNeverMatches() {
@@ -97,11 +119,92 @@ class RulesTest {
         assertEquals(emptySet(), dests(sms(), r))
     }
 
-    @Test fun stackOverflowInRegexIsContained() {
-        val overflow = rule(id = 9, bodyMode = BodyMode.REGEX, bodyPattern = "(?:a|b)*x")
-        val ok = rule(id = 10, dest = setOf(5L))
-        val m = RuleEngine.destinationsFor(sms("abc", "a".repeat(100_000)), listOf(overflow, ok))
+    @Test fun oversizedPatternsRejected() {
+        val bad = listOf(
+            "a".repeat(501),
+            "(?:(?:()){1000}){1000}",
+            "(?:(?:(?:)){1000}){1000}",
+            "(?:(?:(?:()){1000}){1000}){1000}",
+            "(?:()()()()()()()()()()){1000}",
+            "(".repeat(21) + "a" + ")".repeat(21),
+            "(".repeat(10000) + "a" + ")".repeat(10000),
+            "(?:[a-z]{1000}){1000}",
+            "((a{1000}){1000}){1000}",
+            "(?:.{1000}){1000}x",
+            "a{1001}",
+            "(?:.?.?.?.?.?){1000}",
+            "(?:.*.*.*.*.*){1000}",
+            "(?:" + "a".repeat(489) + "){1000}",
+            "(?i)(?:" + "a".repeat(485) + "){1000}",
+            "(?:" + ".".repeat(489) + "){1000}",
+            "\\d{0,1001}",
+        )
+        for (p in bad) assertFalse(RuleEngine.validatePattern(p), p.take(40))
+    }
+
+    @Test fun boundedPatternsAccepted() {
+        val ok = listOf("a{1000}", "(?:\\d{3}){3}", "\\d{4,6}", "a{x", "[{1000}]{2}", "\\Q{9999}\\E", "[[:alpha:]]{2}", "a".repeat(500),
+            "(\\d{3}-){2}\\d{4}", "[a-z]{1000}", ".{0,1000}", "^\\+?53\\d+", "(?i)saldo.*CUP")
+        for (p in ok) assertTrue(RuleEngine.validatePattern(p), p)
+    }
+
+    @Test fun oversizedStoredPatternIsReportedAndLaterRulesStillMatch() {
+        val bad = rule(id = 3, bodyMode = BodyMode.REGEX, bodyPattern = "(?:[a-z]{1000}){1000}")
+        val ok = rule(id = 4, dest = setOf(5L), bodyMode = BodyMode.REGEX, bodyPattern = "aa")
+        val m = RuleEngine.destinationsFor(sms("abc", "aa"), listOf(bad, ok))
+        assertEquals(setOf(3L), m.timedOutRuleIds)
         assertEquals(setOf(5L), m.destinationIds)
-        assertEquals(setOf(9L), m.timedOutRuleIds)
+    }
+
+    @Test fun repeatedCallsGiveSameResult() {
+        val rules = listOf(
+            rule(id = 1, bodyMode = BodyMode.REGEX, bodyPattern = "(a)\\1"),
+            rule(id = 2, dest = setOf(2L), bodyMode = BodyMode.REGEX, bodyPattern = "hel+o"),
+        )
+        val first = RuleEngine.destinationsFor(sms(), rules)
+        assertEquals(first, RuleEngine.destinationsFor(sms(), rules))
+        assertEquals(setOf(2L), first.destinationIds)
+    }
+
+    @Test fun acceptedPatternOverflowingASmallStackIsContained() {
+        // Passes the size cap, but RE2/J recursion overflows a 256 KB stack: the Error must not escape.
+        val pattern = ".{0,1000}"
+        assertTrue(RuleEngine.validatePattern(pattern))
+        val bad = rule(id = 6, bodyMode = BodyMode.REGEX, bodyPattern = pattern)
+        val ok = rule(id = 7, dest = setOf(8L), bodyMode = BodyMode.REGEX, bodyPattern = "aa")
+        var result: Result<RuleMatch>? = null
+        val t = Thread(null, {
+            result = runCatching { RuleEngine.destinationsFor(sms("abc", "a".repeat(2000)), listOf(bad, ok)) }
+        }, "tiny", 256 * 1024)
+        t.start()
+        t.join(5000)
+        assertFalse(t.isAlive, "match did not finish in 5 s")
+        val m = result!!.getOrThrow()
+        assertTrue(8L in m.destinationIds)
+    }
+
+    @Test fun stackOverflowIsNotCachedAsInvalid() {
+        val pattern = ".{0,999}"
+        assertTrue(RuleEngine.validatePattern(pattern))
+        val flaky = rule(id = 9, dest = setOf(10L), bodyMode = BodyMode.REGEX, bodyPattern = pattern)
+        val text = "a".repeat(2000)
+        var small: Result<RuleMatch>? = null
+        val t = Thread(null, {
+            small = runCatching { RuleEngine.destinationsFor(sms("abc", text), listOf(flaky)) }
+        }, "tiny", 256 * 1024)
+        t.start()
+        t.join(5000)
+        assertFalse(t.isAlive)
+        assertEquals(setOf(9L), small!!.getOrThrow().timedOutRuleIds)
+        // Same rule on a normal stack must still work: the overflow was not cached.
+        val m = RuleEngine.destinationsFor(sms("abc", text), listOf(flaky))
+        assertEquals(setOf(10L), m.destinationIds)
+        assertFalse(9L in m.timedOutRuleIds)
+    }
+
+    @Test fun validatePatternDoesNotFillCache() {
+        val before = RuleEngine.cacheSizeForTest()
+        for (k in 0 until 50) RuleEngine.validatePattern("draft$k+")
+        assertEquals(before, RuleEngine.cacheSizeForTest())
     }
 }

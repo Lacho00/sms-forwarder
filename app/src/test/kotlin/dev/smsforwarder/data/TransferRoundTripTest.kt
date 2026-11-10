@@ -79,6 +79,8 @@ class TransferRoundTripTest {
         val file = (ConfigCodec.decode(text) as ConfigParse.Ok).file
         graph.configTransfer.apply(file)
         val imported = graph.db.destinationDao().observeLive().first().single().id
+        // Imports arrive disabled: turn it on so the worker sends.
+        graph.destinationRepository.setEnabled(imported, true)
         val secrets = graph.destinationRepository.secrets(imported)!!
         // The secrets really made the round trip: the URL and the secret header value come from the file.
         assertEquals("https://h.example/hook", secrets.url)
@@ -98,6 +100,22 @@ class TransferRoundTripTest {
             assertEquals(h, first.headers[h], second.headers[h])
         }
         assertTrue(first.body!!.utf8().contains("TEST body"))
+    }
+
+    @Test fun importedRowsAreDisabled() = runBlocking {
+        val d = DestinationPresets.standardJson("Main", "https://h.example/in", "T")
+        val r = dev.smsforwarder.core.RuleDraft(
+            "R", true, dev.smsforwarder.core.SenderMode.EXACT, "AAA", null, null,
+            dev.smsforwarder.core.SimMatch.ANY, emptySet(),
+        )
+        val file = dev.smsforwarder.core.ConfigFile(
+            listOf(dev.smsforwarder.core.ConfigDestination("d1", d)),
+            listOf(dev.smsforwarder.core.ConfigRule(r, listOf("d1"))),
+            true,
+        )
+        graph.configTransfer.apply(file)
+        assertEquals(false, graph.db.destinationDao().observeLive().first().single().enabled)
+        assertEquals(false, graph.db.ruleDao().observeAllWithDestinations().first().single().rule.enabled)
     }
 
     @Test fun unconfiguredImportedPrimaryGetsQueuedKickedOnSaveCredentials() = runBlocking {

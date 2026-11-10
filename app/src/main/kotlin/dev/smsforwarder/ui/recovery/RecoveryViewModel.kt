@@ -99,7 +99,7 @@ class RecoveryViewModel(
             val slot = SimSlots.slotOf(context, row.subId)
             val match = RuleEngine.destinationsFor(IncomingSms(row.address, row.body, slot), rules)
             match.timedOutRuleIds.forEach {
-                Log.w(TAG, "rule $it timed out")
+                Log.w(TAG, "rule $it regex could not run")
                 engineLog?.add(EngineEvent(clock.now(), EngineEventType.RULE_TIMEOUT, ruleId = it))
             }
             match.destinationIds.isNotEmpty()
@@ -145,7 +145,7 @@ class RecoveryViewModel(
                 rules,
             )
             match.timedOutRuleIds.forEach {
-                Log.w(TAG, "rule $it timed out")
+                Log.w(TAG, "rule $it regex could not run")
                 engineLog?.add(EngineEvent(clock.now(), EngineEventType.RULE_TIMEOUT, ruleId = it))
             }
             if (match.destinationIds.isEmpty()) continue

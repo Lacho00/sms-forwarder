@@ -127,6 +127,10 @@ class ConfigTransferTest {
         assertEquals(1, result.withoutCredentials)
         val newId = db.destinationDao().observeLive().first().last().id
         assertNull(repos.destinations.secrets(newId))
+        // Imported rules start disabled, so the destination is only "in use" once the user turns the rule on.
+        assertFalse(newId in repos.destinations.unconfiguredInUse())
+        db.ruleDao().observeAllWithDestinations().first().filter { it.rule.name == "Rule (2)" }
+            .forEach { repos.rules.setEnabled(it.rule.id, true) }
         assertTrue(newId in repos.destinations.unconfiguredInUse())
     }
 

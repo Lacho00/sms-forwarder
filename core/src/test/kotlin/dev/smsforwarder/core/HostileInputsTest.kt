@@ -98,19 +98,9 @@ class HostileInputsTest {
     @Test fun catastrophicRegexInImportedRule() {
         val rule = "{\"name\":\"R\",\"enabled\":true,\"senderMode\":\"EXACT\",\"senderPattern\":\"AAA\"," +
             "\"bodyMode\":\"REGEX\",\"bodyPattern\":\"(a+)+\\\\1$\",\"sim\":\"ANY\",\"destinations\":[\"d1\"]}"
-        val parsed = assertIs<ConfigParse.Ok>(ConfigCodec.decode(file(dest("https://h.example/a"), rules = "[$rule]")))
-        val r = parsed.file.rules.single().draft
-        val spec = RuleSpec(1, true, r.senderMode, r.senderPattern, r.bodyMode, r.bodyPattern, r.sim, setOf(1L))
-        val start = System.nanoTime()
-        val m = RuleEngine.destinationsFor(IncomingSms("AAA", "a".repeat(30) + "b", null), listOf(spec))
-        val elapsedMs = (System.nanoTime() - start) / 1_000_000
-        assertEquals(setOf(1L), m.timedOutRuleIds)
-        assertTrue(m.destinationIds.isEmpty())
-        assertTrue(elapsedMs < 2_000, "took $elapsedMs ms")
-        // Control: a benign body matches the same rule without timing out.
-        val ok = RuleEngine.destinationsFor(IncomingSms("AAA", "aa" + "a", null), listOf(spec))
-        assertTrue(ok.timedOutRuleIds.isEmpty())
-        assertEquals(setOf(1L), ok.destinationIds)
+        // RE2 has no backreferences, so the pattern is refused at import time.
+        val parsed = assertIs<ConfigParse.Invalid>(ConfigCodec.decode(file(dest("https://h.example/a"), rules = "[$rule]")))
+        assertEquals(ConfigError.INVALID_RULE, parsed.error)
     }
 
     @Test fun httpVariants() {

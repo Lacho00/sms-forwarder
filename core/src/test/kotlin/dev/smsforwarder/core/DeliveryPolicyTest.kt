@@ -23,7 +23,12 @@ class DeliveryPolicyTest {
 
     @Test fun transient() {
         assertEquals(SendOutcome.Retry(null, "network"), classifyDelivery(null, null, SuccessPolicy.ANY_2XX))
-        for (c in listOf(429, 500, 302)) assertTrue(classifyDelivery(c, null, SuccessPolicy.ANY_2XX) is SendOutcome.Retry)
+        for (c in listOf(429, 500)) assertTrue(classifyDelivery(c, null, SuccessPolicy.ANY_2XX) is SendOutcome.Retry)
+    }
+
+    @Test fun redirectsAreConfigErrors() {
+        for (c in listOf(301, 302, 307, 308))
+            assertEquals(SendOutcome.Invalid("redirect"), classifyDelivery(c, null, SuccessPolicy.ANY_2XX), "$c")
     }
 
     @Test fun aggregate() {

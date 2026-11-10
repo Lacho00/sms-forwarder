@@ -66,7 +66,7 @@ class SmsReceiver : BroadcastReceiver() {
             graph.ruleRepository.activeRules(),
         )
         match.timedOutRuleIds.forEach {
-            Log.w(TAG, "rule $it timed out")
+            Log.w(TAG, "rule $it regex could not run")
             graph.engineLog.add(EngineEvent(graph.clock.now(), EngineEventType.RULE_TIMEOUT, ruleId = it))
         }
         if (match.destinationIds.isEmpty()) {

@@ -23,6 +23,10 @@ fun defaultHttpClient(): OkHttpClient =
     OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
+        .callTimeout(90, TimeUnit.SECONDS)
+        // A redirect would turn the POST into a GET or resend the secret headers to another host.
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build()
 
 /** Talks to the Worker. Never logs the URL, the token or the SMS body. */

@@ -74,15 +74,17 @@ class SmsReceiverTest {
     @Test fun regexTimeoutLogged() = runBlocking {
         graph.destinationRepository.savePrimaryCredentials(Credentials("https://example.invalid/ingest", "test-token"))
         graph.settings.setOnboardingDone()
-        val ruleId = graph.ruleRepository.create(
-            dev.smsforwarder.core.RuleDraft(
+        // Bypass the validating repository: a rule saved earlier with a pattern RE2/J rejects.
+        val ruleId = graph.db.ruleDao().insert(
+            dev.smsforwarder.data.RuleEntity(
                 name = "R", enabled = true, senderMode = dev.smsforwarder.core.SenderMode.CONTAINS, senderPattern = "OPERADOR",
-                bodyMode = dev.smsforwarder.core.BodyMode.REGEX, bodyPattern = "(a+)+\\1$",
-                sim = dev.smsforwarder.core.SimMatch.ANY, destinationIds = setOf(1L),
+                bodyMode = dev.smsforwarder.core.BodyMode.REGEX, bodyPattern = "(a)\\1",
+                sim = dev.smsforwarder.core.SimMatch.ANY, createdAt = 0,
             ),
         )
+        graph.db.ruleDao().insertLinks(listOf(dev.smsforwarder.data.RuleDestinationEntity(ruleId, 1L)))
 
-        receiver.process(context, smsIntent("OPERADOR", "a".repeat(40) + "!"))
+        receiver.process(context, smsIntent("OPERADOR", "aa"))
 
         val events = graph.engineLog.recent(10)
         assertTrue(events.toString(), events.any { it.type == dev.smsforwarder.core.EngineEventType.RULE_TIMEOUT && it.ruleId == ruleId })

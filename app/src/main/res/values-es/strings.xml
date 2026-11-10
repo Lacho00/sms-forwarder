@@ -342,6 +342,8 @@
     <string name="import_renamed">\u201c%1$s\u201d se llamará \u201c%2$s\u201d</string>
     <string name="import_without_credentials">Sin URL ni token (añádelos en Destinos): %1$s</string>
     <string name="import_dropped_headers">%1$s: vuelve a añadir estas cabeceras secretas: %2$s</string>
+    <string name="import_disabled_notice">Se importa todo desactivado: revísalo y actívalo.</string>
+    <string name="import_no_url">sin URL</string>
     <string name="import_confirm">Importar</string>
     <string name="import_invalid_title">No se puede importar este fichero</string>
     <string name="import_invalid_item">Problema en: %1$s</string>
