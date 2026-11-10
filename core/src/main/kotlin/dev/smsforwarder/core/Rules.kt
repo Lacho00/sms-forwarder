@@ -89,11 +89,16 @@ object RuleEngine {
             Compiled.Invalid
         } catch (_: StackOverflowError) {
             Compiled.Invalid
+        } catch (_: OutOfMemoryError) {
+            // Safety net only: the size estimate should keep programs small. A compile that still
+            // exhausts the heap frees its allocation on unwind and the rule is treated as invalid.
+            Compiled.Invalid
         }
     }
 
     /** One open group (or the top level) while scanning. All sizes are estimated instruction counts. */
-    private class Frame {
+    /** [capturing]: RE2 emits two Capture instructions around the body of a capturing group. */
+    private class Frame(val capturing: Boolean = false) {
         var alternatives = 0L // finished alternatives, plus one per `|`
         var sequence = 0L // concatenation so far in the current alternative
         var last = 0L // size of the last complete atom, which a quantifier would multiply
@@ -170,7 +175,7 @@ object RuleEngine {
                             val end = pattern.indexOf('>', i)
                             if (end < 0) return false
                             i = end + 1
-                            stack.add(Frame())
+                            stack.add(Frame(capturing = true))
                         } else {
                             var k = i + 1
                             while (k < n && (pattern[k] in "imsU-")) k++
@@ -186,14 +191,16 @@ object RuleEngine {
                             }
                         }
                     } else {
-                        stack.add(Frame())
+                        stack.add(Frame(capturing = true))
                     }
                 }
                 ')' -> {
                     i++
                     if (stack.size > 1) {
                         val inner = stack.removeAt(stack.size - 1)
-                        if (!atom(inner.total())) return false
+                        // An empty group still counts as 1, or `(?:(?:()){1000}){1000}` would estimate 0.
+                        val body = maxOf(inner.total(), 1L)
+                        if (!atom(if (inner.capturing) body + 2 else body)) return false
                     } else {
                         if (!atom(1L)) return false
                     }
