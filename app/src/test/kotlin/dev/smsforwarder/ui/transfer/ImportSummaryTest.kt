@@ -8,6 +8,7 @@ import dev.smsforwarder.core.RuleDraft
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class ImportSummaryTest {
@@ -26,9 +27,15 @@ class ImportSummaryTest {
     @Test fun destinationWithoutUrl() =
         assertEquals("• Main — no URL", destinationLine(dest("Main", null), "no URL"))
 
-    @Test fun unparsableUrlFallsBackToTruncatedRaw() {
-        val line = destinationLine(dest("Main", "not a url " + "x".repeat(100)), "no URL")
-        assertEquals("• Main — " + ("not a url " + "x".repeat(100)).take(60) + "…", line)
+    @Test fun unparsableUrlShowsNoUrlLabelNeverTheRawUrl() {
+        val line = destinationLine(dest("Main", "https://exa mple.com/?k=secret"), "no URL")
+        assertEquals("• Main — no URL", line)
+    }
+
+    @Test fun hostWithUnderscoreShowsAuthorityWithoutUserinfo() {
+        val line = destinationLine(dest("Main", "https://user:pass@my_host.example.com/p?token=x"), "no URL")
+        assertEquals("• Main — my_host.example.com", line)
+        listOf("user", "pass", "token", "/p").forEach { assertFalse(it in line) }
     }
 
     @Test fun ruleShowsSenderAndBody() {

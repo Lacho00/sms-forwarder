@@ -8,11 +8,18 @@ private const val MAX_PART = 60
 internal fun truncate(s: String, max: Int = MAX_PART): String =
     if (s.length <= max) s else s.take(max) + "…"
 
-/** The host of [url], or the raw url truncated when it has none, or [noUrl] when there is no url. */
+/**
+ * The host of [url]; when `java.net.URI` finds no host (e.g. an underscore in the name) the raw authority
+ * with any userinfo removed; [noUrl] when there is no url or nothing safe to show. Never returns the path,
+ * query, fragment or userinfo, which may carry secrets.
+ */
 internal fun hostOf(url: String?, noUrl: String): String {
     if (url == null) return noUrl
-    val host = runCatching { java.net.URI(url).host }.getOrNull()
-    return if (host.isNullOrEmpty()) truncate(url) else host
+    return runCatching {
+        val uri = java.net.URI(url)
+        uri.host?.takeIf { it.isNotEmpty() }
+            ?: uri.rawAuthority?.substringAfterLast('@')?.takeIf { it.isNotEmpty() }
+    }.getOrNull() ?: noUrl
 }
 
 internal fun destinationLine(d: PlannedDestination, noUrl: String): String =
