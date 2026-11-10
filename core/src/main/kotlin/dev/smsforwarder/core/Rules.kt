@@ -29,11 +29,12 @@ data class RuleMatch(val destinationIds: Set<Long>, val timedOutRuleIds: Set<Lon
 
 object RuleEngine {
     /**
-     * True when [pattern] compiles under RE2 syntax (RE2/J). Matching is linear in the input size, so
-     * no pattern can backtrack catastrophically. The price: no backreferences (`\1`), no lookarounds
-     * (`(?=..)`, `(?!..)`, `(?<=..)`, `(?<!..)`) and no possessive or atomic constructs; those are invalid.
+     * True when [pattern] compiles under RE2 syntax (RE2/J) and fits the size limits. Matching is linear
+     * in the input size, so no pattern can backtrack catastrophically. The price: no backreferences
+     * (`\1`), no lookarounds (`(?=..)`, `(?!..)`, `(?<=..)`, `(?<!..)`) and no possessive or atomic
+     * constructs; those are invalid. Does not touch the cache, so editor drafts cannot evict real rules.
      */
-    fun validatePattern(pattern: String): Boolean = compiled(pattern) is Compiled.Ok
+    fun validatePattern(pattern: String): Boolean = compile(pattern) is Compiled.Ok
 
     /** Longest accepted pattern, in characters. */
     const val MAX_PATTERN_LENGTH = 500
@@ -42,10 +43,20 @@ object RuleEngine {
     const val MAX_GROUP_DEPTH = 20
 
     /**
-     * Largest accepted product of repetition bounds along a nesting, e.g. `(?:a{30}){30}` is 900.
-     * RE2/J expands counted repetitions into the program, so this caps compiled size and match cost.
+     * Largest accepted estimated program size (RE2 instructions, see [estimatedSize]).
+     *
+     * Why 2000. RE2/J expands counted repetitions into the program, and both matching and the
+     * compiler recurse per instruction. Measured with re2j 1.8: about 3000 consecutive nullable
+     * instructions are fine with a 1 MB thread stack and 5000 overflow it in `Machine.add`;
+     * `(?:` + 489 literals + `){1000}` expands to ~489k instructions (~30 MB retained), so a few
+     * of them in the cache cause OutOfMemoryError. 2000 keeps a stack margin under the 3000 mark
+     * (Android threads can have smaller stacks than a desktop JVM) and bounds one compiled pattern
+     * to well under 1 MB. `a{1000}` and `.{0,1000}` (the largest plain bounds) still fit.
      */
-    const val MAX_REPEAT_PRODUCT = 1000L
+    const val MAX_PROGRAM_SIZE = 2000
+
+    /** RE2's own cap on a repetition count. */
+    private const val MAX_REPEAT = 1000
 
     private const val CACHE_SIZE = 256
 
@@ -60,6 +71,8 @@ object RuleEngine {
             size > CACHE_SIZE
     }
 
+    internal fun cacheSizeForTest(): Int = synchronized(cache) { cache.size }
+
     private fun compiled(pattern: String): Compiled {
         synchronized(cache) { cache[pattern] }?.let { return it }
         val result = compile(pattern)
@@ -67,6 +80,7 @@ object RuleEngine {
         return result
     }
 
+    /** Limit check plus compile, no cache. Shared by [validatePattern] and the cache-miss path. */
     private fun compile(pattern: String): Compiled {
         if (!isWithinLimits(pattern)) return Compiled.Invalid
         return try {
@@ -78,76 +92,163 @@ object RuleEngine {
         }
     }
 
+    /** One open group (or the top level) while scanning. All sizes are estimated instruction counts. */
+    private class Frame {
+        var alternatives = 0L // finished alternatives, plus one per `|`
+        var sequence = 0L // concatenation so far in the current alternative
+        var last = 0L // size of the last complete atom, which a quantifier would multiply
+        var lastQuantified = false // a following `?` is then the non-greedy suffix, size unchanged
+        fun total() = alternatives + sequence
+    }
+
     /**
-     * Structural size cap, run before compiling. Not a ReDoS detector (RE2 is already linear): it only
-     * keeps compiled program size, memory and recursion depth bounded. Checks length, group depth and
-     * the product of `{n}`, `{n,}`, `{n,m}` bounds along the nesting (`*`, `+`, `?` count as 1).
-     * Cost of a quantified atom = bound x (for a group, the largest cost found inside it).
+     * Size cap, run before compiling. Not a ReDoS detector (RE2 is already linear): it keeps the
+     * compiled program, and with it memory and recursion depth, bounded.
+     *
+     * It is an upper-bound estimate of RE2's instruction count, not exact:
+     * - atom (literal, escape, `.`, class, anchor) = 1; concatenation = sum; `|` adds 1;
+     * - group = size of its body; `x?`, `x*`, `x+` = size(x) + 1;
+     * - `x{n}` = n * size(x); `x{n,}` = (n + 1) * size(x) + 1; `x{n,m}` = m * size(x) + (m - n);
+     * - a non-greedy `?` suffix on a quantifier does not change the size.
+     * Rejects as soon as a running total passes [MAX_PROGRAM_SIZE]; counts above 1000 are rejected.
+     * Every value stays at or below 2000 before a multiply by at most 1000, so Long never overflows.
      */
     private fun isWithinLimits(pattern: String): Boolean {
         if (pattern.length > MAX_PATTERN_LENGTH) return false
-        // One entry per open group: the largest cost seen so far at that level (alternatives and
-        // concatenation both take the max, since only nesting multiplies).
-        val levels = ArrayList<Long>().apply { add(1L) }
-        var pending = 1L // cost of the last complete atom, which a following quantifier multiplies
-        fun note(cost: Long): Boolean {
-            pending = cost
-            if (cost > levels[levels.size - 1]) levels[levels.size - 1] = cost
-            return cost <= MAX_REPEAT_PRODUCT
-        }
+        val stack = ArrayList<Frame>().apply { add(Frame()) }
         var i = 0
         val n = pattern.length
+
+        fun atom(size: Long): Boolean {
+            val f = stack[stack.size - 1]
+            f.sequence += size
+            f.last = size
+            f.lastQuantified = false
+            return f.total() <= MAX_PROGRAM_SIZE
+        }
+
+        // Replace the last atom's size by newSize in the current concatenation.
+        fun requantify(newSize: Long): Boolean {
+            val f = stack[stack.size - 1]
+            f.sequence += newSize - f.last
+            f.last = newSize
+            f.lastQuantified = true
+            return f.total() <= MAX_PROGRAM_SIZE
+        }
+
         while (i < n) {
+            val f = stack[stack.size - 1]
             when (pattern[i]) {
                 '\\' -> {
                     val c = if (i + 1 < n) pattern[i + 1] else ' '
                     if (c == 'Q') {
+                        // \Q..\E: every character is a literal atom
                         val end = pattern.indexOf("\\E", i + 2)
+                        val stop = if (end < 0) n else end
+                        if (!atom(0L)) return false
+                        for (k in i + 2 until stop) if (!atom(1L)) return false
                         i = if (end < 0) n else end + 2
                     } else if ((c == 'p' || c == 'P' || c == 'x') && i + 2 < n && pattern[i + 2] == '{') {
                         val end = pattern.indexOf('}', i + 3)
                         i = if (end < 0) n else end + 1 // \p{Greek}, \x{10FFFF}: not a quantifier
+                        if (!atom(1L)) return false
                     } else {
                         i += 2
+                        if (!atom(1L)) return false
                     }
-                    note(1)
                 }
                 '[' -> {
                     i = skipClass(pattern, i)
-                    note(1)
+                    if (!atom(1L)) return false
                 }
                 '(' -> {
-                    if (levels.size > MAX_GROUP_DEPTH) return false
-                    levels.add(1L)
+                    if (stack.size > MAX_GROUP_DEPTH) return false
                     i++
+                    if (i < n && pattern[i] == '?') {
+                        val named = pattern.startsWith("?P<", i) || pattern.startsWith("?<", i)
+                        if (named) {
+                            val end = pattern.indexOf('>', i)
+                            if (end < 0) return false
+                            i = end + 1
+                            stack.add(Frame())
+                        } else {
+                            var k = i + 1
+                            while (k < n && (pattern[k] in "imsU-")) k++
+                            if (k < n && pattern[k] == ')') {
+                                i = k + 1 // (?i): flags only, no instruction, no atom
+                                f.last = 0L
+                                f.lastQuantified = false
+                            } else if (k < n && pattern[k] == ':') {
+                                i = k + 1
+                                stack.add(Frame())
+                            } else {
+                                stack.add(Frame()) // unknown construct; compile rejects it
+                            }
+                        }
+                    } else {
+                        stack.add(Frame())
+                    }
                 }
                 ')' -> {
                     i++
-                    if (levels.size > 1) {
-                        val inner = levels.removeAt(levels.size - 1)
-                        if (!note(inner)) return false
+                    if (stack.size > 1) {
+                        val inner = stack.removeAt(stack.size - 1)
+                        if (!atom(inner.total())) return false
                     } else {
-                        note(1)
+                        if (!atom(1L)) return false
                     }
+                }
+                '|' -> {
+                    i++
+                    f.alternatives += f.sequence + 1
+                    f.sequence = 0L
+                    f.last = 0L
+                    f.lastQuantified = false
+                    if (f.total() > MAX_PROGRAM_SIZE) return false
                 }
                 '{' -> {
-                    val bound = quantifierBound(pattern, i)
-                    if (bound == null) {
+                    val q = QUANTIFIER.matchAt(pattern, i)
+                    if (q == null) {
                         i++
-                        note(1) // literal brace
+                        if (!atom(1L)) return false // literal brace
                     } else {
-                        i = bound.second
-                        if (!note(pending * bound.first.coerceAtMost(MAX_REPEAT_PRODUCT + 1))) return false
+                        i = q.range.last + 1
+                        val loText = q.groupValues[1]
+                        val hasComma = q.groupValues[2].isNotEmpty()
+                        val hiText = q.groupValues[3]
+                        if (loText.length > 4 || hiText.length > 4) return false
+                        val lo = loText.toLong()
+                        val hi = if (hiText.isEmpty()) -1L else hiText.toLong()
+                        if (lo > MAX_REPEAT || hi > MAX_REPEAT) return false
+                        val s = f.last
+                        val size = when {
+                            !hasComma -> lo * s
+                            hi < 0 -> (lo + 1) * s + 1
+                            else -> maxOf(lo, hi).let { m -> m * s + (m - lo) }
+                        }
+                        if (size > MAX_PROGRAM_SIZE) return false
+                        if (!requantify(size)) return false
                     }
                 }
-                '*', '+', '?' -> i++ // bound 1: cost unchanged
+                '*', '+' -> {
+                    i++
+                    if (!requantify(f.last + 1)) return false
+                }
+                '?' -> {
+                    i++
+                    if (!f.lastQuantified) {
+                        if (!requantify(f.last + 1)) return false
+                    } else {
+                        f.lastQuantified = false // non-greedy suffix: size unchanged
+                    }
+                }
                 else -> {
                     i++
-                    note(1)
+                    if (!atom(1L)) return false
                 }
             }
         }
-        return true
+        return stack.sumOf { it.total() } <= MAX_PROGRAM_SIZE
     }
 
     /** Index just past the class starting at [start] (`[`), or the end of input when unterminated. */
@@ -167,16 +268,6 @@ object RuleEngine {
             }
         }
         return p.length
-    }
-
-    /** Upper bound and end index of a valid `{n}`, `{n,}` or `{n,m}` at [start]; null if it is a literal brace. */
-    private fun quantifierBound(p: String, start: Int): Pair<Long, Int>? {
-        val m = QUANTIFIER.matchAt(p, start) ?: return null
-        val lo = m.groupValues[1]
-        val hi = m.groupValues[3]
-        val digits = if (m.groupValues[2].isNotEmpty() && hi.isNotEmpty()) hi else lo
-        val value = if (digits.length > 7) MAX_REPEAT_PRODUCT + 1 else digits.toLong()
-        return value to m.range.last + 1
     }
 
     private val QUANTIFIER = Regex("""\{(\d+)(,(\d*))?}""")
@@ -231,9 +322,22 @@ object RuleEngine {
         override fun fillInStackTrace(): Throwable = this
     }
 
+    private fun markInvalid(pattern: String): Nothing {
+        synchronized(cache) { cache[pattern] = Compiled.Invalid }
+        throw InvalidRegex()
+    }
+
     /** Unanchored, case-sensitive search. A pattern RE2/J rejects counts as a rule that could not run. */
     private fun regexFind(pattern: String, text: String): Boolean {
         val compiled = compiled(pattern) as? Compiled.Ok ?: throw InvalidRegex()
-        return compiled.pattern.matcher(text).find()
+        return try {
+            compiled.pattern.matcher(text).find()
+        } catch (_: StackOverflowError) {
+            markInvalid(pattern)
+        } catch (_: RuntimeException) {
+            markInvalid(pattern)
+        }
+        // OutOfMemoryError and other Errors are deliberately not caught: the program size cap keeps a
+        // compiled pattern small, so they would signal a real fault, not a hostile pattern.
     }
 }
