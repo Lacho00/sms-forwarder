@@ -63,6 +63,8 @@ object RuleEngine {
     private sealed interface Compiled {
         class Ok(val pattern: Pattern) : Compiled
         object Invalid : Compiled
+        /** Heap ran out while compiling: not the pattern's fault, so it is never cached. */
+        object OutOfMemory : Compiled
     }
 
     /** Bounded LRU of compile results (invalid ones included), keyed by pattern text. */
@@ -76,7 +78,7 @@ object RuleEngine {
     private fun compiled(pattern: String): Compiled {
         synchronized(cache) { cache[pattern] }?.let { return it }
         val result = compile(pattern)
-        synchronized(cache) { cache[pattern] = result }
+        if (result !== Compiled.OutOfMemory) synchronized(cache) { cache[pattern] = result }
         return result
     }
 
@@ -90,14 +92,16 @@ object RuleEngine {
         } catch (_: StackOverflowError) {
             Compiled.Invalid
         } catch (_: OutOfMemoryError) {
-            // Safety net only: the size estimate should keep programs small. A compile that still
-            // exhausts the heap frees its allocation on unwind and the rule is treated as invalid.
-            Compiled.Invalid
+            // Safety net only: the size estimate keeps programs small, so this means memory pressure
+            // elsewhere. The allocation is freed on unwind; this SMS treats the rule as invalid.
+            Compiled.OutOfMemory
         }
     }
 
-    /** One open group (or the top level) while scanning. All sizes are estimated instruction counts. */
-    /** [capturing]: RE2 emits two Capture instructions around the body of a capturing group. */
+    /**
+     * One open group (or the top level) while scanning. All sizes are estimated instruction counts.
+     * [capturing]: RE2 emits two Capture instructions around the body of a capturing group.
+     */
     private class Frame(val capturing: Boolean = false) {
         var alternatives = 0L // finished alternatives, plus one per `|`
         var sequence = 0L // concatenation so far in the current alternative
