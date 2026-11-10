@@ -1,12 +1,16 @@
 # Screenshots of the main screens
 
 `ScreenshotsTest` renders Inicio, Reglas, Destinos and the SMS detail in light and dark with fake data
-(AAA, TEST, BANK, `h.example`) and writes PNGs to `app/build/screenshots/`. It is skipped by the normal
+(AAA, TEST, BANK, `h.example`) and writes PNGs to `app/build/screenshots/<locale>/`. It is skipped by the normal
 `:app:testDebugUnitTest`; it only runs with `-Pscreenshots`:
 
 ```
 JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotsTest'
+JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :app:testDebugUnitTest -Pscreenshots=es --tests '*ScreenshotsTest'
 ```
 
 The test uses Robolectric native graphics, so it needs no emulator. Output files are named
 `<screen>-light.png` and `<screen>-dark.png`; they are not committed.
+
+The device is a 411x891 dp phone at xhdpi, so each PNG is 822x1782 px. A bare `-Pscreenshots` renders the
+English UI into `en/`; `-Pscreenshots=es` renders the Spanish UI into `es/`.

@@ -1,0 +1,28 @@
+SMS Forwarder reenvía los SMS que recibes de los remitentes que elijas a un endpoint HTTPS que configuras tú.
+
+<b>Cómo funciona</b>
+- Cada mensaje que coincide se guarda en una cola local y se reintenta hasta que el endpoint responde HTTP 200.
+- Un barrido periódico de la bandeja de entrada sirve de red de seguridad, para que no se pierda ningún mensaje.
+- Varios destinos y reglas, con método, cabeceras y cuerpo personalizables.
+
+<b>Funciones</b>
+- Pantalla de inicio con búsqueda y filtros por estado de entrega.
+- Opción de ocultar el texto de los SMS en la app.
+- Borrado suave: un SMS borrado de la app no se reenvía aunque siga en la bandeja.
+- Pausa del reenvío en cualquier momento.
+- Intervalo del barrido y retención del historial configurables.
+- Avisos por tipo de problema.
+- Color dinámico (Material You).
+- Interfaz en español e inglés.
+
+<b>Privacidad</b>
+- Sin servicios de Google y sin rastreadores.
+- Los mensajes solo van a los destinos que configures.
+
+<b>Permisos</b>
+- RECEIVE_SMS: para enterarse de los mensajes entrantes.
+- READ_SMS: para barrer la bandeja como red de seguridad.
+- INTERNET: para enviar los mensajes a tu endpoint.
+- También se usan: notificaciones (avisos si algo falla), inicio al arrancar (retomar la cola) y exención de optimización de batería (envío fiable en segundo plano).
+
+Software libre con licencia MIT.

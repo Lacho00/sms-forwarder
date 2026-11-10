@@ -1,0 +1,1 @@
+Forward SMS from chosen senders to your own HTTPS endpoint

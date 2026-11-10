@@ -1,0 +1,1 @@
+Reenvía los SMS de remitentes elegidos a tu propio endpoint HTTPS

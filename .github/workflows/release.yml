@@ -24,6 +24,25 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > "$SIGNING_STORE_FILE"
+      - name: Verify tag matches app version
+        run: |
+          version_name=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' app/build.gradle.kts)
+          version_code=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' app/build.gradle.kts)
+          if [ "$GITHUB_REF_NAME" != "v${version_name}" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match versionName \"$version_name\" in app/build.gradle.kts. Bump the version, commit, and tag again."
+            exit 1
+          fi
+          IFS=. read -r x y z <<< "$version_name"
+          # Minor and patch must stay below 100, or two versions would pack into the same versionCode.
+          if ! [[ "$x" =~ ^(0|[1-9][0-9]*)$ && "$y" =~ ^(0|[1-9][0-9]?)$ && "$z" =~ ^(0|[1-9][0-9]?)$ ]]; then
+            echo "::error::versionName $version_name must be x.y.z with no leading zeros and y and z between 0 and 99."
+            exit 1
+          fi
+          expected=$((x * 10000 + y * 100 + z))
+          if [ "$version_code" != "$expected" ]; then
+            echo "::error::versionCode $version_code does not match $expected (x*10000+y*100+z) for versionName $version_name."
+            exit 1
+          fi
       - name: Test and assemble
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}

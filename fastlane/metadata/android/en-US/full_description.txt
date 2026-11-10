@@ -1,0 +1,28 @@
+SMS Forwarder forwards the SMS you receive from the senders you choose to an HTTPS endpoint you configure.
+
+<b>How it works</b>
+- Every matching message is saved in a local queue and retried until the endpoint answers HTTP 200.
+- A periodic sweep of the SMS inbox acts as a safety net, so messages are not lost if one is missed.
+- Several destinations and rules, with custom method, headers and body.
+
+<b>Features</b>
+- Home screen with search and filters by delivery status.
+- Option to hide the SMS text in the app.
+- Soft delete: an SMS deleted from the app is not forwarded again even if it stays in the inbox.
+- Pause forwarding at any time.
+- Configurable sweep interval and history retention.
+- Notifications per type of problem.
+- Dynamic color (Material You).
+- Spanish and English interface.
+
+<b>Privacy</b>
+- No Google services and no trackers.
+- Messages go only to the destinations you configure.
+
+<b>Permissions</b>
+- RECEIVE_SMS: to be notified of incoming messages.
+- READ_SMS: to sweep the inbox as a safety net.
+- INTERNET: to send messages to your endpoint.
+- Also used: notifications (alerts when something fails), start at boot (resume the queue) and ignoring battery optimizations (reliable background delivery).
+
+Free software under the MIT license.
