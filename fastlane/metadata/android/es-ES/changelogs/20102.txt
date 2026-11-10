@@ -1,0 +1,2 @@
+Seguridad: las regex de las reglas usan RE2/J (tiempo lineal y tamaño limitado), así que un patrón ya no puede bloquear el reenvío; nunca se siguen redirecciones HTTP y cuentan como error de configuración; lo importado llega desactivado y el diálogo de importación muestra cada host y patrón antes de confirmar.
+Listo para F-Droid e IzzyOnDroid: metadatos y capturas de la tienda.

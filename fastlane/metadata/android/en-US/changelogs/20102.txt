@@ -1,0 +1,2 @@
+Security: rule regexes run with RE2/J (linear time, size-capped), so a pattern can no longer freeze forwarding; HTTP redirects are never followed and count as a configuration error; imported destinations and rules arrive disabled, and the import dialog lists each host and pattern before you confirm.
+F-Droid and IzzyOnDroid ready: store metadata and screenshots.
