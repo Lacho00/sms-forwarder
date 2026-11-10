@@ -35,6 +35,11 @@ jobs:
             exit 1
           fi
           IFS=. read -r x y z <<< "$version_name"
+          # Minor and patch must stay below 100, or two versions would pack into the same versionCode.
+          if ! [[ "$x" =~ ^(0|[1-9][0-9]*)$ && "$y" =~ ^(0|[1-9][0-9]?)$ && "$z" =~ ^(0|[1-9][0-9]?)$ ]]; then
+            echo "::error::versionName $version_name must be x.y.z with no leading zeros and y and z between 0 and 99."
+            exit 1
+          fi
           expected=$((x * 10000 + y * 100 + z))
           if [ "$version_code" != "$expected" ]; then
             echo "::error::versionCode $version_code does not match $expected (x*10000+y*100+z) for versionName $version_name."
