@@ -118,4 +118,40 @@ class RulesTest {
         val r = rule(mode = SenderMode.REGEX, pattern = "(")
         assertEquals(emptySet(), dests(sms(), r))
     }
+
+    @Test fun oversizedPatternsRejected() {
+        val bad = listOf(
+            "a".repeat(501),
+            "(".repeat(21) + "a" + ")".repeat(21),
+            "(".repeat(10000) + "a" + ")".repeat(10000),
+            "(?:[a-z]{1000}){1000}",
+            "((a{1000}){1000}){1000}",
+            "(?:.{1000}){1000}x",
+            "a{1001}",
+        )
+        for (p in bad) assertFalse(RuleEngine.validatePattern(p), p.take(40))
+    }
+
+    @Test fun boundedPatternsAccepted() {
+        val ok = listOf("a{1000}", "(?:\\d{3}){3}", "\\d{4,6}", "a{x", "[{1000}]{2}", "\\Q{9999}\\E", "[[:alpha:]]{2}", "a".repeat(500))
+        for (p in ok) assertTrue(RuleEngine.validatePattern(p), p)
+    }
+
+    @Test fun oversizedStoredPatternIsReportedAndLaterRulesStillMatch() {
+        val bad = rule(id = 3, bodyMode = BodyMode.REGEX, bodyPattern = "(?:[a-z]{1000}){1000}")
+        val ok = rule(id = 4, dest = setOf(5L), bodyMode = BodyMode.REGEX, bodyPattern = "aa")
+        val m = RuleEngine.destinationsFor(sms("abc", "aa"), listOf(bad, ok))
+        assertEquals(setOf(3L), m.timedOutRuleIds)
+        assertEquals(setOf(5L), m.destinationIds)
+    }
+
+    @Test fun repeatedCallsGiveSameResult() {
+        val rules = listOf(
+            rule(id = 1, bodyMode = BodyMode.REGEX, bodyPattern = "(a)\\1"),
+            rule(id = 2, dest = setOf(2L), bodyMode = BodyMode.REGEX, bodyPattern = "hel+o"),
+        )
+        val first = RuleEngine.destinationsFor(sms(), rules)
+        assertEquals(first, RuleEngine.destinationsFor(sms(), rules))
+        assertEquals(setOf(2L), first.destinationIds)
+    }
 }

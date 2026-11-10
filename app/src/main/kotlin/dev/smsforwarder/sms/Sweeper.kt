@@ -69,7 +69,7 @@ class Sweeper(
                 rules,
             )
             match.timedOutRuleIds.forEach {
-                Log.w(TAG, "rule $it timed out")
+                Log.w(TAG, "rule $it regex could not run")
                 log(EngineEvent(clock.now(), EngineEventType.RULE_TIMEOUT, ruleId = it))
             }
             if (match.destinationIds.isEmpty()) continue
