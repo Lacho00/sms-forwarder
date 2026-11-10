@@ -15,11 +15,13 @@ internal fun truncate(s: String, max: Int = MAX_PART): String =
  */
 internal fun hostOf(url: String?, noUrl: String): String {
     if (url == null) return noUrl
-    return runCatching {
+    val shown = runCatching {
         val uri = java.net.URI(url)
         uri.host?.takeIf { it.isNotEmpty() }
             ?: uri.rawAuthority?.substringAfterLast('@')?.takeIf { it.isNotEmpty() }
-    }.getOrNull() ?: noUrl
+    }.getOrNull() ?: return noUrl
+    // The authority fallback keeps bidi/format characters that java.net.URI accepts, and has no length bound.
+    return truncate(flatten(shown))
 }
 
 /** Imported text is untrusted: line breaks, control and bidi/format characters could fake extra lines. */

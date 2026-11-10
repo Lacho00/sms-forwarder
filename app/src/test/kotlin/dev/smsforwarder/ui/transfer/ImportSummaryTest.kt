@@ -38,6 +38,13 @@ class ImportSummaryTest {
         listOf("user", "pass", "token", "/p").forEach { assertFalse(it in line) }
     }
 
+    @Test fun authorityFallbackIsFlattenedAndTruncated() {
+        val bidi = destinationLine(dest("Main", "https://ok.com‮/x"), "no URL")
+        assertEquals("• Main — ok.com ", bidi)
+        val long = destinationLine(dest("Main", "https://" + "a_".repeat(3000) + ".com/"), "no URL")
+        assertEquals("• Main — " + "a_".repeat(30) + "…", long)
+    }
+
     @Test fun ruleShowsSenderAndBody() {
         assertEquals("• R: BANK", ruleLine(rule("BANK")))
         assertEquals("• R: BANK / code", ruleLine(rule("BANK", BodyMode.CONTAINS, "code")))
