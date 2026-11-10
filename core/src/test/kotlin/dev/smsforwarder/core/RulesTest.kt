@@ -166,23 +166,6 @@ class RulesTest {
         assertEquals(setOf(2L), first.destinationIds)
     }
 
-    @Test fun stackOverflowDuringMatchIsContainedAndLaterRulesStillMatch() {
-        val bad = rule(id = 3, bodyMode = BodyMode.REGEX, bodyPattern = "(?:.?.?.?.?.?){1000}")
-        val ok = rule(id = 4, dest = setOf(5L), bodyMode = BodyMode.REGEX, bodyPattern = "aa")
-        var result: Result<RuleMatch>? = null
-        val t = Thread(null, {
-            result = runCatching { RuleEngine.destinationsFor(sms("abc", "a".repeat(2000) + "aa"), listOf(bad, ok)) }
-        }, "small", 512 * 1024)
-        val start = System.nanoTime()
-        t.start()
-        t.join(5000)
-        assertFalse(t.isAlive, "match did not finish in 5 s")
-        assertTrue((System.nanoTime() - start) / 1_000_000 < 5000)
-        val m = result!!.getOrThrow()
-        assertEquals(setOf(3L), m.timedOutRuleIds)
-        assertEquals(setOf(5L), m.destinationIds)
-    }
-
     @Test fun acceptedPatternOverflowingASmallStackIsContained() {
         // Passes the size cap, but RE2/J recursion overflows a 256 KB stack: the Error must not escape.
         val pattern = ".{0,1000}"
@@ -198,6 +181,25 @@ class RulesTest {
         assertFalse(t.isAlive, "match did not finish in 5 s")
         val m = result!!.getOrThrow()
         assertTrue(8L in m.destinationIds)
+    }
+
+    @Test fun stackOverflowIsNotCachedAsInvalid() {
+        val pattern = ".{0,999}"
+        assertTrue(RuleEngine.validatePattern(pattern))
+        val flaky = rule(id = 9, dest = setOf(10L), bodyMode = BodyMode.REGEX, bodyPattern = pattern)
+        val text = "a".repeat(2000)
+        var small: Result<RuleMatch>? = null
+        val t = Thread(null, {
+            small = runCatching { RuleEngine.destinationsFor(sms("abc", text), listOf(flaky)) }
+        }, "tiny", 256 * 1024)
+        t.start()
+        t.join(5000)
+        assertFalse(t.isAlive)
+        assertEquals(setOf(9L), small!!.getOrThrow().timedOutRuleIds)
+        // Same rule on a normal stack must still work: the overflow was not cached.
+        val m = RuleEngine.destinationsFor(sms("abc", text), listOf(flaky))
+        assertEquals(setOf(10L), m.destinationIds)
+        assertFalse(9L in m.timedOutRuleIds)
     }
 
     @Test fun validatePatternDoesNotFillCache() {

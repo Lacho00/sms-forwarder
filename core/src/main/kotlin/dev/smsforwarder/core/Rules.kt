@@ -63,8 +63,11 @@ object RuleEngine {
     private sealed interface Compiled {
         class Ok(val pattern: Pattern) : Compiled
         object Invalid : Compiled
-        /** Heap ran out while compiling: not the pattern's fault, so it is never cached. */
-        object OutOfMemory : Compiled
+        /**
+         * Resource exhaustion while compiling (heap or stack): it depends on the machine and the calling
+         * thread's stack depth, not on the pattern, so it is never cached.
+         */
+        object Transient : Compiled
     }
 
     /** Bounded LRU of compile results (invalid ones included), keyed by pattern text. */
@@ -78,7 +81,7 @@ object RuleEngine {
     private fun compiled(pattern: String): Compiled {
         synchronized(cache) { cache[pattern] }?.let { return it }
         val result = compile(pattern)
-        if (result !== Compiled.OutOfMemory) synchronized(cache) { cache[pattern] = result }
+        if (result !== Compiled.Transient) synchronized(cache) { cache[pattern] = result }
         return result
     }
 
@@ -90,11 +93,12 @@ object RuleEngine {
         } catch (_: RuntimeException) {
             Compiled.Invalid
         } catch (_: StackOverflowError) {
-            Compiled.Invalid
+            // Depends on this thread's stack depth, not on the pattern: retry on the next SMS.
+            Compiled.Transient
         } catch (_: OutOfMemoryError) {
             // Safety net only: the size estimate keeps programs small, so this means memory pressure
-            // elsewhere. The allocation is freed on unwind; this SMS treats the rule as invalid.
-            Compiled.OutOfMemory
+            // elsewhere. The allocation is freed on unwind; this SMS treats the rule as unrunnable.
+            Compiled.Transient
         }
     }
 
@@ -344,7 +348,9 @@ object RuleEngine {
         return try {
             compiled.pattern.matcher(text).find()
         } catch (_: StackOverflowError) {
-            markInvalid(pattern)
+            // Stack depth belongs to the calling thread, not the pattern (the size cap bounds the
+            // program): fail this SMS only, and do not cache the rule as invalid.
+            throw InvalidRegex()
         } catch (_: RuntimeException) {
             markInvalid(pattern)
         }
