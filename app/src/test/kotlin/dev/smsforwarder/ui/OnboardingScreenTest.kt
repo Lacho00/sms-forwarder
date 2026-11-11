@@ -209,7 +209,9 @@ class OnboardingScreenTest {
         show()
         compose.onNodeWithTag("field_sender").performTextInput("TEST2")
         compose.onNode(clickable(str(R.string.action_add))).performClick()
-        compose.waitForIdle()
+        // addSender saves and re-reads on Room's own executor, which waitForIdle does not wait for.
+        // Waiting on the state also keeps tearDown from closing the database mid-query.
+        compose.waitUntil(5_000) { "TEST2" in vm.state.value.senders }
         compose.onNodeWithText("TEST2").assertIsDisplayed()
     }
 }
