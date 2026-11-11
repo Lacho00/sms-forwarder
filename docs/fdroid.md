@@ -29,7 +29,8 @@ Draft recipe for `metadata/dev.smsforwarder.yml` in fdroiddata:
 
 ```yaml
 Categories:
-  - System
+  - Phone & SMS
+  - Connectivity
 License: MIT
 SourceCode: https://github.com/Lacho00/sms-forwarder
 IssueTracker: https://github.com/Lacho00/sms-forwarder/issues
@@ -58,8 +59,8 @@ CurrentVersionCode: 20102
 
 To open the merge request: fork `fdroid/fdroiddata` on GitLab, add the recipe as
 `metadata/dev.smsforwarder.yml` on a new branch of the fork, push it and open the merge request
-against `fdroid/fdroiddata` with its "App inclusion" template. Check the category against the current
-F-Droid list (`Connectivity` is the alternative).
+against `fdroid/fdroiddata` with its "App inclusion" template. Categories must exist in
+`config/categories.yml` of fdroiddata.
 
 ## IzzyOnDroid
 
