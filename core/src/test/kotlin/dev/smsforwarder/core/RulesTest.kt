@@ -207,4 +207,10 @@ class RulesTest {
         for (k in 0 until 50) RuleEngine.validatePattern("draft$k+")
         assertEquals(before, RuleEngine.cacheSizeForTest())
     }
+
+    // Android compiles patterns with ICU, which rejects a literal brace that is not escaped; the JVM accepts it.
+    @Test fun quantifierPatternEscapesEveryBrace() {
+        val unescaped = Regex("""(?<!\\)[{}]""").findAll(RuleEngine.quantifierPatternForTest()).toList()
+        assertTrue(unescaped.isEmpty(), "unescaped brace at ${unescaped.map { it.range.first }}")
+    }
 }
