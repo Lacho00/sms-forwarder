@@ -207,4 +207,21 @@ class RulesTest {
         for (k in 0 until 50) RuleEngine.validatePattern("draft$k+")
         assertEquals(before, RuleEngine.cacheSizeForTest())
     }
+
+    // Android compiles patterns with ICU, which rejects a literal brace that is not escaped; the JVM accepts it.
+    // A brace is escaped only when an odd number of backslashes precedes it.
+    private fun unescapedBraces(pattern: String): List<Int> =
+        Regex("""(?<!\\)(?:\\\\)*[{}]""").findAll(pattern).map { it.range.last }.toList()
+
+    @Test fun unescapedBracesCountsBackslashRuns() {
+        assertEquals(emptyList(), unescapedBraces("""\{1\}"""))
+        assertEquals(listOf(2), unescapedBraces("""\\}"""))
+        assertEquals(emptyList(), unescapedBraces("""\\\}"""))
+        assertEquals(listOf(0), unescapedBraces("""}"""))
+    }
+
+    @Test fun quantifierPatternEscapesEveryBrace() {
+        val unescaped = unescapedBraces(RuleEngine.quantifierPatternForTest())
+        assertTrue(unescaped.isEmpty(), "unescaped brace at $unescaped")
+    }
 }

@@ -77,6 +77,7 @@ object RuleEngine {
     }
 
     internal fun cacheSizeForTest(): Int = synchronized(cache) { cache.size }
+    internal fun quantifierPatternForTest(): String = QUANTIFIER.pattern
 
     private fun compiled(pattern: String): Compiled {
         synchronized(cache) { cache[pattern] }?.let { return it }
@@ -285,7 +286,7 @@ object RuleEngine {
         return p.length
     }
 
-    private val QUANTIFIER = Regex("""\{(\d+)(,(\d*))?}""")
+    private val QUANTIFIER = Regex("""\{(\d+)(,(\d*))?\}""")
 
     fun destinationsFor(
         sms: IncomingSms,
