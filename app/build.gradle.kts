@@ -12,8 +12,8 @@ android {
         applicationId = "dev.smsforwarder"
         minSdk = 31
         targetSdk = 36
-        versionCode = 20102
-        versionName = "2.1.2"
+        versionCode = 20103
+        versionName = "2.1.3"
     }
 
     val signingStoreFile = System.getenv("SIGNING_STORE_FILE")

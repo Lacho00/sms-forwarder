@@ -1,0 +1,1 @@
+Corrección: la 2.1.2 se cerraba sola con cada SMS recibido en Android y no reenviaba nada. Los mensajes que llegaron mientras fallaba se recuperan al revisar la bandeja.

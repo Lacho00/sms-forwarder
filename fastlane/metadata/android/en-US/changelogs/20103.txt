@@ -1,0 +1,1 @@
+Fix: 2.1.2 closed itself on every incoming SMS on Android and forwarded nothing. Messages that arrived while it was broken are recovered by the inbox sweep.
