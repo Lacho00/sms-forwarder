@@ -64,5 +64,9 @@ F-Droid list (`Connectivity` is the alternative).
 
 IzzyOnDroid serves the APK from the GitHub Releases page, signed with our own key (see
 `docs/signing.md`), so updates are compatible with the GitHub APK. Request inclusion by opening an
-issue in the IzzyOnDroid repository (`android-apk` on GitLab, "inclusion request" template) pointing
-to this repo. Each release must attach the signed APK (the workflow already does).
+issue in the Codeberg issue tracker of
+[IzzyOnDroid/repodata](https://codeberg.org/IzzyOnDroid/repodata/issues) with the "App Inclusion
+Request" template, pointing to this repo. The template has a mandatory section on AI use; fill it
+in. Each release must attach the signed APK (the workflow already does).
+
+Our request: https://codeberg.org/IzzyOnDroid/repodata/issues/869.
