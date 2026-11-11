@@ -4,6 +4,16 @@ Aplicación Android que reenvía los SMS de los remitentes elegidos a un endpoin
 configurado. Guarda cada mensaje en una cola local y lo reintenta hasta recibir un 200;
 además barre periódicamente la bandeja de entrada como red de seguridad.
 
+## Instalación
+
+[<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png"
+alt="Get it on Obtainium" height="54">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/Lacho00/sms-forwarder)
+
+- [Obtainium](https://obtainium.imranr.dev/): instala y actualiza desde las Releases de GitHub.
+- [GitHub Releases](https://github.com/Lacho00/sms-forwarder/releases/latest): APK firmada.
+
+Ambos canales usan la misma firma, así que se pasa de uno a otro sin desinstalar.
+
 ## Uso (1.1.0)
 
 - Navegación inferior con Inicio y Ajustes; Acerca de en el menú.

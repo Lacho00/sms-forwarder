@@ -29,7 +29,8 @@ Draft recipe for `metadata/dev.smsforwarder.yml` in fdroiddata:
 
 ```yaml
 Categories:
-  - System
+  - Phone & SMS
+  - Connectivity
 License: MIT
 SourceCode: https://github.com/Lacho00/sms-forwarder
 IssueTracker: https://github.com/Lacho00/sms-forwarder/issues
@@ -41,9 +42,8 @@ RepoType: git
 Repo: https://github.com/Lacho00/sms-forwarder.git
 
 Builds:
-  # The v2.1.1 tag still takes the version from GITHUB_REF_NAME, so it cannot be built by F-Droid.
-  # The first F-Droid build must target the first tag that has the literal version in
-  # app/build.gradle.kts. 2.1.2 / 20102 is a placeholder for that tag: adjust it to the real one.
+  # v2.1.2 is the first tag with the literal version in app/build.gradle.kts; v2.1.1 and older
+  # take it from GITHUB_REF_NAME and cannot be built by F-Droid.
   - versionName: 2.1.2
     versionCode: 20102
     commit: v2.1.2
@@ -57,8 +57,10 @@ CurrentVersion: 2.1.2
 CurrentVersionCode: 20102
 ```
 
-Open the merge request in `fdroiddata` once the tag exists. Check the category against the current
-F-Droid list (`Connectivity` is the alternative).
+To open the merge request: fork `fdroid/fdroiddata` on GitLab, add the recipe as
+`metadata/dev.smsforwarder.yml` on a new branch of the fork, push it and open the merge request
+against `fdroid/fdroiddata` with its "App inclusion" template. Categories must exist in
+`config/categories.yml` of fdroiddata.
 
 ## IzzyOnDroid
 
@@ -70,3 +72,10 @@ Request" template, pointing to this repo. The template has a mandatory section o
 in. Each release must attach the signed APK (the workflow already does).
 
 Our request: https://codeberg.org/IzzyOnDroid/repodata/issues/869.
+
+## Uptodown
+
+Uptodown takes the signed APK from the GitHub Release as is, so its updates are compatible with the
+GitHub and IzzyOnDroid APKs. Upload it from the Uptodown developer console, using the texts and
+screenshots in `fastlane/metadata/android/`. Each new release has to be uploaded there
+again.
