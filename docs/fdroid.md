@@ -20,18 +20,28 @@ into `en-US/images/phoneScreenshots/` (from `en/`) and `es-ES/images/phoneScreen
 
 ## F-Droid
 
-F-Droid builds from source and signs with its own key, so a user coming from the GitHub APK must
-uninstall and reinstall (the signatures differ). Unless F-Droid verifies a reproducible build against
-the developer-signed APK, the two channels are not interchangeable. The build disables
-`dependenciesInfo` so no encrypted dependency blob is embedded.
+F-Droid builds the app from source with reproducible builds enabled: it compares its unsigned APK
+with the signed APK from the GitHub Release (`Binaries`) and, if they match byte for byte apart from
+the signature, publishes our APK with our signature (`AllowedAPKSigningKeys`). So F-Droid, GitHub,
+Obtainium, IzzyOnDroid and Uptodown all ship the same signature and updates work across channels. The
+build disables `dependenciesInfo` so no encrypted dependency blob is embedded.
 
-Draft recipe for `metadata/dev.smsforwarder.yml` in fdroiddata:
+Keep releases reproducible: the release workflow builds with JDK 17 (Temurin), and
+`META-INF/version-control-info.textproto` holds the commit hash, so it only matches a build made
+from a real git clone (not a `git worktree`). To check a release locally, build the tag from a clean
+clone with `./gradlew :app:assembleRelease` and no `SIGNING_*` variables, strip the APK Signing
+Block from the release APK and compare the two files byte for byte (`apksigcopier compare` does both steps). If a release stops being
+reproducible, F-Droid will not publish it.
+
+Recipe in fdroiddata (`metadata/dev.smsforwarder.yml`), merge request
+https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56891:
 
 ```yaml
 Categories:
   - Phone & SMS
   - Connectivity
 License: MIT
+AuthorName: Lacho00
 SourceCode: https://github.com/Lacho00/sms-forwarder
 IssueTracker: https://github.com/Lacho00/sms-forwarder/issues
 Changelog: https://github.com/Lacho00/sms-forwarder/releases
@@ -40,16 +50,17 @@ AutoName: SMS Forwarder
 
 RepoType: git
 Repo: https://github.com/Lacho00/sms-forwarder.git
+Binaries: https://github.com/Lacho00/sms-forwarder/releases/download/v%v/sms-forwarder-v%v.apk
 
 Builds:
-  # v2.1.2 is the first tag with the literal version in app/build.gradle.kts; v2.1.1 and older
-  # take it from GITHUB_REF_NAME and cannot be built by F-Droid.
   - versionName: 2.1.2
     versionCode: 20102
-    commit: v2.1.2
+    commit: cc3035db95af81646f9b560fc55933757d30b826
     subdir: app
     gradle:
       - yes
+
+AllowedAPKSigningKeys: fa54d7cbc42840e71840327ce6b6f7487438c22345197b94c064fe7c7bed98e5
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
@@ -57,10 +68,13 @@ CurrentVersion: 2.1.2
 CurrentVersionCode: 20102
 ```
 
-To open the merge request: fork `fdroid/fdroiddata` on GitLab, add the recipe as
-`metadata/dev.smsforwarder.yml` on a new branch of the fork, push it and open the merge request
-against `fdroid/fdroiddata` with its "App inclusion" template. Categories must exist in
-`config/categories.yml` of fdroiddata.
+`commit` must be the full hash of the tagged commit (`git rev-parse vX.Y.Z^{}`). After the first
+merge, `AutoUpdateMode: Version` and `UpdateCheckMode: Tags` pick up new tags without another merge
+request. Categories must exist in `config/categories.yml` of fdroiddata.
+
+GitLab asks to verify the account (phone or card) before running pipelines on the fork. Following
+the fdroiddata template, do not verify: leave a note in the merge request so a maintainer starts the
+CI.
 
 ## IzzyOnDroid
 
