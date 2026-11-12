@@ -53,9 +53,9 @@ Repo: https://github.com/Lacho00/sms-forwarder.git
 Binaries: https://github.com/Lacho00/sms-forwarder/releases/download/v%v/sms-forwarder-v%v.apk
 
 Builds:
-  - versionName: 2.1.2
-    versionCode: 20102
-    commit: cc3035db95af81646f9b560fc55933757d30b826
+  - versionName: 2.1.3
+    versionCode: 20103
+    commit: e49cdfb4cac3c8be53c1ae2aefee565b43ce2e0f
     subdir: app
     gradle:
       - yes
@@ -64,8 +64,8 @@ AllowedAPKSigningKeys: fa54d7cbc42840e71840327ce6b6f7487438c22345197b94c064fe7c7
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 2.1.2
-CurrentVersionCode: 20102
+CurrentVersion: 2.1.3
+CurrentVersionCode: 20103
 ```
 
 `commit` must be the full hash of the tagged commit (`git rev-parse vX.Y.Z^{}`). After the first
