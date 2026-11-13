@@ -100,6 +100,11 @@ class RulesTest {
         assertTrue(RuleEngine.validatePattern("^a.*"))
     }
 
+    @Test fun isRejectedPatternOnlyForRealRejections() {
+        for (p in listOf("(a)\\1", "a(?=b)", "(", "a".repeat(501))) assertTrue(RuleEngine.isRejectedPattern(p), p.take(20))
+        assertFalse(RuleEngine.isRejectedPattern("^a.*"))
+    }
+
     @Test fun patternsAccepted() {
         for (p in listOf("(CUP|USD)+", ".*codigo.*\\d{6}.*", "^\\+?53\\d+", "(a|aa)+$", "(?i)saldo")) {
             assertTrue(RuleEngine.validatePattern(p), p)

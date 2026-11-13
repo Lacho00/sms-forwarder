@@ -36,8 +36,8 @@ data class RuleRowUi(
 )
 
 private fun RuleEntity.hasInvalidRegex(): Boolean =
-    (senderMode == SenderMode.REGEX && !RuleEngine.validatePattern(senderPattern)) ||
-        (bodyMode == BodyMode.REGEX && !RuleEngine.validatePattern(bodyPattern.orEmpty()))
+    (senderMode == SenderMode.REGEX && RuleEngine.isRejectedPattern(senderPattern)) ||
+        (bodyMode == BodyMode.REGEX && RuleEngine.isRejectedPattern(bodyPattern.orEmpty()))
 
 /** [scope] is only passed by tests; in the app it is the ViewModel scope. */
 class RulesViewModel(
