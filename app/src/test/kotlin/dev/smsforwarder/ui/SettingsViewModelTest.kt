@@ -60,12 +60,14 @@ class SettingsViewModelTest {
         onSweepIntervalChanged = { sweeps += it },
     )
 
+    // 10 s, like the language tests: on a cold CI runner the first DataStore write can take
+    // more than 5 s, and a shorter timeout made these tests fail at random.
     private fun SettingsViewModel.await(cond: (SettingsPrefs) -> Boolean): SettingsPrefs =
-        runBlocking { withTimeout(5_000) { prefs.first(cond) } }
+        runBlocking { withTimeout(10_000) { prefs.first(cond) } }
 
     // The callback runs right after the save, on another thread, so the flow can update first.
     private fun waitUntil(cond: () -> Boolean) {
-        val end = System.currentTimeMillis() + 5_000
+        val end = System.currentTimeMillis() + 10_000
         while (!cond() && System.currentTimeMillis() < end) Thread.sleep(10)
     }
 
