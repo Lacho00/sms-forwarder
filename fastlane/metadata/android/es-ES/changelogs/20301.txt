@@ -1,0 +1,1 @@
+Transiciones más limpias: la pantalla anterior se desvanece antes de que entre la nueva, las pestañas cambian sin mover las barras y el modo oscuro ya no destella en blanco.

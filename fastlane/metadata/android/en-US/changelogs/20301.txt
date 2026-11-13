@@ -1,0 +1,1 @@
+Smoother screen transitions: the old screen fades out before the new one slides in, tabs switch without moving the top and bottom bars, and dark mode no longer flashes white.
