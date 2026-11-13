@@ -7,18 +7,15 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.SideEffect
 import dev.smsforwarder.ui.theme.Motion
+import dev.smsforwarder.ui.theme.fadeThrough
+import dev.smsforwarder.ui.theme.sharedAxisX
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
@@ -217,38 +214,71 @@ fun AppNavHost(
         }
     }
 
-    // Push slides in from the end, pop from the start, and a tab switch (same depth) just crossfades.
+    // Push and pop use a shared axis on X; a same-depth change fades through; a tab switch only fades the body.
     val shownDepth = remember { intArrayOf(routes.size) }
     val depthDelta = routes.size - shownDepth[0]
+    val offsetPx = with(LocalDensity.current) { Motion.SHARED_AXIS_OFFSET.roundToPx() }
     SideEffect { shownDepth[0] = routes.size }
     AnimatedContent(
         targetState = current,
-        modifier = Modifier.fillMaxSize(),
-        transitionSpec = { screenTransition(depthDelta) },
-        contentKey = { it },
+        // Between the outgoing fade and the incoming one the window shows through; paint it with the theme
+        // background so a dark theme does not flash the light window colour.
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        transitionSpec = {
+            when {
+                depthDelta > 0 -> sharedAxisX(forward = true, offsetPx = offsetPx)
+                depthDelta < 0 -> sharedAxisX(forward = false, offsetPx = offsetPx)
+                else -> fadeThrough()
+            }
+        },
+        // Tabs share one key: a tab switch must not run the outer transition (the bars stay fixed).
+        contentKey = { if (Routes.isTab(it)) "tabs" else it },
         label = "screen",
     ) { route ->
         val detailId = Routes.detailId(route)
         val destinationTarget = Routes.destinationTarget(route)
         val ruleTarget = Routes.ruleTarget(route)
         when {
-            route == Routes.MAIN -> {
-                val state by mainViewModel.state.collectAsState()
+            Routes.isTab(route) -> {
+                val mainState by mainViewModel.state.collectAsState()
+                val prefs by settingsViewModel.prefs.collectAsState()
+                val rows by rulesViewModel.rows.collectAsState()
+                val destinationRows by destinationsViewModel.rows.collectAsState()
+                val settingsActions = remember(settingsViewModel) {
+                    SettingsActions(
+                        setForwarding = settingsViewModel::setForwarding,
+                        setSweepInterval = settingsViewModel::setSweepInterval,
+                        setStuckAfter = settingsViewModel::setStuckAfter,
+                        setRetention = settingsViewModel::setRetention,
+                        setHideText = settingsViewModel::setHideText,
+                        setNotify = settingsViewModel::setNotify,
+                        setTheme = settingsViewModel::setTheme,
+                        setDynamicColor = settingsViewModel::setDynamicColor,
+                        setLanguage = settingsViewModel::setLanguage,
+                    )
+                }
+                val isMain = route == Routes.MAIN
+                // One shell for every tab: the bars stay put on a tab switch and only the body fades through.
                 AppShell(
                     current = route,
-                    title = stringResource(R.string.app_name),
+                    title = when (route) {
+                        Routes.SETTINGS -> stringResource(R.string.settings_title)
+                        Routes.RULES -> stringResource(R.string.tab_rules)
+                        Routes.DESTINATIONS -> stringResource(R.string.tab_destinations)
+                        else -> stringResource(R.string.app_name)
+                    },
                     onTab = onTab,
                     onExport = transferViewModel::startExport,
                     onImport = transferViewModel::startImport,
                     onAbout = { navigate(Routes.ABOUT) },
                     transferEnabled = !transferBlocked,
-                    titleContent = if (searchOpen) {
-                        { MainSearchField(state.query, mainViewModel::setQuery) }
+                    titleContent = if (isMain && searchOpen) {
+                        { MainSearchField(mainState.query, mainViewModel::setQuery) }
                     } else {
                         null
                     },
                     navigationIcon = {
-                        if (searchOpen) {
+                        if (isMain && searchOpen) {
                             IconButton(onClick = {
                                 // Closing the field also clears the query, so a hidden search never filters the list.
                                 mainViewModel.setQuery("")
@@ -262,31 +292,61 @@ fun AppNavHost(
                         }
                     },
                     actions = {
-                        if (!searchOpen) {
+                        if (isMain && !searchOpen) {
                             IconButton(onClick = { searchOpen = true }) {
                                 Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.main_search_open))
                             }
                         }
                     },
                 ) { padding ->
-                    MainScreen(
-                        state = state,
-                        onOpenIssue = { issue ->
-                            val target = issueTarget(issue)
-                            if (target != null) onTab(target) else onOpenSystemIssue(issue)
-                        },
-                        onSweepNow = onSweepNow,
-                        onOpen = { id -> navigate(Routes.detail(id)) },
-                        padding = padding,
-                        onFilterChange = mainViewModel::setFilter,
-                        onDestinationFilterChange = mainViewModel::setDestinationFilter,
-                        onResume = mainViewModel::onResume,
-                        onClearFilters = {
-                            mainViewModel.setQuery("")
-                            mainViewModel.setFilter(StatusFilter.ALL)
-                            mainViewModel.setDestinationFilter(null)
-                        },
-                    )
+                    AnimatedContent(
+                        targetState = route,
+                        modifier = Modifier.fillMaxSize(),
+                        transitionSpec = { fadeThrough() },
+                        label = "tab",
+                    ) { tab ->
+                        when (tab) {
+                            Routes.SETTINGS -> SettingsScreen(
+                                prefs = prefs,
+                                actions = settingsActions,
+                                onOpenRecovery = { navigate(Routes.RECOVERY) },
+                                onOpenSystemIssue = onOpenSystemIssue,
+                                padding = padding,
+                            )
+                            Routes.RULES -> RulesScreen(
+                                rows = rows,
+                                onOpen = { id -> navigate(Routes.rule(id)) },
+                                onAdd = { navigate(Routes.rule(null)) },
+                                onToggle = rulesViewModel::setEnabled,
+                                padding = padding,
+                            )
+                            Routes.DESTINATIONS -> DestinationsScreen(
+                                rows = destinationRows,
+                                onOpen = { id -> navigate(Routes.destination(id)) },
+                                onAdd = { navigate(Routes.destination(null)) },
+                                onToggle = destinationsViewModel::setEnabled,
+                                padding = padding,
+                            )
+                            else -> MainScreen(
+                                state = mainState,
+                                onOpenIssue = { issue ->
+                                    val target = issueTarget(issue)
+                                    if (target != null) onTab(target) else onOpenSystemIssue(issue)
+                                },
+                                onSweepNow = onSweepNow,
+                                onOpen = { id -> navigate(Routes.detail(id)) },
+                                padding = padding,
+                                onFilterChange = mainViewModel::setFilter,
+                                onDestinationFilterChange = mainViewModel::setDestinationFilter,
+                                onResume = mainViewModel::onResume,
+                                onClearFilters = {
+                                    mainViewModel.setQuery("")
+                                    mainViewModel.setFilter(StatusFilter.ALL)
+                                    mainViewModel.setDestinationFilter(null)
+                                },
+                            )
+                        }
+                    }
                 }
             }
             detailId != null -> {
@@ -304,79 +364,6 @@ fun AppNavHost(
                     },
                     onBack = { if (route == current) back() },
                 )
-            }
-            route == Routes.SETTINGS -> {
-                val prefs by settingsViewModel.prefs.collectAsState()
-                val actions = remember(settingsViewModel) {
-                    SettingsActions(
-                        setForwarding = settingsViewModel::setForwarding,
-                        setSweepInterval = settingsViewModel::setSweepInterval,
-                        setStuckAfter = settingsViewModel::setStuckAfter,
-                        setRetention = settingsViewModel::setRetention,
-                        setHideText = settingsViewModel::setHideText,
-                        setNotify = settingsViewModel::setNotify,
-                        setTheme = settingsViewModel::setTheme,
-                        setDynamicColor = settingsViewModel::setDynamicColor,
-                        setLanguage = settingsViewModel::setLanguage,
-                    )
-                }
-                AppShell(
-                    current = route,
-                    title = stringResource(R.string.settings_title),
-                    onTab = onTab,
-                    onExport = transferViewModel::startExport,
-                    onImport = transferViewModel::startImport,
-                    onAbout = { navigate(Routes.ABOUT) },
-                    transferEnabled = !transferBlocked,
-                ) { padding ->
-                    SettingsScreen(
-                        prefs = prefs,
-                        actions = actions,
-                        onOpenRecovery = { navigate(Routes.RECOVERY) },
-                        onOpenSystemIssue = onOpenSystemIssue,
-                        padding = padding,
-                    )
-                }
-            }
-            route == Routes.RULES -> {
-                val rows by rulesViewModel.rows.collectAsState()
-                AppShell(
-                    current = route,
-                    title = stringResource(R.string.tab_rules),
-                    onTab = onTab,
-                    onExport = transferViewModel::startExport,
-                    onImport = transferViewModel::startImport,
-                    onAbout = { navigate(Routes.ABOUT) },
-                    transferEnabled = !transferBlocked,
-                ) { padding ->
-                    RulesScreen(
-                        rows = rows,
-                        onOpen = { id -> navigate(Routes.rule(id)) },
-                        onAdd = { navigate(Routes.rule(null)) },
-                        onToggle = rulesViewModel::setEnabled,
-                        padding = padding,
-                    )
-                }
-            }
-            route == Routes.DESTINATIONS -> {
-                val rows by destinationsViewModel.rows.collectAsState()
-                AppShell(
-                    current = route,
-                    title = stringResource(R.string.tab_destinations),
-                    onTab = onTab,
-                    onExport = transferViewModel::startExport,
-                    onImport = transferViewModel::startImport,
-                    onAbout = { navigate(Routes.ABOUT) },
-                    transferEnabled = !transferBlocked,
-                ) { padding ->
-                    DestinationsScreen(
-                        rows = rows,
-                        onOpen = { id -> navigate(Routes.destination(id)) },
-                        onAdd = { navigate(Routes.destination(null)) },
-                        onToggle = destinationsViewModel::setEnabled,
-                        padding = padding,
-                    )
-                }
             }
             destinationTarget != null -> {
                 val vm = remember(destinationTarget) { destinationEditorViewModel(destinationTarget) }
@@ -494,16 +481,4 @@ fun AppNavHost(
 @Composable
 fun LoadingScreen() {
     Text(stringResource(R.string.app_name), modifier = Modifier.padding(16.dp))
-}
-
-/** Slides by a tenth of the width: enough to read as direction without covering the whole screen. */
-private fun AnimatedContentTransitionScope<String>.screenTransition(depthDelta: Int): ContentTransform {
-    val fadeIn = fadeIn(Motion.enter(Motion.MEDIUM))
-    val fadeOut = fadeOut(Motion.exit(Motion.SHORT))
-    if (depthDelta == 0) return (Motion.fadeInShort togetherWith Motion.fadeOutShort).using(SizeTransform(clip = false))
-    val dir = if (depthDelta > 0) 1 else -1
-    return (
-        slideInHorizontally(Motion.enter(Motion.MEDIUM)) { dir * it / 10 } + fadeIn togetherWith
-            slideOutHorizontally(Motion.exit(Motion.SHORT)) { -dir * it / 10 } + fadeOut
-        ).using(SizeTransform(clip = false))
 }
