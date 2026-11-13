@@ -88,29 +88,31 @@ fun RulesScreen(
             // Room below the last row for the extended FAB (56dp) and its 16dp margins.
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(rows, key = { it.id }) { row ->
-                    ListItem(
-                        headlineContent = { Text(row.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(summaryLine(row))
-                                if (row.invalidRegex) {
-                                    StatusPill(StatusTone.ERROR, stringResource(R.string.rule_invalid_regex))
+                    Column(Modifier.animateItem()) {
+                        ListItem(
+                            headlineContent = { Text(row.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            supportingContent = {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(summaryLine(row))
+                                    if (row.invalidRegex) {
+                                        StatusPill(StatusTone.ERROR, stringResource(R.string.rule_invalid_regex))
+                                    }
+                                    if (row.destinationNames.isEmpty()) {
+                                        StatusPill(StatusTone.ERROR, stringResource(R.string.rule_no_destinations))
+                                    }
                                 }
-                                if (row.destinationNames.isEmpty()) {
-                                    StatusPill(StatusTone.ERROR, stringResource(R.string.rule_no_destinations))
-                                }
-                            }
-                        },
-                        trailingContent = {
-                            Switch(
-                                checked = row.enabled,
-                                onCheckedChange = { onToggle(row.id, it) },
-                                modifier = Modifier.semantics { contentDescription = row.name },
-                            )
-                        },
-                        modifier = Modifier.animateItem().clickable { onOpen(row.id) },
-                    )
-                    InsetDivider()
+                            },
+                            trailingContent = {
+                                Switch(
+                                    checked = row.enabled,
+                                    onCheckedChange = { onToggle(row.id, it) },
+                                    modifier = Modifier.semantics { contentDescription = row.name },
+                                )
+                            },
+                            modifier = Modifier.clickable { onOpen(row.id) },
+                        )
+                        InsetDivider()
+                    }
                 }
             }
         }

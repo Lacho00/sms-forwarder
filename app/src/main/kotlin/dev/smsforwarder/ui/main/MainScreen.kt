@@ -2,6 +2,7 @@ package dev.smsforwarder.ui.main
 
 import dev.smsforwarder.ui.theme.Motion
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.clickable
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -190,11 +191,21 @@ fun MainScreen(
     }
     val today = remember(resumes) { LocalDate.now(zone) }
     val groups = remember(state.rows, today) { groupByDay(state.rows, System.currentTimeMillis(), zone) }
+    val bannerVisible = !searching && state.issues.isNotEmpty()
+    // The list's top padding follows the banner's expand/shrink instead of jumping when it toggles.
+    val listTop by animateDpAsState(
+        if (bannerVisible) 8.dp else padding.calculateTopPadding() + 8.dp,
+        animationSpec = Motion.standard(),
+        label = "listTop",
+    )
+    // The exiting banner keeps the issues it showed instead of collapsing around an empty box.
+    var lastIssues by remember { mutableStateOf(state.issues) }
+    if (state.issues.isNotEmpty()) lastIssues = state.issues
     Column(Modifier.fillMaxSize()) {
         // The banner lives outside the list: an item inserted above the first visible one (issues load after
         // the rows) would be scrolled off by the list's key anchoring.
         AnimatedVisibility(
-            visible = !searching && state.issues.isNotEmpty(),
+            visible = bannerVisible,
             enter = Motion.expandIn,
             exit = Motion.shrinkOut,
         ) {
@@ -202,7 +213,7 @@ fun MainScreen(
                 Modifier.padding(
                     start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 8.dp,
                 ),
-            ) { HealthBanner(state.issues, onOpenIssue) }
+            ) { HealthBanner(lastIssues, onOpenIssue) }
         }
         LazyColumn(
             modifier = Modifier.fillMaxWidth().weight(1f),
@@ -210,7 +221,7 @@ fun MainScreen(
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
-                top = if (!searching && state.issues.isNotEmpty()) 8.dp else padding.calculateTopPadding() + 8.dp,
+                top = listTop,
                 bottom = padding.calculateBottomPadding() + 8.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),

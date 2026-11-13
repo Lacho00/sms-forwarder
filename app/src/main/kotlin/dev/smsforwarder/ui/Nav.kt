@@ -297,10 +297,12 @@ fun AppNavHost(
                     onRetry = { vm.retry() },
                     onResendTo = { vm.resendTo(it) },
                     onDelete = {
-                        vm.delete()
-                        back()
+                        if (route == current) {
+                            vm.delete()
+                            back()
+                        }
                     },
-                    onBack = back,
+                    onBack = { if (route == current) back() },
                 )
             }
             route == Routes.SETTINGS -> {
@@ -387,13 +389,19 @@ fun AppNavHost(
                         editorReady = route
                     }
                 }
+                // The exiting screen keeps drawing the last state it had while current, not the reset one; a second
+                // tap on its back arrow during the exit must not pop another screen.
+                val shown = remember { mutableStateOf(state) }
+                if (route == current) shown.value = state
                 val leave: () -> Unit = {
-                    vm.reset()
-                    editorReady = null
-                    back()
+                    if (route == current) {
+                        vm.reset()
+                        editorReady = null
+                        back()
+                    }
                 }
                 BackHandler(enabled = route == current) { leave() }
-                DestinationEditorScreen(state = state, vm = vm, onBack = leave)
+                DestinationEditorScreen(state = shown.value, vm = vm, onBack = leave)
             }
             ruleTarget != null -> {
                 val vm = remember(ruleTarget) { ruleEditorViewModel(ruleTarget) }
@@ -405,13 +413,19 @@ fun AppNavHost(
                         editorReady = route
                     }
                 }
+                // The exiting screen keeps drawing the last state it had while current, not the reset one; a second
+                // tap on its back arrow during the exit must not pop another screen.
+                val shown = remember { mutableStateOf(state) }
+                if (route == current) shown.value = state
                 val leave: () -> Unit = {
-                    vm.reset()
-                    editorReady = null
-                    back()
+                    if (route == current) {
+                        vm.reset()
+                        editorReady = null
+                        back()
+                    }
                 }
                 BackHandler(enabled = route == current) { leave() }
-                RuleEditorScreen(state = state, vm = vm, onBack = leave)
+                RuleEditorScreen(state = shown.value, vm = vm, onBack = leave)
             }
             route.startsWith("rule/") -> {
                 // A route that names no rule: go back instead of falling through to onboarding.
@@ -436,7 +450,7 @@ fun AppNavHost(
                         } catch (_: ActivityNotFoundException) {
                         }
                     },
-                    onBack = back,
+                    onBack = { if (route == current) back() },
                 )
             }
             route == Routes.RECOVERY -> {
@@ -455,7 +469,7 @@ fun AppNavHost(
                             sentCount = recoveryViewModel.sendSelected()
                         }
                     },
-                    onBack = back,
+                    onBack = { if (route == current) back() },
                 )
             }
             else -> OnboardingScreen(
