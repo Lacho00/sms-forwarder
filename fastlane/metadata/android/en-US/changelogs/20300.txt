@@ -1,0 +1,1 @@
+Subtle animations: delivery status changes fade between states, list rows slide in and out, screens slide when you open or close them, and onboarding steps move forward smoothly.
