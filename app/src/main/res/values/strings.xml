@@ -279,6 +279,7 @@
     <string name="rules_empty">No rules yet</string>
     <string name="rules_empty_body">A rule picks which SMS go to which destination.</string>
     <string name="rule_no_destinations">No destinations: this rule forwards nothing</string>
+    <string name="rule_invalid_regex">Invalid regex: this rule never matches</string>
     <string name="rule_row_sender_exact">Sender: %1$s</string>
     <string name="rule_row_sender_contains">Sender contains: %1$s</string>
     <string name="rule_row_sender_regex">Sender regex: %1$s</string>
@@ -319,7 +320,7 @@
     <string name="rule_load_failed">Couldn\'t read this rule.</string>
     <string name="rule_error_name_empty">Enter a name</string>
     <string name="rule_error_sender_empty">Enter the sender</string>
-    <string name="rule_error_regex">This is not a valid regular expression</string>
+    <string name="rule_error_regex">Not a valid regular expression. Backreferences (\\1) and lookarounds ((?=…), (?&lt;=…)) are not supported</string>
     <string name="rule_error_body_empty">Enter the text</string>
     <string name="rule_error_no_destinations">Choose at least one destination</string>
     <string name="menu_export">Export</string>

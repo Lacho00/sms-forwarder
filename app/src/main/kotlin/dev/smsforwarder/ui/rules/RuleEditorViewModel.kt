@@ -108,7 +108,11 @@ class RuleEditorViewModel(
                 if (d == null) {
                     _state.update { it.copy(loaded = true, done = true) }
                 } else {
-                    _state.update { it.copy(loaded = true, isNew = false, draft = d) }
+                    // Rules saved before the RE2/J migration may hold a rejected regex: mark it on open.
+                    val regexErrors = validateRule(d)
+                        .filter { it == RuleError.SENDER_REGEX_INVALID || it == RuleError.BODY_REGEX_INVALID }
+                        .toSet()
+                    _state.update { it.copy(loaded = true, isNew = false, draft = d, errors = regexErrors) }
                 }
             }
         }

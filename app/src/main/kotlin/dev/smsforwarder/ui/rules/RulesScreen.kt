@@ -93,6 +93,9 @@ fun RulesScreen(
                         supportingContent = {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(summaryLine(row))
+                                if (row.invalidRegex) {
+                                    StatusPill(StatusTone.ERROR, stringResource(R.string.rule_invalid_regex))
+                                }
                                 if (row.destinationNames.isEmpty()) {
                                     StatusPill(StatusTone.ERROR, stringResource(R.string.rule_no_destinations))
                                 }

@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import dev.smsforwarder.core.BodyMode
+import dev.smsforwarder.core.RuleEngine
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
+import dev.smsforwarder.data.RuleEntity
 import dev.smsforwarder.data.RuleRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -15,7 +17,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** [destinationNames] are the live destinations only; empty means the rule forwards nothing. */
+/**
+ * [destinationNames] are the live destinations only; empty means the rule forwards nothing.
+ * [invalidRegex] is true when a REGEX field holds a pattern the engine now rejects (saved before the
+ * RE2/J migration); such a rule never matches.
+ */
 data class RuleRowUi(
     val id: Long,
     val name: String,
@@ -26,7 +32,12 @@ data class RuleRowUi(
     val bodyPattern: String?,
     val sim: SimMatch,
     val destinationNames: List<String>,
+    val invalidRegex: Boolean,
 )
+
+private fun RuleEntity.hasInvalidRegex(): Boolean =
+    (senderMode == SenderMode.REGEX && !RuleEngine.validatePattern(senderPattern)) ||
+        (bodyMode == BodyMode.REGEX && !RuleEngine.validatePattern(bodyPattern.orEmpty()))
 
 /** [scope] is only passed by tests; in the app it is the ViewModel scope. */
 class RulesViewModel(
@@ -46,6 +57,7 @@ class RulesViewModel(
                 bodyPattern = r.rule.bodyPattern,
                 sim = r.rule.sim,
                 destinationNames = r.destinations.sortedBy { it.id }.map { it.name },
+                invalidRegex = r.rule.hasInvalidRegex(),
             )
         }
     }.stateIn(scope ?: viewModelScope, SharingStarted.Eagerly, emptyList())

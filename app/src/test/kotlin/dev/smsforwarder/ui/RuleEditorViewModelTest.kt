@@ -208,4 +208,34 @@ class RuleEditorViewModelTest {
         assertNull(vm.state.value.draft.bodyMode)
         assertNull(vm.state.value.draft.bodyPattern)
     }
+
+    @Test fun loadingARuleWithAnInvalidRegexMarksTheFieldOnOpen() {
+        // Bypasses the validating repository: a rule saved before the RE2/J migration.
+        val id = runBlocking {
+            db.ruleDao().insert(
+                dev.smsforwarder.data.RuleEntity(
+                    name = "R", enabled = true, senderMode = SenderMode.REGEX, senderPattern = "(a)\\1",
+                    bodyMode = null, bodyPattern = null, sim = SimMatch.ANY, createdAt = 0,
+                ),
+            )
+        }
+        val vm = vm(id)
+        vm.await { it.loaded && !it.isNew }
+        assertEquals(setOf(RuleError.SENDER_REGEX_INVALID), vm.state.value.errors)
+    }
+
+    @Test fun loadingAValidRuleWithoutDestinationsShowsNoErrors() {
+        val id = runBlocking {
+            // No links: a rule whose destinations were all deleted.
+            db.ruleDao().insert(
+                dev.smsforwarder.data.RuleEntity(
+                    name = "R", enabled = true, senderMode = SenderMode.CONTAINS, senderPattern = "BANK",
+                    bodyMode = null, bodyPattern = null, sim = SimMatch.ANY, createdAt = 0,
+                ),
+            )
+        }
+        val vm = vm(id)
+        vm.await { it.loaded && !it.isNew }
+        assertTrue(vm.state.value.errors.isEmpty())
+    }
 }
