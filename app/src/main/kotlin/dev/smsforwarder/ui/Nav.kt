@@ -389,9 +389,10 @@ fun AppNavHost(
                         editorReady = route
                     }
                 }
-                // The exiting screen keeps drawing the last state it had while current, not the reset one; a second
-                // tap on its back arrow during the exit must not pop another screen.
-                val shown = remember { mutableStateOf(state) }
+                // The exiting screen keeps drawing the last state it had while current, not the reset one. A plain
+                // holder, not snapshot state, so writing it during composition triggers no extra recomposition.
+                // A second tap on its back arrow during the exit must not pop another screen.
+                val shown = remember { object { var value = state } }
                 if (route == current) shown.value = state
                 val leave: () -> Unit = {
                     if (route == current) {
@@ -413,9 +414,10 @@ fun AppNavHost(
                         editorReady = route
                     }
                 }
-                // The exiting screen keeps drawing the last state it had while current, not the reset one; a second
-                // tap on its back arrow during the exit must not pop another screen.
-                val shown = remember { mutableStateOf(state) }
+                // The exiting screen keeps drawing the last state it had while current, not the reset one. A plain
+                // holder, not snapshot state, so writing it during composition triggers no extra recomposition.
+                // A second tap on its back arrow during the exit must not pop another screen.
+                val shown = remember { object { var value = state } }
                 if (route == current) shown.value = state
                 val leave: () -> Unit = {
                     if (route == current) {
