@@ -23,7 +23,7 @@ into `en-US/images/phoneScreenshots/` (from `en/`) and `es-ES/images/phoneScreen
 F-Droid builds the app from source with reproducible builds enabled: it compares its unsigned APK
 with the signed APK from the GitHub Release (`Binaries`) and, if they match byte for byte apart from
 the signature, publishes our APK with our signature (`AllowedAPKSigningKeys`). So F-Droid, GitHub,
-Obtainium, IzzyOnDroid and Uptodown all ship the same signature and updates work across channels. The
+Obtainium and Uptodown all ship the same signature and updates work across channels. The
 build disables `dependenciesInfo` so no encrypted dependency blob is embedded.
 
 Keep releases reproducible: the release workflow builds with JDK 17 (Temurin), and
@@ -33,8 +33,12 @@ clone with `./gradlew :app:assembleRelease` and no `SIGNING_*` variables, strip 
 Block from the release APK and compare the two files byte for byte (`apksigcopier compare` does both steps). If a release stops being
 reproducible, F-Droid will not publish it.
 
-Recipe in fdroiddata (`metadata/dev.smsforwarder.yml`), merge request
-https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56891:
+Recipe in fdroiddata (`metadata/dev.smsforwarder.yml`). The first merge request,
+https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56891, was closed on 2026-11-12: F-Droid only
+includes apps that have been maintained for more than 3 months. The first release (v1.0.0) is from
+2026-10-30, so resubmit from 2027-01-30. The recipe stays on the `dev.smsforwarder` branch of the
+fdroiddata fork; rebase it on upstream and bump it to the latest release before opening a new merge
+request.
 
 ```yaml
 Categories:
@@ -85,11 +89,12 @@ issue in the Codeberg issue tracker of
 Request" template, pointing to this repo. The template has a mandatory section on AI use; fill it
 in. Each release must attach the signed APK (the workflow already does).
 
-Our request: https://codeberg.org/IzzyOnDroid/repodata/issues/869.
+Our request, https://codeberg.org/IzzyOnDroid/repodata/issues/869, was rejected on 2026-11-12: the
+level of LLM assistance in this project exceeds their App Inclusion AI Policy. Do not resubmit.
 
 ## Uptodown
 
 Uptodown takes the signed APK from the GitHub Release as is, so its updates are compatible with the
-GitHub and IzzyOnDroid APKs. Upload it from the Uptodown developer console, using the texts and
+GitHub APK. Upload it from the Uptodown developer console, using the texts and
 screenshots in `fastlane/metadata/android/`. Each new release has to be uploaded there
 again.
