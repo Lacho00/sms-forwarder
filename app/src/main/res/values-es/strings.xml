@@ -279,6 +279,7 @@
     <string name="rules_empty">Aún no hay reglas</string>
     <string name="rules_empty_body">Una regla elige qué SMS van a qué destino.</string>
     <string name="rule_no_destinations">Sin destinos: esta regla no reenvía nada</string>
+    <string name="rule_invalid_regex">Regex no válida: esta regla no se aplica</string>
     <string name="rule_row_sender_exact">Remitente: %1$s</string>
     <string name="rule_row_sender_contains">Remitente contiene: %1$s</string>
     <string name="rule_row_sender_regex">Remitente regex: %1$s</string>
@@ -319,7 +320,7 @@
     <string name="rule_load_failed">No se pudo leer esta regla.</string>
     <string name="rule_error_name_empty">Escribe un nombre</string>
     <string name="rule_error_sender_empty">Escribe el remitente</string>
-    <string name="rule_error_regex">No es una expresión regular válida</string>
+    <string name="rule_error_regex">No es una expresión regular válida. No se admiten referencias (\\1) ni lookaround ((?=…), (?&lt;=…))</string>
     <string name="rule_error_body_empty">Escribe el texto</string>
     <string name="rule_error_no_destinations">Elige al menos un destino</string>
     <string name="menu_export">Exportar</string>

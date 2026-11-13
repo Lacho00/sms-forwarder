@@ -1,12 +1,14 @@
 package dev.smsforwarder.ui
 
 import androidx.room.Room
+import dev.smsforwarder.core.BodyMode
 import dev.smsforwarder.core.Clock
 import dev.smsforwarder.core.DestinationPresets
 import dev.smsforwarder.core.RuleDraft
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
 import dev.smsforwarder.data.AppDatabase
+import dev.smsforwarder.data.RuleEntity
 import dev.smsforwarder.data.TestRepos
 import dev.smsforwarder.ui.rules.RulesViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -19,6 +21,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -78,5 +81,37 @@ class RulesViewModelTest {
         vm.setEnabled(id, false)
         val rows = withTimeout(5_000) { vm.rows.first { it.size == 1 && !it[0].enabled } }
         assertFalse(rows[0].enabled)
+    }
+
+    // Bypasses the validating repository: a rule saved before the RE2/J migration.
+    private fun stored(senderMode: SenderMode, senderPattern: String, bodyMode: BodyMode?, bodyPattern: String?) = runBlocking {
+        db.ruleDao().insert(
+            RuleEntity(
+                name = "R", enabled = true, senderMode = senderMode, senderPattern = senderPattern,
+                bodyMode = bodyMode, bodyPattern = bodyPattern, sim = SimMatch.ANY, createdAt = 0,
+            ),
+        )
+    }
+
+    private fun onlyRow() = runBlocking { withTimeout(5_000) { vm().rows.first { it.size == 1 } }[0] }
+
+    @Test fun invalidSenderRegexIsFlagged() {
+        stored(SenderMode.REGEX, "(a)\\1", null, null)
+        assertTrue(onlyRow().invalidRegex)
+    }
+
+    @Test fun invalidBodyRegexIsFlagged() {
+        stored(SenderMode.EXACT, "AAA", BodyMode.REGEX, "a(?=b)")
+        assertTrue(onlyRow().invalidRegex)
+    }
+
+    @Test fun validRegexIsNotFlagged() {
+        stored(SenderMode.REGEX, "^a.*", BodyMode.REGEX, "^a.*")
+        assertFalse(onlyRow().invalidRegex)
+    }
+
+    @Test fun containsModeNeverCountsAsRegex() {
+        stored(SenderMode.CONTAINS, "(a)\\1", BodyMode.CONTAINS, "a(?=b)")
+        assertFalse(onlyRow().invalidRegex)
     }
 }

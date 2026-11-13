@@ -36,6 +36,12 @@ object RuleEngine {
      */
     fun validatePattern(pattern: String): Boolean = compile(pattern) is Compiled.Ok
 
+    /**
+     * True only when RE2/J or the size limits reject [pattern]. A transient failure (stack or heap
+     * exhausted while compiling) is not a rejection. Does not touch the cache.
+     */
+    fun isRejectedPattern(pattern: String): Boolean = compile(pattern) === Compiled.Invalid
+
     /** Longest accepted pattern, in characters. */
     const val MAX_PATTERN_LENGTH = 500
 

@@ -46,7 +46,8 @@ class RulesScreenTest {
         bodyPattern: String? = null,
         sim: SimMatch = SimMatch.ANY,
         destinations: List<String> = listOf("Dest"),
-    ) = RuleRowUi(id, name, true, senderMode, "AAA", bodyMode, bodyPattern, sim, destinations)
+        invalidRegex: Boolean = false,
+    ) = RuleRowUi(id, name, true, senderMode, "AAA", bodyMode, bodyPattern, sim, destinations, invalidRegex)
 
     private fun show(rows: List<RuleRowUi>) {
         compose.setContent {
@@ -65,6 +66,16 @@ class RulesScreenTest {
     @Test fun noDestinationsIsAnErrorPill() {
         show(listOf(row(destinations = emptyList())))
         compose.onNodeWithText(app.getString(R.string.rule_no_destinations)).assertIsDisplayed()
+    }
+
+    @Test fun invalidRegexIsAnErrorPill() {
+        show(listOf(row(invalidRegex = true)))
+        compose.onNodeWithText(app.getString(R.string.rule_invalid_regex)).assertIsDisplayed()
+    }
+
+    @Test fun validRegexShowsNoPill() {
+        show(listOf(row()))
+        compose.onNodeWithText(app.getString(R.string.rule_invalid_regex)).assertDoesNotExist()
     }
 
     @Test fun ruleWithDestinationsDoesNotWarn() {
@@ -93,7 +104,7 @@ class RulesScreenTest {
 
     @Test fun longNameAndSenderStayOnScreen() {
         val name = "N".repeat(60)
-        show(listOf(RuleRowUi(1, name, true, SenderMode.EXACT, "S".repeat(60), null, null, SimMatch.ANY, listOf("Dest"))))
+        show(listOf(RuleRowUi(1, name, true, SenderMode.EXACT, "S".repeat(60), null, null, SimMatch.ANY, listOf("Dest"), false)))
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
         val sw = compose.onNode(hasContentDescription(name) and isToggleable(), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertTrue(sw.right <= root.right && sw.left >= root.left)

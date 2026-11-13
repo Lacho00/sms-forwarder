@@ -108,9 +108,9 @@ class ScreenshotsTest {
     @Test fun rules() = shot("rules") {
         RulesScreen(
             rows = listOf(
-                RuleRowUi(1, "Rule one", true, SenderMode.EXACT, "AAA", null, null, SimMatch.ANY, listOf("Main")),
-                RuleRowUi(2, "Rule two", true, SenderMode.EXACT, "BANK", BodyMode.CONTAINS, "TEST", SimMatch.SIM1, listOf("Main", "Backup")),
-                RuleRowUi(3, "Rule three", false, SenderMode.REGEX, "^A+$", null, null, SimMatch.ANY, emptyList()),
+                RuleRowUi(1, "Rule one", true, SenderMode.EXACT, "AAA", null, null, SimMatch.ANY, listOf("Main"), false),
+                RuleRowUi(2, "Rule two", true, SenderMode.EXACT, "BANK", BodyMode.CONTAINS, "TEST", SimMatch.SIM1, listOf("Main", "Backup"), false),
+                RuleRowUi(3, "Rule three", false, SenderMode.REGEX, "^A+$", null, null, SimMatch.ANY, emptyList(), false),
             ),
             onOpen = {}, onAdd = {}, onToggle = { _, _ -> }, padding = PaddingValues(),
         )

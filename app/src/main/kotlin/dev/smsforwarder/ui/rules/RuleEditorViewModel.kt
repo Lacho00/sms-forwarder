@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import dev.smsforwarder.core.BodyMode
 import dev.smsforwarder.core.RuleDraft
+import dev.smsforwarder.core.RuleEngine
 import dev.smsforwarder.core.RuleError
 import dev.smsforwarder.core.SenderMode
 import dev.smsforwarder.core.SimMatch
@@ -33,6 +34,8 @@ data class RuleEditorState(
     val draft: RuleDraft = NEW_RULE_DRAFT,
     val destinations: List<DestinationEntity> = emptyList(),
     val errors: Set<RuleError> = emptySet(),
+    /** True after a save attempt found errors; from then on every error is shown live, not only regex ones. */
+    val submitted: Boolean = false,
     val deleteAsked: Boolean = false,
     val done: Boolean = false,
     /** The last save or delete did not complete; nothing was lost, retry. */
@@ -108,17 +111,37 @@ class RuleEditorViewModel(
                 if (d == null) {
                     _state.update { it.copy(loaded = true, done = true) }
                 } else {
-                    _state.update { it.copy(loaded = true, isNew = false, draft = d) }
+                    // Rules saved before the RE2/J migration may hold a rejected regex: mark it on open.
+                    val regexErrors = buildSet {
+                        if (d.senderMode == SenderMode.REGEX && RuleEngine.isRejectedPattern(d.senderPattern)) {
+                            add(RuleError.SENDER_REGEX_INVALID)
+                        }
+                        if (d.bodyMode == BodyMode.REGEX && RuleEngine.isRejectedPattern(d.bodyPattern.orEmpty())) {
+                            add(RuleError.BODY_REGEX_INVALID)
+                        }
+                    }
+                    _state.update { it.copy(loaded = true, isNew = false, draft = d, errors = regexErrors) }
                 }
             }
         }
     }
 
-    /** Applies an edit; refreshes the shown errors once there are some. */
+    /**
+     * Applies an edit; refreshes the shown errors once there are some. Before a save attempt only the
+     * regex errors (flagged on open) are kept in step, so unrelated ones stay hidden until save.
+     */
     fun update(transform: (RuleDraft) -> RuleDraft) {
         _state.update {
             val next = it.copy(draft = transform(it.draft), saveFailed = false)
-            if (next.errors.isEmpty()) next else next.copy(errors = validateRule(next.liveDraft()))
+            if (next.errors.isEmpty()) {
+                next
+            } else {
+                val all = validateRule(next.liveDraft())
+                val shown = if (next.submitted) all else {
+                    all.filter { e -> e == RuleError.SENDER_REGEX_INVALID || e == RuleError.BODY_REGEX_INVALID }.toSet()
+                }
+                next.copy(errors = shown)
+            }
         }
     }
 
@@ -142,7 +165,7 @@ class RuleEditorViewModel(
         val draft = s.liveDraft()
         val errors = validateRule(draft)
         if (errors.isNotEmpty()) {
-            _state.update { it.copy(errors = errors) }
+            _state.update { it.copy(errors = errors, submitted = true) }
             return
         }
         _state.update { it.copy(busy = true, errors = emptySet(), saveFailed = false) }
