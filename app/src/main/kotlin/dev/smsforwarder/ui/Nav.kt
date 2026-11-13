@@ -7,6 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.background
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.SideEffect
@@ -219,7 +221,9 @@ fun AppNavHost(
     SideEffect { shownDepth[0] = routes.size }
     AnimatedContent(
         targetState = current,
-        modifier = Modifier.fillMaxSize(),
+        // Between the outgoing fade and the incoming one the window shows through; paint it with the theme
+        // background so a dark theme does not flash the light window colour.
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         transitionSpec = {
             when {
                 depthDelta > 0 -> sharedAxisX(forward = true, offsetPx = offsetPx)
