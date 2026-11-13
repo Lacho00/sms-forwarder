@@ -1,0 +1,1 @@
+Animaciones sutiles: el estado de cada envío cambia con un fundido, las filas de las listas entran y salen deslizándose, las pantallas se deslizan al abrirlas o cerrarlas y los pasos del onboarding avanzan con suavidad.
