@@ -1,0 +1,1 @@
+Rules with a regex the app cannot run (backreferences, lookarounds) are now marked in the rules list and in the editor, so you know they are not applied.

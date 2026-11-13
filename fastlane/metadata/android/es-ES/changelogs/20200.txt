@@ -1,0 +1,1 @@
+Las reglas con una regex que la app no puede ejecutar (referencias hacia atrás, lookarounds) ahora se marcan en la lista de reglas y en el editor, para que sepas que no se aplican.
