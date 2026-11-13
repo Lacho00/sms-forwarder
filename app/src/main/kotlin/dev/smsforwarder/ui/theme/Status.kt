@@ -1,5 +1,10 @@
 package dev.smsforwarder.ui.theme
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.togetherWith
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -90,11 +95,21 @@ fun StatusPill(
     iconDescription: String? = null,
 ) {
     val colors = toneColors(tone)
-    Surface(modifier = modifier, shape = RoundedCornerShape(50), color = colors.container, contentColor = colors.onContainer) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(toneIcon(tone), contentDescription = iconDescription, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    val container by animateColorAsState(colors.container, Motion.standard(), label = "pillContainer")
+    val onContainer by animateColorAsState(colors.onContainer, Motion.standard(), label = "pillContent")
+    Surface(modifier = modifier, shape = RoundedCornerShape(50), color = container, contentColor = onContainer) {
+        AnimatedContent(
+            targetState = tone to text,
+            transitionSpec = {
+                (Motion.fadeInShort togetherWith Motion.fadeOutShort).using(SizeTransform(clip = false))
+            },
+            label = "pillContent",
+        ) { (shownTone, shownText) ->
+            Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(toneIcon(shownTone), contentDescription = iconDescription, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(shownText, style = MaterialTheme.typography.labelMedium, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
