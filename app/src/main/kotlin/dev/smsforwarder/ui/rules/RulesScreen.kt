@@ -108,7 +108,7 @@ fun RulesScreen(
                                 modifier = Modifier.semantics { contentDescription = row.name },
                             )
                         },
-                        modifier = Modifier.clickable { onOpen(row.id) },
+                        modifier = Modifier.animateItem().clickable { onOpen(row.id) },
                     )
                     InsetDivider()
                 }

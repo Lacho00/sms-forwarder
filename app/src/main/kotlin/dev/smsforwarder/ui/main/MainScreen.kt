@@ -1,5 +1,7 @@
 package dev.smsforwarder.ui.main
 
+import dev.smsforwarder.ui.theme.Motion
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -191,7 +193,11 @@ fun MainScreen(
     Column(Modifier.fillMaxSize()) {
         // The banner lives outside the list: an item inserted above the first visible one (issues load after
         // the rows) would be scrolled off by the list's key anchoring.
-        if (!searching && state.issues.isNotEmpty()) {
+        AnimatedVisibility(
+            visible = !searching && state.issues.isNotEmpty(),
+            enter = Motion.expandIn,
+            exit = Motion.shrinkOut,
+        ) {
             Box(
                 Modifier.padding(
                     start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 8.dp,
@@ -210,11 +216,11 @@ fun MainScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (!searching) {
-                item(key = "status") { StatusPanel(state, onSweepNow, onFilterChange) }
+                item(key = "status") { Box(Modifier.animateItem()) { StatusPanel(state, onSweepNow, onFilterChange) } }
             }
             item(key = "filters") {
                 Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    modifier = Modifier.animateItem().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -249,17 +255,19 @@ fun MainScreen(
                         icon = if (filtering) rememberVectorPainter(Icons.Filled.Search) else painterResource(R.drawable.ic_tab_home),
                         title = stringResource(if (filtering) R.string.main_no_results else R.string.main_empty),
                         body = stringResource(if (filtering) R.string.main_no_results_body else R.string.main_empty_body),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        modifier = Modifier.animateItem().fillMaxWidth().padding(vertical = 24.dp),
                         actionLabel = if (filtering) stringResource(R.string.main_clear_filters) else null,
                         onAction = if (filtering) onClearFilters else null,
                     )
                 }
             }
             groups.forEach { group ->
-                item(key = "day-${group.day}") { DayHeader(group) }
+                item(key = "day-${group.day}") { Box(Modifier.animateItem()) { DayHeader(group) } }
                 itemsIndexed(group.rows, key = { _, row -> row.id }) { index, row ->
-                    SmsRow(row, group.kind, hideText = state.hideText, onClick = { onOpen(row.id) })
-                    if (index < group.rows.lastIndex) InsetDivider()
+                    Column(Modifier.animateItem()) {
+                        SmsRow(row, group.kind, hideText = state.hideText, onClick = { onOpen(row.id) })
+                        if (index < group.rows.lastIndex) InsetDivider()
+                    }
                 }
             }
         }
