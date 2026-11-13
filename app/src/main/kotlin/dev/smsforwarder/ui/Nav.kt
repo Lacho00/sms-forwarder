@@ -6,7 +6,19 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.SideEffect
+import dev.smsforwarder.ui.theme.Motion
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
@@ -205,241 +217,269 @@ fun AppNavHost(
         }
     }
 
-    val detailId = Routes.detailId(current)
-    val destinationTarget = Routes.destinationTarget(current)
-    val ruleTarget = Routes.ruleTarget(current)
-    when {
-        current == Routes.MAIN -> {
-            val state by mainViewModel.state.collectAsState()
-            AppShell(
-                current = current,
-                title = stringResource(R.string.app_name),
-                onTab = onTab,
-                onExport = transferViewModel::startExport,
-                onImport = transferViewModel::startImport,
-                onAbout = { navigate(Routes.ABOUT) },
-                transferEnabled = !transferBlocked,
-                titleContent = if (searchOpen) {
-                    { MainSearchField(state.query, mainViewModel::setQuery) }
-                } else {
-                    null
-                },
-                navigationIcon = {
-                    if (searchOpen) {
-                        IconButton(onClick = {
-                            // Closing the field also clears the query, so a hidden search never filters the list.
+    // Push slides in from the end, pop from the start, and a tab switch (same depth) just crossfades.
+    val shownDepth = remember { intArrayOf(routes.size) }
+    val depthDelta = routes.size - shownDepth[0]
+    SideEffect { shownDepth[0] = routes.size }
+    AnimatedContent(
+        targetState = current,
+        modifier = Modifier.fillMaxSize(),
+        transitionSpec = { screenTransition(depthDelta) },
+        contentKey = { it },
+        label = "screen",
+    ) { route ->
+        val detailId = Routes.detailId(route)
+        val destinationTarget = Routes.destinationTarget(route)
+        val ruleTarget = Routes.ruleTarget(route)
+        when {
+            route == Routes.MAIN -> {
+                val state by mainViewModel.state.collectAsState()
+                AppShell(
+                    current = route,
+                    title = stringResource(R.string.app_name),
+                    onTab = onTab,
+                    onExport = transferViewModel::startExport,
+                    onImport = transferViewModel::startImport,
+                    onAbout = { navigate(Routes.ABOUT) },
+                    transferEnabled = !transferBlocked,
+                    titleContent = if (searchOpen) {
+                        { MainSearchField(state.query, mainViewModel::setQuery) }
+                    } else {
+                        null
+                    },
+                    navigationIcon = {
+                        if (searchOpen) {
+                            IconButton(onClick = {
+                                // Closing the field also clears the query, so a hidden search never filters the list.
+                                mainViewModel.setQuery("")
+                                searchOpen = false
+                            }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.main_search_close),
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        if (!searchOpen) {
+                            IconButton(onClick = { searchOpen = true }) {
+                                Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.main_search_open))
+                            }
+                        }
+                    },
+                ) { padding ->
+                    MainScreen(
+                        state = state,
+                        onOpenIssue = { issue ->
+                            val target = issueTarget(issue)
+                            if (target != null) onTab(target) else onOpenSystemIssue(issue)
+                        },
+                        onSweepNow = onSweepNow,
+                        onOpen = { id -> navigate(Routes.detail(id)) },
+                        padding = padding,
+                        onFilterChange = mainViewModel::setFilter,
+                        onDestinationFilterChange = mainViewModel::setDestinationFilter,
+                        onResume = mainViewModel::onResume,
+                        onClearFilters = {
                             mainViewModel.setQuery("")
-                            searchOpen = false
-                        }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.main_search_close),
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    if (!searchOpen) {
-                        IconButton(onClick = { searchOpen = true }) {
-                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.main_search_open))
-                        }
-                    }
-                },
-            ) { padding ->
-                MainScreen(
+                            mainViewModel.setFilter(StatusFilter.ALL)
+                            mainViewModel.setDestinationFilter(null)
+                        },
+                    )
+                }
+            }
+            detailId != null -> {
+                val vm = remember(detailId) { detailViewModel(detailId) }
+                val state by vm.state.collectAsState()
+                DetailScreen(
                     state = state,
-                    onOpenIssue = { issue ->
-                        val target = issueTarget(issue)
-                        if (target != null) onTab(target) else onOpenSystemIssue(issue)
+                    onRetry = { vm.retry() },
+                    onResendTo = { vm.resendTo(it) },
+                    onDelete = {
+                        if (route == current) {
+                            vm.delete()
+                            back()
+                        }
                     },
-                    onSweepNow = onSweepNow,
-                    onOpen = { id -> navigate(Routes.detail(id)) },
-                    padding = padding,
-                    onFilterChange = mainViewModel::setFilter,
-                    onDestinationFilterChange = mainViewModel::setDestinationFilter,
-                    onResume = mainViewModel::onResume,
-                    onClearFilters = {
-                        mainViewModel.setQuery("")
-                        mainViewModel.setFilter(StatusFilter.ALL)
-                        mainViewModel.setDestinationFilter(null)
-                    },
+                    onBack = { if (route == current) back() },
                 )
             }
-        }
-        detailId != null -> {
-            val vm = remember(detailId) { detailViewModel(detailId) }
-            val state by vm.state.collectAsState()
-            DetailScreen(
-                state = state,
-                onRetry = { vm.retry() },
-                onResendTo = { vm.resendTo(it) },
-                onDelete = {
-                    vm.delete()
-                    back()
-                },
-                onBack = back,
-            )
-        }
-        current == Routes.SETTINGS -> {
-            val prefs by settingsViewModel.prefs.collectAsState()
-            val actions = remember(settingsViewModel) {
-                SettingsActions(
-                    setForwarding = settingsViewModel::setForwarding,
-                    setSweepInterval = settingsViewModel::setSweepInterval,
-                    setStuckAfter = settingsViewModel::setStuckAfter,
-                    setRetention = settingsViewModel::setRetention,
-                    setHideText = settingsViewModel::setHideText,
-                    setNotify = settingsViewModel::setNotify,
-                    setTheme = settingsViewModel::setTheme,
-                    setDynamicColor = settingsViewModel::setDynamicColor,
-                    setLanguage = settingsViewModel::setLanguage,
-                )
-            }
-            AppShell(
-                current = current,
-                title = stringResource(R.string.settings_title),
-                onTab = onTab,
-                onExport = transferViewModel::startExport,
-                onImport = transferViewModel::startImport,
-                onAbout = { navigate(Routes.ABOUT) },
-                transferEnabled = !transferBlocked,
-            ) { padding ->
-                SettingsScreen(
-                    prefs = prefs,
-                    actions = actions,
-                    onOpenRecovery = { navigate(Routes.RECOVERY) },
-                    onOpenSystemIssue = onOpenSystemIssue,
-                    padding = padding,
-                )
-            }
-        }
-        current == Routes.RULES -> {
-            val rows by rulesViewModel.rows.collectAsState()
-            AppShell(
-                current = current,
-                title = stringResource(R.string.tab_rules),
-                onTab = onTab,
-                onExport = transferViewModel::startExport,
-                onImport = transferViewModel::startImport,
-                onAbout = { navigate(Routes.ABOUT) },
-                transferEnabled = !transferBlocked,
-            ) { padding ->
-                RulesScreen(
-                    rows = rows,
-                    onOpen = { id -> navigate(Routes.rule(id)) },
-                    onAdd = { navigate(Routes.rule(null)) },
-                    onToggle = rulesViewModel::setEnabled,
-                    padding = padding,
-                )
-            }
-        }
-        current == Routes.DESTINATIONS -> {
-            val rows by destinationsViewModel.rows.collectAsState()
-            AppShell(
-                current = current,
-                title = stringResource(R.string.tab_destinations),
-                onTab = onTab,
-                onExport = transferViewModel::startExport,
-                onImport = transferViewModel::startImport,
-                onAbout = { navigate(Routes.ABOUT) },
-                transferEnabled = !transferBlocked,
-            ) { padding ->
-                DestinationsScreen(
-                    rows = rows,
-                    onOpen = { id -> navigate(Routes.destination(id)) },
-                    onAdd = { navigate(Routes.destination(null)) },
-                    onToggle = destinationsViewModel::setEnabled,
-                    padding = padding,
-                )
-            }
-        }
-        destinationTarget != null -> {
-            val vm = remember(destinationTarget) { destinationEditorViewModel(destinationTarget) }
-            val state by vm.state.collectAsState()
-            // A fresh editor on every open (a rotation keeps the marker, so the form survives it), and nothing
-            // typed stays in the ViewModel once the editor is left.
-            LaunchedEffect(current) {
-                if (editorReady != current) {
-                    vm.reset()
-                    editorReady = current
+            route == Routes.SETTINGS -> {
+                val prefs by settingsViewModel.prefs.collectAsState()
+                val actions = remember(settingsViewModel) {
+                    SettingsActions(
+                        setForwarding = settingsViewModel::setForwarding,
+                        setSweepInterval = settingsViewModel::setSweepInterval,
+                        setStuckAfter = settingsViewModel::setStuckAfter,
+                        setRetention = settingsViewModel::setRetention,
+                        setHideText = settingsViewModel::setHideText,
+                        setNotify = settingsViewModel::setNotify,
+                        setTheme = settingsViewModel::setTheme,
+                        setDynamicColor = settingsViewModel::setDynamicColor,
+                        setLanguage = settingsViewModel::setLanguage,
+                    )
+                }
+                AppShell(
+                    current = route,
+                    title = stringResource(R.string.settings_title),
+                    onTab = onTab,
+                    onExport = transferViewModel::startExport,
+                    onImport = transferViewModel::startImport,
+                    onAbout = { navigate(Routes.ABOUT) },
+                    transferEnabled = !transferBlocked,
+                ) { padding ->
+                    SettingsScreen(
+                        prefs = prefs,
+                        actions = actions,
+                        onOpenRecovery = { navigate(Routes.RECOVERY) },
+                        onOpenSystemIssue = onOpenSystemIssue,
+                        padding = padding,
+                    )
                 }
             }
-            val leave: () -> Unit = {
-                vm.reset()
-                editorReady = null
-                back()
-            }
-            BackHandler { leave() }
-            DestinationEditorScreen(state = state, vm = vm, onBack = leave)
-        }
-        ruleTarget != null -> {
-            val vm = remember(ruleTarget) { ruleEditorViewModel(ruleTarget) }
-            val state by vm.state.collectAsState()
-            // Same as the destination editor: fresh on every open, nothing kept once left.
-            LaunchedEffect(current) {
-                if (editorReady != current) {
-                    vm.reset()
-                    editorReady = current
+            route == Routes.RULES -> {
+                val rows by rulesViewModel.rows.collectAsState()
+                AppShell(
+                    current = route,
+                    title = stringResource(R.string.tab_rules),
+                    onTab = onTab,
+                    onExport = transferViewModel::startExport,
+                    onImport = transferViewModel::startImport,
+                    onAbout = { navigate(Routes.ABOUT) },
+                    transferEnabled = !transferBlocked,
+                ) { padding ->
+                    RulesScreen(
+                        rows = rows,
+                        onOpen = { id -> navigate(Routes.rule(id)) },
+                        onAdd = { navigate(Routes.rule(null)) },
+                        onToggle = rulesViewModel::setEnabled,
+                        padding = padding,
+                    )
                 }
             }
-            val leave: () -> Unit = {
-                vm.reset()
-                editorReady = null
-                back()
+            route == Routes.DESTINATIONS -> {
+                val rows by destinationsViewModel.rows.collectAsState()
+                AppShell(
+                    current = route,
+                    title = stringResource(R.string.tab_destinations),
+                    onTab = onTab,
+                    onExport = transferViewModel::startExport,
+                    onImport = transferViewModel::startImport,
+                    onAbout = { navigate(Routes.ABOUT) },
+                    transferEnabled = !transferBlocked,
+                ) { padding ->
+                    DestinationsScreen(
+                        rows = rows,
+                        onOpen = { id -> navigate(Routes.destination(id)) },
+                        onAdd = { navigate(Routes.destination(null)) },
+                        onToggle = destinationsViewModel::setEnabled,
+                        padding = padding,
+                    )
+                }
             }
-            BackHandler { leave() }
-            RuleEditorScreen(state = state, vm = vm, onBack = leave)
-        }
-        current.startsWith("rule/") -> {
-            // A route that names no rule: go back instead of falling through to onboarding.
-            LaunchedEffect(current) { if (routes.size > 1) back() else stack = Routes.MAIN }
-        }
-        current.startsWith("destination/") -> {
-            // A route that names no destination: go back instead of falling through to onboarding.
-            LaunchedEffect(current) { if (routes.size > 1) back() else stack = Routes.MAIN }
-        }
-        current == Routes.ABOUT -> {
-            val context = LocalContext.current
-            val versionName = remember {
-                runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
-            }
-            AboutScreen(
-                versionName = versionName,
-                state = aboutState,
-                onExportDiagnostic = aboutViewModel::startExport,
-                onOpenLink = { url ->
-                    try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    } catch (_: ActivityNotFoundException) {
+            destinationTarget != null -> {
+                val vm = remember(destinationTarget) { destinationEditorViewModel(destinationTarget) }
+                val state by vm.state.collectAsState()
+                // A fresh editor on every open (a rotation keeps the marker, so the form survives it), and nothing
+                // typed stays in the ViewModel once the editor is left.
+                LaunchedEffect(route) {
+                    if (route == current && editorReady != route) {
+                        vm.reset()
+                        editorReady = route
                     }
-                },
-                onBack = back,
+                }
+                // The exiting screen keeps drawing the last state it had while current, not the reset one. A plain
+                // holder, not snapshot state, so writing it during composition triggers no extra recomposition.
+                // A second tap on its back arrow during the exit must not pop another screen.
+                val shown = remember { object { var value = state } }
+                if (route == current) shown.value = state
+                val leave: () -> Unit = {
+                    if (route == current) {
+                        vm.reset()
+                        editorReady = null
+                        back()
+                    }
+                }
+                BackHandler(enabled = route == current) { leave() }
+                DestinationEditorScreen(state = shown.value, vm = vm, onBack = leave)
+            }
+            ruleTarget != null -> {
+                val vm = remember(ruleTarget) { ruleEditorViewModel(ruleTarget) }
+                val state by vm.state.collectAsState()
+                // Same as the destination editor: fresh on every open, nothing kept once left.
+                LaunchedEffect(route) {
+                    if (route == current && editorReady != route) {
+                        vm.reset()
+                        editorReady = route
+                    }
+                }
+                // The exiting screen keeps drawing the last state it had while current, not the reset one. A plain
+                // holder, not snapshot state, so writing it during composition triggers no extra recomposition.
+                // A second tap on its back arrow during the exit must not pop another screen.
+                val shown = remember { object { var value = state } }
+                if (route == current) shown.value = state
+                val leave: () -> Unit = {
+                    if (route == current) {
+                        vm.reset()
+                        editorReady = null
+                        back()
+                    }
+                }
+                BackHandler(enabled = route == current) { leave() }
+                RuleEditorScreen(state = shown.value, vm = vm, onBack = leave)
+            }
+            route.startsWith("rule/") -> {
+                // A route that names no rule: go back instead of falling through to onboarding.
+                LaunchedEffect(route) { if (route == current) { if (routes.size > 1) back() else stack = Routes.MAIN } }
+            }
+            route.startsWith("destination/") -> {
+                // A route that names no destination: go back instead of falling through to onboarding.
+                LaunchedEffect(route) { if (route == current) { if (routes.size > 1) back() else stack = Routes.MAIN } }
+            }
+            route == Routes.ABOUT -> {
+                val context = LocalContext.current
+                val versionName = remember {
+                    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+                }
+                AboutScreen(
+                    versionName = versionName,
+                    state = aboutState,
+                    onExportDiagnostic = aboutViewModel::startExport,
+                    onOpenLink = { url ->
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        } catch (_: ActivityNotFoundException) {
+                        }
+                    },
+                    onBack = { if (route == current) back() },
+                )
+            }
+            route == Routes.RECOVERY -> {
+                val items by recoveryViewModel.candidates.collectAsState()
+                val unreadable by recoveryViewModel.unreadable.collectAsState()
+                var sentCount by remember { mutableStateOf<Int?>(null) }
+                val scope = rememberCoroutineScope()
+                LaunchedEffect(Unit) { recoveryViewModel.load() }
+                RecoveryScreen(
+                    items = items,
+                    unreadable = unreadable,
+                    resultMessage = sentCount?.let { pluralStringResource(R.plurals.recovery_queued_result, it, it) },
+                    onToggle = recoveryViewModel::toggle,
+                    onSend = {
+                        scope.launch {
+                            sentCount = recoveryViewModel.sendSelected()
+                        }
+                    },
+                    onBack = { if (route == current) back() },
+                )
+            }
+            else -> OnboardingScreen(
+                vm = onboardingViewModel,
+                recoveryVm = recoveryViewModel,
+                onFinished = { stack = Routes.MAIN },
             )
         }
-        current == Routes.RECOVERY -> {
-            val items by recoveryViewModel.candidates.collectAsState()
-            val unreadable by recoveryViewModel.unreadable.collectAsState()
-            var sentCount by remember { mutableStateOf<Int?>(null) }
-            val scope = rememberCoroutineScope()
-            LaunchedEffect(Unit) { recoveryViewModel.load() }
-            RecoveryScreen(
-                items = items,
-                unreadable = unreadable,
-                resultMessage = sentCount?.let { pluralStringResource(R.plurals.recovery_queued_result, it, it) },
-                onToggle = recoveryViewModel::toggle,
-                onSend = {
-                    scope.launch {
-                        sentCount = recoveryViewModel.sendSelected()
-                    }
-                },
-                onBack = back,
-            )
-        }
-        else -> OnboardingScreen(
-            vm = onboardingViewModel,
-            recoveryVm = recoveryViewModel,
-            onFinished = { stack = Routes.MAIN },
-        )
     }
     TransferDialogs(
         state = transferState,
@@ -454,4 +494,16 @@ fun AppNavHost(
 @Composable
 fun LoadingScreen() {
     Text(stringResource(R.string.app_name), modifier = Modifier.padding(16.dp))
+}
+
+/** Slides by a tenth of the width: enough to read as direction without covering the whole screen. */
+private fun AnimatedContentTransitionScope<String>.screenTransition(depthDelta: Int): ContentTransform {
+    val fadeIn = fadeIn(Motion.enter(Motion.MEDIUM))
+    val fadeOut = fadeOut(Motion.exit(Motion.SHORT))
+    if (depthDelta == 0) return (Motion.fadeInShort togetherWith Motion.fadeOutShort).using(SizeTransform(clip = false))
+    val dir = if (depthDelta > 0) 1 else -1
+    return (
+        slideInHorizontally(Motion.enter(Motion.MEDIUM)) { dir * it / 10 } + fadeIn togetherWith
+            slideOutHorizontally(Motion.exit(Motion.SHORT)) { -dir * it / 10 } + fadeOut
+        ).using(SizeTransform(clip = false))
 }

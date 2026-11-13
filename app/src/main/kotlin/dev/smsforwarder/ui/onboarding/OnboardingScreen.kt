@@ -12,6 +12,13 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -55,6 +62,7 @@ import dev.smsforwarder.health.MiuiIntents
 import dev.smsforwarder.ui.components.BottomActionBar
 import dev.smsforwarder.ui.recovery.RecoveryList
 import dev.smsforwarder.ui.recovery.RecoveryViewModel
+import dev.smsforwarder.ui.theme.Motion
 import dev.smsforwarder.ui.theme.StatusPill
 import dev.smsforwarder.ui.theme.StatusTone
 import kotlinx.coroutines.CancellationException
@@ -156,35 +164,51 @@ fun OnboardingScreen(
         ) {
             val total = OnboardingStep.entries.size
             val number = state.step.ordinal + 1
+            val progress by animateFloatAsState(number / total.toFloat(), Motion.standard(), label = "progress")
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     stringResource(R.string.onboarding_progress, number, total),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                LinearProgressIndicator(progress = { number / total.toFloat() }, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
             }
-            Text(stepTitle(state.step), style = MaterialTheme.typography.headlineSmall)
-            if (recoveryStep) {
-                RecoveryStep(recoveryVm)
-            } else {
-                Column(
-                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    when (state.step) {
-                        OnboardingStep.CUTOVER -> CutoverStep(state.cutoverConfirmed, vm::confirmCutover)
-                        OnboardingStep.PERMISSIONS -> PermissionsStep(state, vm)
-                        OnboardingStep.BATTERY -> BatteryStep()
-                        OnboardingStep.MIUI -> MiuiStep()
-                        OnboardingStep.SENDERS -> SendersStep(
-                            senders = state.senders,
-                            onAdd = { scope.launch { vm.addSender(it) } },
-                            onRemove = { scope.launch { vm.removeSender(it) } },
-                        )
-                        OnboardingStep.CONNECTION -> ConnectionStep(state, vm) { scope.launch { vm.testConnection() } }
-                        OnboardingStep.REMINDER -> Text(stringResource(R.string.onboarding_reminder))
-                        OnboardingStep.RECOVERY -> Unit
+            AnimatedContent(
+                targetState = state.step,
+                modifier = Modifier.weight(1f),
+                transitionSpec = {
+                    val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (
+                        slideInHorizontally(Motion.enter(Motion.MEDIUM)) { dir * it / 10 } + Motion.fadeInShort togetherWith
+                            slideOutHorizontally(Motion.exit(Motion.SHORT)) { -dir * it / 10 } + Motion.fadeOutShort
+                        ).using(SizeTransform(clip = false))
+                },
+                label = "onboardingStep",
+            ) { step ->
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stepTitle(step), style = MaterialTheme.typography.headlineSmall)
+                    if (step == OnboardingStep.RECOVERY) {
+                        RecoveryStep(recoveryVm)
+                    } else {
+                        Column(
+                            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            when (step) {
+                                OnboardingStep.CUTOVER -> CutoverStep(state.cutoverConfirmed, vm::confirmCutover)
+                                OnboardingStep.PERMISSIONS -> PermissionsStep(state, vm)
+                                OnboardingStep.BATTERY -> BatteryStep()
+                                OnboardingStep.MIUI -> MiuiStep()
+                                OnboardingStep.SENDERS -> SendersStep(
+                                    senders = state.senders,
+                                    onAdd = { scope.launch { vm.addSender(it) } },
+                                    onRemove = { scope.launch { vm.removeSender(it) } },
+                                )
+                                OnboardingStep.CONNECTION -> ConnectionStep(state, vm) { scope.launch { vm.testConnection() } }
+                                OnboardingStep.REMINDER -> Text(stringResource(R.string.onboarding_reminder))
+                                OnboardingStep.RECOVERY -> Unit
+                            }
+                        }
                     }
                 }
             }
@@ -225,17 +249,26 @@ private fun PermissionsStep(state: OnboardingUiState, vm: OnboardingViewModel) {
     }
 
     Text(stringResource(R.string.onboarding_permissions_intro))
-    StatusPill(
-        if (state.smsPermissionGranted) StatusTone.OK else StatusTone.PENDING,
-        stringResource(
-            if (state.smsPermissionGranted) {
-                R.string.onboarding_permissions_granted
-            } else {
-                R.string.onboarding_permissions_pending
-            },
-        ),
-        maxLines = UNLIMITED_LINES,
-    )
+    AnimatedContent(
+        targetState = state.smsPermissionGranted,
+        transitionSpec = {
+            (scaleIn(Motion.enter(Motion.MEDIUM), initialScale = 0.6f) + Motion.fadeInShort togetherWith Motion.fadeOutShort)
+                .using(SizeTransform(clip = false))
+        },
+        label = "permissionsGranted",
+    ) { granted ->
+        StatusPill(
+            if (granted) StatusTone.OK else StatusTone.PENDING,
+            stringResource(
+                if (granted) {
+                    R.string.onboarding_permissions_granted
+                } else {
+                    R.string.onboarding_permissions_pending
+                },
+            ),
+            maxLines = UNLIMITED_LINES,
+        )
+    }
     FilledTonalButton(onClick = { launcher.launch(toRequest) }, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.onboarding_grant_permissions))
     }

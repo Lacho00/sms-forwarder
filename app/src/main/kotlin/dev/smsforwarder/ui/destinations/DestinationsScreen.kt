@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -76,27 +77,29 @@ fun DestinationsScreen(
             // Room below the last row for the extended FAB (56dp) and its 16dp margins.
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(rows, key = { it.id }) { row ->
-                    ListItem(
-                        headlineContent = { Text(row.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = { Text(supportingLine(row)) },
-                        trailingContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (row.enabled && row.errors > 0) {
-                                    StatusPill(
-                                        StatusTone.ERROR,
-                                        pluralStringResource(R.plurals.destination_error_count, row.errors, row.errors),
+                    Column(Modifier.animateItem()) {
+                        ListItem(
+                            headlineContent = { Text(row.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            supportingContent = { Text(supportingLine(row)) },
+                            trailingContent = {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (row.enabled && row.errors > 0) {
+                                        StatusPill(
+                                            StatusTone.ERROR,
+                                            pluralStringResource(R.plurals.destination_error_count, row.errors, row.errors),
+                                        )
+                                    }
+                                    Switch(
+                                        checked = row.enabled,
+                                        onCheckedChange = { onToggle(row.id, it) },
+                                        modifier = Modifier.semantics { contentDescription = row.name },
                                     )
                                 }
-                                Switch(
-                                    checked = row.enabled,
-                                    onCheckedChange = { onToggle(row.id, it) },
-                                    modifier = Modifier.semantics { contentDescription = row.name },
-                                )
-                            }
-                        },
-                        modifier = Modifier.clickable { onOpen(row.id) },
-                    )
-                    InsetDivider()
+                            },
+                            modifier = Modifier.clickable { onOpen(row.id) },
+                        )
+                        InsetDivider()
+                    }
                 }
             }
         }

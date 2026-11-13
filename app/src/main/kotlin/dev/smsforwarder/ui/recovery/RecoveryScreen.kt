@@ -65,35 +65,37 @@ fun RecoveryList(
             } else {
                 MaterialTheme.colorScheme.onSurface
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = !item.alreadyKnown) { onToggle(item.key) }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(
-                    checked = item.selected,
-                    onCheckedChange = { onToggle(item.key) },
-                    enabled = !item.alreadyKnown,
-                )
-                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                    Text(
-                        item.sender,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = textColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+            Column(Modifier.animateItem()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !item.alreadyKnown) { onToggle(item.key) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = item.selected,
+                        onCheckedChange = { onToggle(item.key) },
+                        enabled = !item.alreadyKnown,
                     )
-                    Text(formatDateTime(item.receivedAt), style = MaterialTheme.typography.bodySmall, color = textColor)
-                    Text(item.preview, style = MaterialTheme.typography.bodyMedium, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (item.alreadyKnown) {
-                        StatusPill(StatusTone.NEUTRAL, stringResource(R.string.recovery_already_saved), Modifier.padding(top = 4.dp))
+                    Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                        Text(
+                            item.sender,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(formatDateTime(item.receivedAt), style = MaterialTheme.typography.bodySmall, color = textColor)
+                        Text(item.preview, style = MaterialTheme.typography.bodyMedium, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (item.alreadyKnown) {
+                            StatusPill(StatusTone.NEUTRAL, stringResource(R.string.recovery_already_saved), Modifier.padding(top = 4.dp))
+                        }
                     }
                 }
+                // Starts at the text column: 48dp checkbox + 8dp gap.
+                InsetDivider(start = 56.dp)
             }
-            // Starts at the text column: 48dp checkbox + 8dp gap.
-            InsetDivider(start = 56.dp)
         }
     }
 }
