@@ -97,9 +97,12 @@ class SettingsViewModelTest {
     @Test fun changingSweepIntervalSavesThenNotifiesTheScheduler() {
         val vm = vm()
         vm.setSweepInterval(SweepInterval.M30)
-        vm.await { it.sweepInterval == SweepInterval.M30 }
+        // The callback only runs after the save, so once it has fired the stored value must already be M30.
+        // Reading the repository, not vm.prefs, keeps the test off the eagerly shared StateFlow, whose
+        // collector runs on Dispatchers.Unconfined and sometimes missed the update under Robolectric.
         waitUntil { sweeps.isNotEmpty() }
         assertEquals(listOf(SweepInterval.M30), sweeps)
+        assertEquals(SweepInterval.M30, runBlocking { withTimeout(5_000) { settings.sweepInterval.first() } })
     }
 
     // The event is buffered (conflated channel), so it is not lost if it is emitted before the
