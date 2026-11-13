@@ -16,8 +16,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -65,6 +64,7 @@ import dev.smsforwarder.ui.recovery.RecoveryViewModel
 import dev.smsforwarder.ui.theme.Motion
 import dev.smsforwarder.ui.theme.StatusPill
 import dev.smsforwarder.ui.theme.StatusTone
+import dev.smsforwarder.ui.theme.sharedAxisX
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -173,16 +173,11 @@ fun OnboardingScreen(
                 )
                 LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
             }
+            val offsetPx = with(LocalDensity.current) { Motion.SHARED_AXIS_OFFSET.roundToPx() }
             AnimatedContent(
                 targetState = state.step,
                 modifier = Modifier.weight(1f),
-                transitionSpec = {
-                    val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                    (
-                        slideInHorizontally(Motion.enter(Motion.MEDIUM)) { dir * it / 10 } + Motion.fadeInShort togetherWith
-                            slideOutHorizontally(Motion.exit(Motion.SHORT)) { -dir * it / 10 } + Motion.fadeOutShort
-                        ).using(SizeTransform(clip = false))
-                },
+                transitionSpec = { sharedAxisX(targetState.ordinal > initialState.ordinal, offsetPx) },
                 label = "onboardingStep",
             ) { step ->
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
