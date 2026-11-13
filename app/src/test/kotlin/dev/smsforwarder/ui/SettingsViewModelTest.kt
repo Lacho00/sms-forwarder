@@ -42,6 +42,9 @@ class SettingsViewModelTest {
     private lateinit var settings: SettingsRepository
     private val sweeps = java.util.concurrent.CopyOnWriteArrayList<SweepInterval>()
 
+    // The stored sweep interval read inside the callback: proves the save happened before the scheduler was told.
+    private val storedAtCallback = java.util.concurrent.CopyOnWriteArrayList<SweepInterval>()
+
     @Before fun setUp() {
         val context = RuntimeEnvironment.getApplication()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
@@ -57,7 +60,10 @@ class SettingsViewModelTest {
     private fun vm() = SettingsViewModel(
         settings = settings,
         scope = CoroutineScope(Dispatchers.Unconfined),
-        onSweepIntervalChanged = { sweeps += it },
+        onSweepIntervalChanged = {
+            storedAtCallback += runBlocking { withTimeout(5_000) { settings.sweepInterval.first() } }
+            sweeps += it
+        },
     )
 
     // 10 s, like the language tests: on a cold CI runner the first DataStore write can take
@@ -97,12 +103,12 @@ class SettingsViewModelTest {
     @Test fun changingSweepIntervalSavesThenNotifiesTheScheduler() {
         val vm = vm()
         vm.setSweepInterval(SweepInterval.M30)
-        // The callback only runs after the save, so once it has fired the stored value must already be M30.
+        // The callback reads the repository when it runs, so a notify-before-save order would record M15.
         // Reading the repository, not vm.prefs, keeps the test off the eagerly shared StateFlow, whose
         // collector runs on Dispatchers.Unconfined and sometimes missed the update under Robolectric.
         waitUntil { sweeps.isNotEmpty() }
         assertEquals(listOf(SweepInterval.M30), sweeps)
-        assertEquals(SweepInterval.M30, runBlocking { withTimeout(5_000) { settings.sweepInterval.first() } })
+        assertEquals(listOf(SweepInterval.M30), storedAtCallback)
     }
 
     // The event is buffered (conflated channel), so it is not lost if it is emitted before the
