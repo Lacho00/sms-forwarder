@@ -60,7 +60,7 @@ class HealthCheckerTest {
 
     @Test fun noRulesIsReportedAsNoRules() = runBlocking {
         assertTrue(HealthIssue.NO_RULES in checker.check())
-        settings.addSender("OPERADOR")
+        settings.addSender("CARRIER")
         assertFalse(HealthIssue.NO_RULES in checker.check())
     }
 
@@ -81,7 +81,7 @@ class HealthCheckerTest {
     }
 
     @Test fun token401PresentIsReported() = runBlocking {
-        val record = SmsRecord("OPERADOR", "uno", 1_799_999_999_000L, null, null)
+        val record = SmsRecord("CARRIER", "one", 1_799_999_999_000L, null, null)
         val id = (sms.ingest(record, SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         assertFalse(HealthIssue.TOKEN_REJECTED in checker.check())
         sms.recordAttemptForSms(id, SendOutcome.Rejected(401, "unauthorized"))

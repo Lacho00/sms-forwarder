@@ -94,7 +94,7 @@ class OnboardingViewModelTest {
         vm.next()
         assertEquals(OnboardingStep.SENDERS, vm.state.value.step)
 
-        vm.addSender("OPERADOR")
+        vm.addSender("CARRIER")
         assertTrue(vm.state.value.canContinue)
         vm.next()
         assertEquals(OnboardingStep.CONNECTION, vm.state.value.step)
@@ -106,7 +106,7 @@ class OnboardingViewModelTest {
         assertEquals("Needs confirmation", OnboardingStep.CUTOVER, vm.state.value.step)
 
         reachSenders()
-        vm.addSender("OPERADOR")
+        vm.addSender("CARRIER")
         vm.next()
         assertEquals(OnboardingStep.CONNECTION, vm.state.value.step)
 
@@ -142,7 +142,7 @@ class OnboardingViewModelTest {
 
     private suspend fun reachConnection() {
         reachSenders()
-        vm.addSender("OPERADOR")
+        vm.addSender("CARRIER")
         vm.next()
         assertEquals(OnboardingStep.CONNECTION, vm.state.value.step)
     }
@@ -157,7 +157,7 @@ class OnboardingViewModelTest {
         racing.next()
         racing.onPermissionResult(smsGranted = true, restrictedHint = false)
         repeat(3) { racing.next() }
-        racing.addSender("OPERADOR")
+        racing.addSender("CARRIER")
         racing.next()
         assertEquals(OnboardingStep.CONNECTION, racing.state.value.step)
         racing.setUrl("https://example.com/ingest")

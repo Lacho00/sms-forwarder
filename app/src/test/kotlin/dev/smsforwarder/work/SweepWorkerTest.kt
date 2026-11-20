@@ -54,7 +54,7 @@ class SweepWorkerTest {
 
     // Review Focus 1: after a sweep, a deleted queued SMS has no send job and nothing reaches the server.
     @Test fun sweepAfterDeletingQueuedSmsMakesNoRequestAndSchedulesNoSend() = runBlocking {
-        val record = SmsRecord("OPERADOR", "Code 1234", 1_800_000_000_000L, null, null)
+        val record = SmsRecord("CARRIER", "Code 1234", 1_800_000_000_000L, null, null)
         graph.destinationRepository.ensurePrimary()
         val id = (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         graph.smsRepository.softDelete(id)

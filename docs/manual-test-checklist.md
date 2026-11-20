@@ -1,99 +1,99 @@
-# Lista de comprobación manual
+# Manual test checklist
 
-Se recorre en el teléfono real con la APK de la Release. Apunta los casos que fallen.
+Run through it on a real phone with the Release APK. Note any cases that fail.
 
-- [ ] SMS normal de un remitente configurado: llega al endpoint y aparece como enviado.
-- [ ] SMS multiparte: se reenvía una sola vez, con el texto completo.
-- [ ] Modo avión: el SMS queda en cola y se envía al volver la red.
-- [ ] Forzar la detención y abrir la app: el barrido recupera el SMS perdido y notifica.
-- [ ] Token incorrecto: respuesta 401, notificación; al corregir el token se reencola y se envía.
-- [ ] Reinicio del teléfono: la app sigue activa y el barrido sigue programado.
-- [ ] La app reenviadora anterior está desactivada antes de configurar.
-- [ ] Modo claro y modo oscuro: la interfaz se ve bien en ambos.
-- [ ] Quitar Inicio automático (MIUI): aparece el aviso.
-- [ ] Android 15, ajustes restringidos: si no sale el diálogo de permiso, el primer arranque
-      explica "Permitir ajustes restringidos".
-- [ ] Clave perdida tras transferir a otro dispositivo: la app muestra `NOT_CONFIGURED` y no se cierra.
-- [ ] El primer barrido tras la configuración no envía nada anterior a la configuración.
-- [ ] Un SMS que llega durante el primer arranque no se reenvía.
-- [ ] El primer arranque no deja continuar sin al menos un remitente.
-- [ ] Vaciar la lista de remitentes en Ajustes muestra la tarjeta y la notificación de `NO_SENDERS`.
+- [ ] Normal SMS from a configured sender: reaches the endpoint and shows as sent.
+- [ ] Multipart SMS: forwarded only once, with the full text.
+- [ ] Airplane mode: the SMS stays queued and is sent when the network returns.
+- [ ] Force stop and open the app: the sweep recovers the missed SMS and notifies.
+- [ ] Wrong token: 401 response, notification; after fixing the token it is requeued and sent.
+- [ ] Phone reboot: the app stays active and the sweep stays scheduled.
+- [ ] The previous forwarding app is disabled before setup.
+- [ ] Light and dark mode: the UI looks right in both.
+- [ ] Remove Autostart (MIUI): the warning appears.
+- [ ] Android 15, restricted settings: if the permission dialog does not show, the first launch
+      explains "Allow restricted settings".
+- [ ] Key lost after transferring to another device: the app shows `NOT_CONFIGURED` and does not crash.
+- [ ] The first sweep after setup sends nothing from before the setup.
+- [ ] An SMS that arrives during the first launch is not forwarded.
+- [ ] The first launch does not let you continue without at least one sender.
+- [ ] Emptying the sender list in Settings shows the `NO_SENDERS` card and notification.
 
 ## v1.1.0
 
-- [ ] Icono en el cajón de apps: se ve bien en modo claro, oscuro y con icono temático (monocromo).
-- [ ] Cambiar el idioma (español/inglés) en Ajustes no pierde la pantalla en la que estás.
-- [ ] Pausar el reenvío: los SMS nuevos no se envían; al reanudar se envían.
-- [ ] Borrar de la app un SMS que sigue en la bandeja y esperar un barrido: no se reenvía.
-- [ ] Intervalo de barrido: tras cambiarlo, `adb shell dumpsys jobscheduler | grep dev.smsforwarder`
-      muestra el periodo nuevo.
-- [ ] Apagar el color dinámico: la interfaz usa la paleta fija y se ve bien en claro y oscuro.
-- [ ] Ocultar texto: Inicio y Detalle no muestran el contenido de los SMS.
-- [ ] Inicio: la búsqueda y los filtros (todos, en cola, error) acotan la lista.
-- [ ] Acerca de: muestra la versión correcta, el enlace al repositorio se abre y aparece la licencia MIT.
-- [ ] Notificaciones por tipo (recuperado, atascado, permisos): al apagar cada una, ese aviso no sale.
-- [ ] Un rechazo 400 sigue notificando aunque estén apagados los avisos opcionales.
-- [ ] Retención: con un plazo corto, el historial enviado se purga; los SMS en cola o con error no se borran.
+- [ ] Launcher icon: looks right in light mode, dark mode and with the themed (monochrome) icon.
+- [ ] Changing the language (Spanish/English) in Settings does not lose the screen you are on.
+- [ ] Pause forwarding: new SMS are not sent; on resume they are sent.
+- [ ] Delete from the app an SMS that is still in the inbox and wait for a sweep: it is not forwarded.
+- [ ] Sweep interval: after changing it, `adb shell dumpsys jobscheduler | grep dev.smsforwarder`
+      shows the new period.
+- [ ] Turn off dynamic color: the UI uses the fixed palette and looks right in light and dark.
+- [ ] Hide text: Home and Detail do not show the SMS content.
+- [ ] Home: search and filters (all, queued, error) narrow the list.
+- [ ] About: shows the correct version, the repository link opens and the MIT license appears.
+- [ ] Notifications by type (recovered, stuck, permissions): when each is turned off, that notice does not appear.
+- [ ] A 400 rejection still notifies even when the optional notices are turned off.
+- [ ] Retention: with a short period, sent history is purged; queued or failed SMS are not deleted.
 
-## Actualizar de 1.1 a 1.2
+## Updating from 1.1 to 1.2
 
-Se instala la APK de la Release de la rama sobre la 1.1.0 real, sin desinstalar (`adb install -r`).
+Install the branch's Release APK over the real 1.1.0 without uninstalling (`adb install -r`).
 
-- [ ] Inicio muestra el mismo historial que antes de actualizar.
-- [ ] Ajustes muestra los mismos remitentes.
-- [ ] La prueba de conexión funciona.
-- [ ] Un SMS nuevo de un remitente configurado llega al endpoint con 200.
-- [ ] La app no pide ningún permiso nuevo.
+- [ ] Home shows the same history as before the update.
+- [ ] Settings shows the same senders.
+- [ ] The connection test works.
+- [ ] A new SMS from a configured sender reaches the endpoint with 200.
+- [ ] The app does not ask for any new permission.
 
-La APK de la Release no es depurable, así que no se puede copiar la base de datos antes de actualizar.
-La red de seguridad son las pruebas de migración (T3) y de importación (T5). Quien instala confirma
-antes que acepta ese riesgo.
+The Release APK is not debuggable, so the database cannot be copied before updating.
+The safety net is the migration tests (T3) and the import tests (T5). Whoever installs confirms
+beforehand that they accept this risk.
 
 ## v1.3.0
 
-- [ ] Crear un destino de cada plantilla (JSON estándar, Telegram, ntfy, personalizado) y pulsar Probar:
-      el JSON estándar con cuerpo `{}` responde 400 (correcto); Telegram y ntfy reciben el SMS de prueba.
-- [ ] El SMS de prueba no aparece en Inicio ni deja intentos.
-- [ ] Un destino caído junto a otro que funciona: el SMS llega al que funciona y el caído no lo retrasa.
-- [ ] Pausar un destino con SMS en cola: no se envían; al reanudar se envían enseguida y el otro
-      destino, ya enviado, no repite.
-- [ ] Pausar un destino que tiene entregas en error: siguen en error, no vuelven a "en cola".
-- [ ] Borrar un destino con SMS en cola: el aviso indica el número de SMS, las entregas quedan
-      canceladas y no hay aviso de atascado.
-- [ ] Regla regex con `(?i)` y otra con filtro de texto "contiene".
-- [ ] Regla con filtro "no contiene": un SMS que contiene el texto se descarta y otro del mismo
-      remitente que no lo contiene se reenvía.
-- [ ] Regla con SIM 2 en un teléfono de una SIM: no reenvía nada.
-- [ ] Editar el token de un destino con 401: el SMS se reenvía.
-- [ ] Reanudar un destino en pausa tras corregir su token (tenía 401/403): sus SMS vuelven a la cola
-      y se envían.
-- [ ] Detalle: "Reenviar a un destino" manda el SMS al destino elegido, también a uno que ya lo recibió.
-- [ ] Detalle: el código HTTP solo aparece si procede de una entrega que falla; con un destino en 200 y
-      otro en 403 no sale "Error 200".
-- [ ] Inicio: los chips de destino filtran la lista y cada fila muestra el estado por destino.
-- [ ] Cambiar el idioma con un editor abierto no pierde la pantalla.
-- [ ] Actualizar de 1.2.0 a 1.3.0 (`adb install -r`) no pierde destinos, reglas ni historial.
+- [ ] Create one destination of each template (standard JSON, Telegram, ntfy, custom) and press Test:
+      standard JSON with body `{}` responds 400 (expected); Telegram and ntfy receive the test SMS.
+- [ ] The test SMS does not appear in Home and leaves no attempts.
+- [ ] A failing destination next to a working one: the SMS reaches the working one and the failing one does not delay it.
+- [ ] Pause a destination with queued SMS: they are not sent; on resume they are sent right away and the other
+      destination, already sent, does not repeat.
+- [ ] Pause a destination that has failed deliveries: they stay in error, they do not go back to "queued".
+- [ ] Delete a destination with queued SMS: the warning gives the number of SMS, the deliveries are
+      canceled and there is no stuck notice.
+- [ ] Regex rule with `(?i)` and another with a "contains" text filter.
+- [ ] Rule with a "does not contain" filter: an SMS that contains the text is discarded and another from the same
+      sender that does not contain it is forwarded.
+- [ ] Rule with SIM 2 on a single-SIM phone: forwards nothing.
+- [ ] Edit the token of a destination with 401: the SMS is forwarded again.
+- [ ] Resume a paused destination after fixing its token (it had 401/403): its SMS go back to the queue
+      and are sent.
+- [ ] Detail: "Resend to a destination" sends the SMS to the chosen destination, even one that already received it.
+- [ ] Detail: the HTTP code only appears if it comes from a failing delivery; with one destination at 200 and
+      another at 403, "Error 200" does not show.
+- [ ] Home: the destination chips filter the list and each row shows the per-destination status.
+- [ ] Changing the language with an editor open does not lose the screen.
+- [ ] Updating from 1.2.0 to 1.3.0 (`adb install -r`) does not lose destinations, rules or history.
 
 ## v2.0.0
 
-- [ ] Exportar sin secretos (casilla desmarcada) y abrir el fichero: ningún destino lleva URL ni valores
-      de cabeceras secretas (los nombres de esas cabeceras sí aparecen).
-- [ ] Exportar con secretos: al marcar la casilla se ve el aviso; el fichero lleva URL, tokens y
-      cabeceras secretas.
-- [ ] Importar en el mismo teléfono el fichero con secretos: todo se añade duplicado con sufijo
-      ` (2)` y no se reemplaza nada. El resumen dice "Importados N destino(s) / regla(s)" (singular y plural
-      correctos) y se ve un indicador de progreso mientras se importa.
-- [ ] Importar el fichero sin secretos: el resumen incluye "Sin URL ni token (añádelos en Destinos):
-      <nombres>"; en Destinos esos destinos salen en la fila "Sin credenciales"; una regla activa que
-      los usa muestra el aviso `NOT_CONFIGURED`; al añadir la URL, los SMS en cola se envían enseguida.
-- [ ] Importar un fichero no válido (URL http, regex roto, `"version": 2`, un fichero de texto
-      cualquiera): mensaje de error y no cambia nada (ni destinos, ni reglas, ni secretos).
-- [ ] Si guardar los secretos falla durante la importación, el mensaje dice que no se importó nada y la
-      lista de destinos y reglas queda igual.
-- [ ] Exportar diagnóstico desde Acerca de y buscar en el fichero un cuerpo de SMS, un remitente
-      y la URL de un destino: no aparece ninguno.
-- [ ] Acerca de: flecha de volver, icono redondo y enlace al código.
-- [ ] Menú ⋮ con Exportar, Importar y Acerca de en las tres pestañas.
-- [ ] Con la migración heredada en modo seguro, Exportar e Importar salen desactivados.
-- [ ] Actualizar de 1.3.0 a 2.0.0 (`adb install -r`) no pierde destinos, reglas ni historial.
-- [ ] La APK no pide permisos nuevos (`aapt dump permissions` igual que la 1.3.0).
+- [ ] Export without secrets (checkbox unchecked) and open the file: no destination has a URL or secret
+      header values (the names of those headers do appear).
+- [ ] Export with secrets: checking the box shows the warning; the file contains URLs, tokens and
+      secret headers.
+- [ ] Import the file with secrets on the same phone: everything is added as a duplicate with the suffix
+      ` (2)` and nothing is replaced. The summary says "Imported N destination(s) / rule(s)" (singular and plural
+      correct) and a progress indicator shows while importing.
+- [ ] Import the file without secrets: the summary includes "No URL or token (add them in Destinations):
+      <names>"; in Destinations those destinations appear in the "No credentials" row; an active rule that
+      uses them shows the `NOT_CONFIGURED` warning; after adding the URL, queued SMS are sent right away.
+- [ ] Import an invalid file (http URL, broken regex, `"version": 2`, any text file):
+      error message and nothing changes (no destinations, rules or secrets).
+- [ ] If saving the secrets fails during import, the message says nothing was imported and the
+      destination and rule lists stay the same.
+- [ ] Export diagnostics from About and search the file for an SMS body, a sender
+      and a destination URL: none of them appears.
+- [ ] About: back arrow, round icon and link to the source code.
+- [ ] Menu ⋮ with Export, Import and About on all three tabs.
+- [ ] With the legacy migration in safe mode, Export and Import are disabled.
+- [ ] Updating from 1.3.0 to 2.0.0 (`adb install -r`) does not lose destinations, rules or history.
+- [ ] The APK asks for no new permissions (`aapt dump permissions` same as 1.3.0).

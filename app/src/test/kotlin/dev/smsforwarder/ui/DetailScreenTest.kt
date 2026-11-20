@@ -42,10 +42,10 @@ class DetailScreenTest {
     private fun sms(status: SmsStatus) = SmsEntity(
         id = 1,
         localKey = "key",
-        sender = "OPERADOR",
-        senderNormalized = "OPERADOR",
-        body = "OPERADOR: Se ha comprado un plan de datos de 2.5GB valido por 30 dias, " +
-            "se activa con el primer uso. Se desconto 360.00. Saldo actual 140.25",
+        sender = "CARRIER",
+        senderNormalized = "CARRIER",
+        body = "CARRIER: You bought a 2.5GB data plan valid for 30 days, " +
+            "it starts on first use. 360.00 was deducted. Current balance 140.25",
         receivedAt = 1_800_000_000_000L,
         phoneDate = null,
         subId = 1,
@@ -107,7 +107,7 @@ class DetailScreenTest {
                 DetailScreen(state = state, onRetry = {}, onDelete = {}, onBack = {})
             }
         }
-        compose.onNode(hasText("OPERADOR", substring = true) and !hasText("Se ha comprado", substring = true)).assertExists()
+        compose.onNode(hasText("CARRIER", substring = true) and !hasText("You bought", substring = true)).assertExists()
         compose.onNodeWithText(str(R.string.status_sent)).assertExists()
     }
 
@@ -184,9 +184,9 @@ class DetailScreenTest {
                 )
             }
         }
-        compose.onNodeWithText("OPERADOR: Se ha comprado", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("CARRIER: You bought", substring = true).assertDoesNotExist()
         compose.onNodeWithText(str(R.string.detail_show_text)).performScrollTo().performClick()
-        compose.onNodeWithText("OPERADOR: Se ha comprado", substring = true).assertExists()
+        compose.onNodeWithText("CARRIER: You bought", substring = true).assertExists()
     }
 
     private fun destination(id: Long, name: String) = DestinationEntity(

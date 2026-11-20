@@ -54,9 +54,9 @@ class AppGraphAlertsTest {
     private fun entity() = SmsEntity(
         id = 1,
         localKey = "key-1",
-        sender = "OPERADOR",
-        senderNormalized = "OPERADOR",
-        body = "cuerpo de prueba",
+        sender = "CARRIER",
+        senderNormalized = "CARRIER",
+        body = "test body",
         receivedAt = 1_800_000_000_000L,
         phoneDate = null,
         subId = null,
@@ -66,7 +66,7 @@ class AppGraphAlertsTest {
     )
 
     private suspend fun stuckSms(): Long {
-        val record = SmsRecord("OPERADOR", "cuerpo de prueba", 1_800_000_000_000L, null, null)
+        val record = SmsRecord("CARRIER", "test body", 1_800_000_000_000L, null, null)
         val id = (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
         val dao = graph.db.smsDao()
         dao.update(dao.get(id)!!.copy(firstSeenAt = System.currentTimeMillis() - 7 * 3_600_000L))

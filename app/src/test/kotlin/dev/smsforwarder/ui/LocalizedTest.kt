@@ -119,9 +119,9 @@ class LocalizedTest {
         val item = SmsEntity(
             id = 7,
             localKey = "key-7",
-            sender = "OPERADOR",
-            senderNormalized = "OPERADOR",
-            body = "cuerpo de prueba",
+            sender = "CARRIER",
+            senderNormalized = "CARRIER",
+            body = "test body",
             receivedAt = 1_800_000_000_000L,
             phoneDate = null,
             subId = null,

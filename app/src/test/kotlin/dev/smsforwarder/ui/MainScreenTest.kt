@@ -177,10 +177,10 @@ class MainScreenTest {
     @Test fun rowShowsLabel() {
         val row = RowUi(
             id = 1,
-            sender = "OPERADOR",
+            sender = "CARRIER",
             subId = 1,
             receivedAt = 1_800_000_000_000L,
-            preview = "Se ha comprado un plan de datos",
+            preview = "You bought a 2.5GB data plan",
             label = StatusLabel(StatusKind.RECOVERED, 1, 200),
         )
         show(state(rows = listOf(row)))

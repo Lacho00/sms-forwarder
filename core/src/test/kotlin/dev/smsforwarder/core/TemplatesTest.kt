@@ -14,7 +14,7 @@ class TemplatesTest {
 
     @Test fun standardJsonIsByteIdenticalToV1() {
         val url = "https://h.example/ingest"
-        val bodies = listOf("hola", "di \"sí\"", "línea1\nlínea2", "c:\\ruta", "{body} literal", "emoji 😀\t")
+        val bodies = listOf("hello", "say \"naïve\"", "café\nnaïve", "c:\\path", "{body} literal", "emoji 😀\t")
         for (b in bodies) {
             val v = vars(b)
             val r = Templates.render(Templates.standardJson(url, "t"), v)
@@ -60,20 +60,20 @@ class TemplatesTest {
     }
 
     @Test fun toStringHidesSecrets() {
-        val r = Templates.render(Templates.standardJson("https://secret.example/path", "tok-123"), vars("cuerpo-privado"))
+        val r = Templates.render(Templates.standardJson("https://secret.example/path", "tok-123"), vars("private-body"))
         val s = r.toString()
-        for (x in listOf("secret.example", "tok-123", "cuerpo-privado")) assertFalse(s.contains(x))
+        for (x in listOf("secret.example", "tok-123", "private-body")) assertFalse(s.contains(x))
         assertNotNull(s)
         val spec = Templates.standardJson("https://secret.example/path", "tok-123")
         val ss = spec.toString()
         for (x in listOf("secret.example", "tok-123", "sender")) assertFalse(ss.contains(x))
-        val vs = vars("cuerpo-privado", sender = "REMITENTE").toString()
-        for (x in listOf("cuerpo-privado", "REMITENTE", "dev")) assertFalse(vs.contains(x))
+        val vs = vars("private-body", sender = "SENDER").toString()
+        for (x in listOf("private-body", "SENDER", "dev")) assertFalse(vs.contains(x))
     }
 
     @Test fun headerVariablesAreAscii() {
         val spec = DestinationSpec(HttpMethod.POST, "https://h/x", listOf("X" to "{body}"), null, false)
-        val v = Templates.render(spec, vars("sí 😀")).headers.single().second
+        val v = Templates.render(spec, vars("café 😀")).headers.single().second
         assertEquals(true, v.all { it in ' '..'~' })
     }
 

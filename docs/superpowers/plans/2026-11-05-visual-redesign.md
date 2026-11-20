@@ -1,43 +1,43 @@
-# Rediseño visual. Plan de implementación
+# Visual redesign. Implementation plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Cada pantalla responde de un vistazo "¿está reenviando y ha fallado algo?": un único lenguaje de estado (color + icono + texto), Inicio con panel de estado y filas de dos o tres líneas, una jerarquía de botones y Ajustes y editores más cortos.
+**Goal:** Every screen answers at a glance "is it forwarding, and has anything failed?": a single status language (color + icon + text), Home with a status panel and two- or three-line rows, a button hierarchy, and shorter Settings and editors.
 
-**Architecture:** Primero las piezas compartidas: `ui/theme/Status.kt` (tonos fijos por `CompositionLocal`, `StatusPill`, mapeos) y `ui/components/` (estado vacío, título de sección, barra inferior fija, botón destructivo, fila de ajuste, diálogo de opción única). Después cada pantalla se reescribe sobre ellas, sin tocar ViewModels salvo dos cambios de datos: `MainUiState.sentToday` y la plantilla por defecto de un destino nuevo. Nada cambia en reenvío, Room, workers ni navegación.
+**Architecture:** Shared pieces first: `ui/theme/Status.kt` (fixed tones via `CompositionLocal`, `StatusPill`, mappings) and `ui/components/` (empty state, section title, pinned bottom bar, destructive button, setting row, single-choice dialog). Then each screen is rewritten on top of them, without touching ViewModels except for two data changes: `MainUiState.sentToday` and the default template of a new destination. Nothing changes in forwarding, Room, workers or navigation.
 
-**Tech Stack:** Kotlin, Jetpack Compose Material 3 (BOM `2026.09.00`), `material-icons-core`, vector drawables propios, Robolectric (`sdk=35`), JUnit.
+**Tech Stack:** Kotlin, Jetpack Compose Material 3 (BOM `2026.09.00`), `material-icons-core`, custom vector drawables, Robolectric (`sdk=35`), JUnit.
 
-**Spec:** [2026-11-04-visual-redesign-design.md](../specs/2026-11-04-visual-redesign-design.md). Aprobada por el usuario el 2026-11-05.
+**Spec:** [2026-11-04-visual-redesign-design.md](../specs/2026-11-04-visual-redesign-design.md). Approved by the user on 2026-11-05.
 
-**Rama:** `visual-redesign` desde `main` @ `c06432d`, en el worktree `/srv/http/sms-forwarder-wt/visual-redesign`; el clon principal se queda en `main`. El primer commit de la rama añade la spec y este plan. La revisión OCR de cierre compara contra `c06432d`.
+**Branch:** `visual-redesign` from `main` @ `c06432d`, in the worktree `/srv/http/sms-forwarder-wt/visual-redesign`; the main clone stays on `main`. The branch's first commit adds the spec and this plan. The closing OCR review compares against `c06432d`.
 
-## Decisiones de este plan
+## Decisions of this plan
 
-Lo que la spec deja al constructor, decidido aquí **(mi decisión)**:
+What the spec leaves to the builder, decided here **(my decision)**:
 
-- **Colores de tono.** ERROR usa `colorScheme.errorContainer` / `onErrorContainer` (no dependen del fondo de pantalla en M3). NEUTRAL usa `surfaceVariant` / `onSurfaceVariant`. OK y PENDING son fijos:
+- **Tone colors.** ERROR uses `colorScheme.errorContainer` / `onErrorContainer` (in M3 they do not depend on the screen background). NEUTRAL uses `surfaceVariant` / `onSurfaceVariant`. OK and PENDING are fixed:
 
-  | Tono | Claro container / on | Oscuro container / on |
+  | Tone | Light container / on | Dark container / on |
   |---|---|---|
   | OK | `#D3F1D8` / `#0B4F1C` | `#1F4D2A` / `#B9F2C3` |
   | PENDING | `#FFE6AE` / `#5A3B00` | `#5B4300` / `#FFDE9E` |
 
-  Todos superan 7:1 (texto sobre su container). El punto del panel usa el color `on` del tono.
-- **Iconos que faltan en `material-icons-core`**: se dibujan como vector drawables en `res/drawable` (24 dp, trazo/relleno de Material Symbols outlined, Apache 2.0; no hay copia local de los SVG en la máquina, se escriben a mano). Nombres: `ic_status_schedule` (reloj), `ic_status_error` (círculo con !), `ic_upload`, `ic_download`, `ic_tab_home` / `ic_tab_home_filled` (bandeja), `ic_tab_rules_filled`, `ic_tab_destinations_filled`. Los de core que se usan tal cual: `Check`, `Close`, `Warning`, `Info`, `Lock`, `Search`, `Refresh`, `Add`, `Delete`, `Settings`, `KeyboardArrowRight`, `ArrowDropDown`, `AutoMirrored.Filled.ArrowBack`, `MoreVert`.
-- **Iconos de pestañas:** Inicio = bandeja (`ic_tab_home*`); Reglas y Destinos conservan su dibujo actual (embudo y bifurcación, elegidos por el usuario) y ganan variante rellena para el estado seleccionado; Ajustes = `Icons.Outlined.Settings`/`Icons.Filled.Settings` (core trae ambos).
-- **`sentToday`** se calcula en memoria en el `combine` de `MainViewModel` sobre `observeAll()` (lista ya sin filtrar): `status == SmsStatus.SENT && receivedAt >= startOfDay(now)`. `RECOVERED` y `MANUAL` son `SENT` con otro `origin`, así que entran solos. Sin consulta nueva ni índice. Reloj y zona inyectables.
-- **Plantilla del destino:** desplegable (`ExposedDropdownMenuBox`, mismo estilo que el método HTTP) si alguna de las cuatro etiquetas se corta en un `SingleChoiceSegmentedButtonRow` a 360 dp; segmentado si caben. Se mide en la T8 con `android-ui` en el emulador a 360 dp y se anota el resultado en el commit.
-- **Componentes compartidos** en `ui/components/Components.kt` (un fichero; son pequeños). El estado vacío de la spec se llama `EmptyState`.
-- **Búsqueda en la barra:** `AppShell` gana un parámetro `titleContent: (@Composable () -> Unit)? = null` y `navigationIcon: @Composable () -> Unit = {}`; si `titleContent` no es nulo sustituye al título. El campo es `OutlinedTextField` con su contorno (como pide la spec), icono de lupa al inicio, `IconButton` de borrar al final cuando hay texto, flecha atrás en `navigationIcon` que cierra y limpia.
-- **Hoja de avisos:** `ModalBottomSheet` de M3.
-- **Versión:** `versionName 2.1.0`, `versionCode` +1, en la T12. La release solo con OK del usuario.
+  All exceed 7:1 (text over its container). The panel dot uses the tone's `on` color.
+- **Icons missing from `material-icons-core`**: drawn as vector drawables in `res/drawable` (24 dp, stroke/fill from Material Symbols outlined, Apache 2.0; there is no local copy of the SVGs on the machine, they are written by hand). Names: `ic_status_schedule` (clock), `ic_status_error` (circle with !), `ic_upload`, `ic_download`, `ic_tab_home` / `ic_tab_home_filled` (inbox), `ic_tab_rules_filled`, `ic_tab_destinations_filled`. Those from core that are used as is: `Check`, `Close`, `Warning`, `Info`, `Lock`, `Search`, `Refresh`, `Add`, `Delete`, `Settings`, `KeyboardArrowRight`, `ArrowDropDown`, `AutoMirrored.Filled.ArrowBack`, `MoreVert`.
+- **Tab icons:** Home = inbox (`ic_tab_home*`); Rules and Destinations keep their current drawing (funnel and fork, chosen by the user) and gain a filled variant for the selected state; Settings = `Icons.Outlined.Settings`/`Icons.Filled.Settings` (core ships both).
+- **`sentToday`** is computed in memory in the `combine` of `MainViewModel` over `observeAll()` (the already unfiltered list): `status == SmsStatus.SENT && receivedAt >= startOfDay(now)`. `RECOVERED` and `MANUAL` are `SENT` with a different `origin`, so they count automatically. No new query or index. Clock and zone are injectable.
+- **Destination template:** dropdown (`ExposedDropdownMenuBox`, same style as the HTTP method) if any of the four labels is cut off in a `SingleChoiceSegmentedButtonRow` at 360 dp; segmented if they fit. Measured in T8 with `android-ui` on the emulator at 360 dp and the result is noted in the commit.
+- **Shared components** in `ui/components/Components.kt` (one file; they are small). The spec's empty state is called `EmptyState`.
+- **Search in the bar:** `AppShell` gains a parameter `titleContent: (@Composable () -> Unit)? = null` and `navigationIcon: @Composable () -> Unit = {}`; if `titleContent` is not null it replaces the title. The field is an `OutlinedTextField` with its outline (as the spec asks), a magnifier icon at the start, a clear `IconButton` at the end when there is text, and a back arrow in `navigationIcon` that closes and clears.
+- **Warnings sheet:** M3 `ModalBottomSheet`.
+- **Version:** `versionName 2.1.0`, `versionCode` +1, in T12. The release only with the user's OK.
 
-### Textos nuevos
+### New texts
 
-Inglés / español. Todo en `values/strings.xml` y `values-es/strings.xml`.
+English / Spanish. All in `values/strings.xml` and `values-es/strings.xml`.
 
-| Clave | en | es |
+| Key | en | es |
 |---|---|---|
 | `main_forwarding` | Forwarding | Reenviando |
 | `main_last_sweep` | Last sweep %1$s | Último barrido %1$s |
@@ -56,36 +56,36 @@ Inglés / español. Todo en `values/strings.xml` y `values-es/strings.xml`.
 | `rules_empty_body` | A rule picks which SMS go to which destination. | Una regla elige qué SMS van a qué destino. |
 | `onboarding_progress` | Step %1$d of %2$d | Paso %1$d de %2$d |
 
-Se reutilizan: `forwarding_paused` (el panel muestra "Forwarding paused"), `main_sweep_now` (descripción del botón de barrido), `main_empty`, `main_no_results`, `action_add`, `recovery_already_saved`, `destination_error_count`, `rule_no_destinations`. Si un texto existente ya dice lo de la tabla, se usa el existente y se omite la clave nueva. Las claves que dejan de usarse (`main_status_line`, `main_open_settings`, `delivery_*` con ✓/✗ se reescriben, no se borran) se eliminan en la tarea que las deja sin uso.
+Reused: `forwarding_paused` (the panel shows "Forwarding paused"), `main_sweep_now` (description of the sweep button), `main_empty`, `main_no_results`, `action_add`, `recovery_already_saved`, `destination_error_count`, `rule_no_destinations`. If an existing text already says what the table says, the existing one is used and the new key is omitted. Keys that stop being used (`main_status_line`, `main_open_settings`; the `delivery_*` ones with ✓/✗ are rewritten, not deleted) are removed in the task that leaves them unused.
 
 ## Global Constraints
 
-- Sin funcionalidades nuevas ni cambios de comportamiento: reenvío, Room (sigue en versión 3, sin migración), workers, rutas, pestañas y menú ⋮ quedan igual. Únicos datos nuevos: `MainUiState.sentToday` y la plantilla por defecto `TemplateKind.STANDARD_JSON` de un destino nuevo.
-- Sin dependencias nuevas. No se añade `material-icons-extended`. No se instala nada del SDK.
-- Sin fuentes propias ni paleta de marca. El color dinámico sigue por defecto.
-- El estado nunca es solo color: siempre icono + texto. Objetivos táctiles de 48 dp. Descripciones de TalkBack con sentido (los `IconButton` sin texto llevan `contentDescription`).
-- Todo texto nuevo en `values/strings.xml` y `values-es/strings.xml`; los tests comparan con `context.getString(R.string.x)`, nunca con literales.
-- Los tests que comprueban textos se actualizan a propósito, no se borran. Cada tarea deja verdes los tests de `:app` que toca.
-- `minSdk = 31`. JDK 17: `JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :app:testDebugUnitTest --tests '<clase>'`. CI es la referencia.
-- Nada de textos de SMS reales, remitentes reales, teléfonos ni nombres de proyectos del autor en código, tests, strings o capturas (ejemplos: `AAA`, `TEST`, `https://h.example`).
-- Regla de diseño del usuario: todo cambio visual se mide antes/después en el emulador (`emulator-5554`, `pixel35`), claro y oscuro, y a 360 dp de ancho donde haya filas de chips o segmentados. Emulador apagado al terminar (`android-emu-stop`).
-- Commits sin líneas de atribución. Revisión con OCR antes de cualquier push.
+- No new features or behavior changes: forwarding, Room (stays at version 3, no migration), workers, routes, tabs and the ⋮ menu stay the same. Only new data: `MainUiState.sentToday` and the default template `TemplateKind.STANDARD_JSON` of a new destination.
+- No new dependencies. `material-icons-extended` is not added. Nothing is installed from the SDK.
+- No custom fonts or brand palette. Dynamic color stays on by default.
+- Status is never color alone: always icon + text. 48 dp touch targets. Meaningful TalkBack descriptions (`IconButton`s without text carry a `contentDescription`).
+- All new text in `values/strings.xml` and `values-es/strings.xml`; tests compare with `context.getString(R.string.x)`, never with literals.
+- Tests that check texts are updated on purpose, not deleted. Each task leaves the `:app` tests it touches green.
+- `minSdk = 31`. JDK 17: `JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :app:testDebugUnitTest --tests '<class>'`. CI is the reference.
+- No real SMS texts, real senders, phone numbers or the author's project names in code, tests, strings or screenshots (examples: `AAA`, `TEST`, `https://h.example`).
+- The user's design rule: every visual change is measured before/after on the emulator (`emulator-5554`, `pixel35`), light and dark, and at 360 dp width wherever there are chip rows or segmented controls. Emulator shut down when finished (`android-emu-stop`).
+- Commits without attribution lines. OCR review before any push.
 
 ## Review Focus
 
-1. **Nombres de destino y remitentes largos** (30+ caracteres, sin espacios). La fila de Inicio, las píldoras en `FlowRow` y la cabecera de Detalle deben elipsar o saltar de línea, nunca empujar la hora fuera de pantalla. Test en T5: remitente de 60 caracteres y la hora sigue visible.
-2. **Fuente del sistema al 130 % y 360 dp.** Los tres contadores del panel, la fila de chips y los segmentados de Ajustes no se cortan ni se solapan. Comprobación manual en T12 (`adb shell settings put system font_scale 1.3`), anotada en el ledger.
-3. **Color dinámico desactivado y fondos de pantalla con tonos verdes o rojos.** Una píldora OK sigue siendo distinguible de una ERROR y legible. Cubierto por el test de contraste de T1 (los colores son fijos) y por las capturas de T12 con color dinámico apagado.
-4. **Lista vacía mientras hay avisos de salud o búsqueda activa.** Con búsqueda no vacía se ocultan panel y aviso; el estado vacío muestra "Quitar filtros" que limpia búsqueda y filtros. Test en T5.
-5. **Cambio de día con la app abierta.** Un SMS de ayer no cuenta en "Enviados hoy" y su cabecera dice "Ayer". Tests puros con reloj y zona fijos en T3, incluido un SMS a las 23:59 y otro a las 00:00.
+1. **Long destination names and senders** (30+ characters, no spaces). The Home row, the pills in `FlowRow` and the Detail header must ellipsize or wrap, never push the time off screen. Test in T5: a 60-character sender and the time is still visible.
+2. **System font at 130 % and 360 dp.** The three panel counters, the chip row and the segmented controls in Settings are not cut off or overlapping. Manual check in T12 (`adb shell settings put system font_scale 1.3`), noted in the ledger.
+3. **Dynamic color off and wallpapers with green or red tones.** An OK pill is still distinguishable from an ERROR one and readable. Covered by the T1 contrast test (the colors are fixed) and by the T12 screenshots with dynamic color off.
+4. **Empty list while there are health warnings or an active search.** With a non-empty search, the panel and warning are hidden; the empty state shows "Clear filters", which clears the search and filters. Test in T5.
+5. **Day change with the app open.** Yesterday's SMS does not count in "Sent today" and its header says "Yesterday". Pure tests with a fixed clock and zone in T3, including an SMS at 23:59 and another at 00:00.
 
 ---
 
-### Task 1: Sistema de estado
+### Task 1: Status system
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/ui/theme/Status.kt`
-- Modify: `app/src/main/kotlin/dev/smsforwarder/ui/theme/Theme.kt` (proveer `LocalStatusColors` según `dark`)
+- Modify: `app/src/main/kotlin/dev/smsforwarder/ui/theme/Theme.kt` (provide `LocalStatusColors` according to `dark`)
 - Create: `app/src/main/res/drawable/ic_status_schedule.xml`, `ic_status_error.xml`
 - Test: `app/src/test/kotlin/dev/smsforwarder/ui/StatusTest.kt`
 
@@ -94,129 +94,129 @@ Se reutilizan: `forwarding_paused` (el panel muestra "Forwarding paused"), `main
   - `enum class StatusTone { OK, PENDING, ERROR, NEUTRAL }`
   - `data class ToneColors(val container: Color, val onContainer: Color)`
   - `@Immutable class StatusColors(val ok: ToneColors, val pending: ToneColors)`; `val LightStatusColors`, `val DarkStatusColors`; `val LocalStatusColors = staticCompositionLocalOf { LightStatusColors }`
-  - `@Composable fun toneColors(tone: StatusTone): ToneColors` (ERROR y NEUTRAL salen de `MaterialTheme.colorScheme`)
+  - `@Composable fun toneColors(tone: StatusTone): ToneColors` (ERROR and NEUTRAL come from `MaterialTheme.colorScheme`)
   - `fun toneOf(kind: StatusKind): StatusTone`, `fun toneOf(status: DeliveryStatus): StatusTone`
   - `@Composable fun toneIcon(tone: StatusTone): Painter` (OK = `Icons.Filled.Check`, PENDING = `ic_status_schedule`, ERROR = `ic_status_error`, NEUTRAL = `Icons.Filled.Close`)
-  - `@Composable fun StatusPill(tone: StatusTone, text: String, modifier: Modifier = Modifier)`: `Surface` redondeado (`RoundedCornerShape(50)`), icono 14 dp decorativo (`contentDescription = null`; el texto lleva el significado), `labelMedium`, padding 8×4 dp.
-  - `internal fun contrastRatio(a: Color, b: Color): Double` (WCAG, con `Color.luminance()`)
+  - `@Composable fun StatusPill(tone: StatusTone, text: String, modifier: Modifier = Modifier)`: rounded `Surface` (`RoundedCornerShape(50)`), 14 dp decorative icon (`contentDescription = null`; the text carries the meaning), `labelMedium`, 8×4 dp padding.
+  - `internal fun contrastRatio(a: Color, b: Color): Double` (WCAG, with `Color.luminance()`)
 
-- [ ] **Step 1: Tests que fallan.** `toneMapsEveryStatusKind` (SENT, RECOVERED, MANUAL → OK; QUEUED → PENDING; ERROR → ERROR), `toneMapsEveryDeliveryStatus` (SENT → OK, QUEUED → PENDING, ERROR → ERROR, CANCELED → NEUTRAL), `fixedTonesPassAaInBothModes` (para `LightStatusColors` y `DarkStatusColors`, `ok` y `pending`: `contrastRatio(container, onContainer) >= 4.5`), `pillShowsItsText` (Compose: `StatusPill(OK, "x")` dentro de `SmsForwarderTheme` muestra "x").
-- [ ] **Step 2:** `./gradlew :app:testDebugUnitTest --tests 'dev.smsforwarder.ui.StatusTest'` → FAIL (no compila).
-- [ ] **Step 3:** Implementar en `Status.kt` con los hex de la tabla de decisiones; `SmsForwarderTheme` envuelve `MaterialTheme` en `CompositionLocalProvider(LocalStatusColors provides if (dark) DarkStatusColors else LightStatusColors)`. Los `when` sobre los enums, sin `else`.
-- [ ] **Step 4:** Mismo comando → PASS, y `ThemeTest` sigue en verde.
+- [ ] **Step 1: Failing tests.** `toneMapsEveryStatusKind` (SENT, RECOVERED, MANUAL → OK; QUEUED → PENDING; ERROR → ERROR), `toneMapsEveryDeliveryStatus` (SENT → OK, QUEUED → PENDING, ERROR → ERROR, CANCELED → NEUTRAL), `fixedTonesPassAaInBothModes` (for `LightStatusColors` and `DarkStatusColors`, `ok` and `pending`: `contrastRatio(container, onContainer) >= 4.5`), `pillShowsItsText` (Compose: `StatusPill(OK, "x")` inside `SmsForwarderTheme` shows "x").
+- [ ] **Step 2:** `./gradlew :app:testDebugUnitTest --tests 'dev.smsforwarder.ui.StatusTest'` → FAIL (does not compile).
+- [ ] **Step 3:** Implement in `Status.kt` with the hex values from the decisions table; `SmsForwarderTheme` wraps `MaterialTheme` in `CompositionLocalProvider(LocalStatusColors provides if (dark) DarkStatusColors else LightStatusColors)`. The `when`s over the enums, without `else`.
+- [ ] **Step 4:** Same command → PASS, and `ThemeTest` stays green.
 - [ ] **Step 5: Commit** `feat(ui): status tones and pill`.
 
-### Task 2: Componentes compartidos
+### Task 2: Shared components
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/ui/components/Components.kt`
 - Test: `app/src/test/kotlin/dev/smsforwarder/ui/ComponentsTest.kt`
 
 **Interfaces:**
-- Consumes: nada de T1 salvo el tema.
+- Consumes: nothing from T1 except the theme.
 - Produces:
-  - `@Composable fun EmptyState(icon: Painter, title: String, body: String, modifier: Modifier = Modifier, actionLabel: String? = null, onAction: (() -> Unit)? = null)`: centrado, icono 48 dp `onSurfaceVariant`, `titleMedium`, `bodyMedium`, acción como `TextButton`.
-  - `@Composable fun SectionTitle(text: String, modifier: Modifier = Modifier)`: `titleSmall`, `colorScheme.primary`, padding superior 24 dp, inferior 8 dp, con `semantics { heading() }`.
-  - `@Composable fun BottomActionBar(content: @Composable ColumnScope.() -> Unit)`: `Surface` con `tonalElevation` 3 dp, padding 16 dp, `navigationBarsPadding()`; los botones dentro ocupan todo el ancho.
-  - `@Composable fun DestructiveButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier)`: `OutlinedButton` con `contentColor = colorScheme.error` y borde `colorScheme.error`, icono `Icons.Filled.Delete`.
-  - `@Composable fun SettingRow(title: String, modifier: Modifier = Modifier, supporting: String? = null, leadingIcon: Painter? = null, chevron: Boolean = false, onClick: () -> Unit)`: `ListItem` clicable, chevron `Icons.AutoMirrored.Filled.KeyboardArrowRight`.
-  - `@Composable fun <T> SingleChoiceDialog(title: String, options: List<T>, selected: T, label: @Composable (T) -> String, onSelect: (T) -> Unit, onDismiss: () -> Unit)`: `AlertDialog` con filas `RadioButton` + texto (`selectable` con `Role.RadioButton`), elegir cierra; botón "Cancel" existente (`R.string.action_cancel` o el que use la app).
+  - `@Composable fun EmptyState(icon: Painter, title: String, body: String, modifier: Modifier = Modifier, actionLabel: String? = null, onAction: (() -> Unit)? = null)`: centered, 48 dp `onSurfaceVariant` icon, `titleMedium`, `bodyMedium`, action as a `TextButton`.
+  - `@Composable fun SectionTitle(text: String, modifier: Modifier = Modifier)`: `titleSmall`, `colorScheme.primary`, 24 dp top padding, 8 dp bottom, with `semantics { heading() }`.
+  - `@Composable fun BottomActionBar(content: @Composable ColumnScope.() -> Unit)`: `Surface` with 3 dp `tonalElevation`, 16 dp padding, `navigationBarsPadding()`; the buttons inside take the full width.
+  - `@Composable fun DestructiveButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier)`: `OutlinedButton` with `contentColor = colorScheme.error` and `colorScheme.error` border, `Icons.Filled.Delete` icon.
+  - `@Composable fun SettingRow(title: String, modifier: Modifier = Modifier, supporting: String? = null, leadingIcon: Painter? = null, chevron: Boolean = false, onClick: () -> Unit)`: clickable `ListItem`, chevron `Icons.AutoMirrored.Filled.KeyboardArrowRight`.
+  - `@Composable fun <T> SingleChoiceDialog(title: String, options: List<T>, selected: T, label: @Composable (T) -> String, onSelect: (T) -> Unit, onDismiss: () -> Unit)`: `AlertDialog` with `RadioButton` + text rows (`selectable` with `Role.RadioButton`), choosing closes it; existing "Cancel" button (`R.string.action_cancel` or whichever the app uses).
   - `@Composable fun InsetDivider()`: `HorizontalDivider(Modifier.padding(start = 16.dp))`.
 
-- [ ] **Step 1: Tests que fallan.** `emptyStateActionFires` (pulsar la acción llama a `onAction`), `emptyStateWithoutActionShowsNoButton`, `sectionTitleIsHeading` (`SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)`), `singleChoiceDialogSelectsAndCloses` (pulsar la segunda opción → `onSelect(opción2)`), `settingRowShowsSupportingText`.
+- [ ] **Step 1: Failing tests.** `emptyStateActionFires` (tapping the action calls `onAction`), `emptyStateWithoutActionShowsNoButton`, `sectionTitleIsHeading` (`SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)`), `singleChoiceDialogSelectsAndCloses` (tapping the second option → `onSelect(option2)`), `settingRowShowsSupportingText`.
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.ComponentsTest'` → FAIL.
-- [ ] **Step 3:** Implementar.
+- [ ] **Step 3:** Implement.
 - [ ] **Step 4:** → PASS.
 - [ ] **Step 5: Commit** `feat(ui): shared empty state, section title, bottom bar and setting row`.
 
-### Task 3: Datos de Inicio: enviados hoy y grupos por día
+### Task 3: Home data: sent today and day groups
 
 **Files:**
 - Modify: `app/src/main/kotlin/dev/smsforwarder/ui/main/MainViewModel.kt`
-- Modify: `app/src/main/kotlin/dev/smsforwarder/ui/MainActivity.kt` (si la fábrica cambia de firma; los parámetros nuevos llevan valor por defecto, así que no debería)
+- Modify: `app/src/main/kotlin/dev/smsforwarder/ui/MainActivity.kt` (if the factory changes signature; the new parameters have default values, so it should not)
 - Test: `app/src/test/kotlin/dev/smsforwarder/ui/MainViewModelTest.kt`, `app/src/test/kotlin/dev/smsforwarder/ui/DayGroupTest.kt`
 
 **Interfaces:**
 - Produces:
   - `MainUiState.sentToday: Int = 0`
-  - `MainViewModel(..., clock: () -> Long = System::currentTimeMillis, zone: () -> ZoneId = ZoneId::systemDefault)` (también en `Factory`, con los mismos valores por defecto)
+  - `MainViewModel(..., clock: () -> Long = System::currentTimeMillis, zone: () -> ZoneId = ZoneId::systemDefault)` (also in `Factory`, with the same defaults)
   - `internal fun startOfDay(now: Long, zone: ZoneId): Long`
   - `enum class DayKind { TODAY, YESTERDAY, OTHER }`; `data class DayGroup(val day: LocalDate, val kind: DayKind, val rows: List<RowUi>)`
-  - `internal fun groupByDay(rows: List<RowUi>, now: Long, zone: ZoneId): List<DayGroup>` (conserva el orden de `rows`, que llega por `receivedAt DESC`)
+  - `internal fun groupByDay(rows: List<RowUi>, now: Long, zone: ZoneId): List<DayGroup>` (keeps the order of `rows`, which arrives by `receivedAt DESC`)
 
-- [ ] **Step 1: Tests que fallan.**
-  - `DayGroupTest`: con `zone = ZoneId.of("America/Havana")` y `now` = 2026-11-05 10:00 local: `startOfDay` = 2026-11-05 00:00 local; filas a 09:00 hoy, 23:59 ayer, 00:00 ayer y 2026-11-01 → grupos `[TODAY(1), YESTERDAY(2), OTHER(1)]`; lista vacía → `[]`.
-  - `MainViewModelTest.sentTodayCountsOnlySentSinceMidnight`: con el reloj fijo anterior, SMS SENT hoy (origin normal), SENT hoy recuperado, SENT hoy manual, QUEUED hoy, ERROR hoy, SENT ayer 23:59 → `sentToday == 3`.
-  - `MainViewModelTest.sentTodayIgnoresFilters`: con `setFilter(StatusFilter.ERROR)` y `setQuery("zzz")`, `sentToday` no cambia.
+- [ ] **Step 1: Failing tests.**
+  - `DayGroupTest`: with `zone = ZoneId.of("America/Havana")` and `now` = 2026-11-05 10:00 local: `startOfDay` = 2026-11-05 00:00 local; rows at 09:00 today, 23:59 yesterday, 00:00 yesterday and 2026-11-01 → groups `[TODAY(1), YESTERDAY(2), OTHER(1)]`; empty list → `[]`.
+  - `MainViewModelTest.sentTodayCountsOnlySentSinceMidnight`: with the fixed clock above, SENT SMS today (normal origin), SENT today recovered, SENT today manual, QUEUED today, ERROR today, SENT yesterday 23:59 → `sentToday == 3`.
+  - `MainViewModelTest.sentTodayIgnoresFilters`: with `setFilter(StatusFilter.ERROR)` and `setQuery("zzz")`, `sentToday` does not change.
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.DayGroupTest' --tests 'dev.smsforwarder.ui.MainViewModelTest'` → FAIL.
-- [ ] **Step 3:** Implementar. `sentToday` se calcula sobre `all` en el `combine` existente, con `clock()` y `zone()` en cada emisión.
-- [ ] **Step 4:** → PASS (y el resto de `MainViewModelTest`).
+- [ ] **Step 3:** Implement. `sentToday` is computed over `all` in the existing `combine`, with `clock()` and `zone()` on each emission.
+- [ ] **Step 4:** → PASS (and the rest of `MainViewModelTest`).
 - [ ] **Step 5: Commit** `feat(ui): sent-today count and day grouping for home`.
 
-### Task 4: Inicio, bloque superior (búsqueda, panel, aviso)
+### Task 4: Home, top block (search, panel, warning)
 
 **Files:**
-- Modify: `app/src/main/kotlin/dev/smsforwarder/ui/AppShell.kt` (parámetros `titleContent`, `navigationIcon`)
-- Modify: `app/src/main/kotlin/dev/smsforwarder/ui/Nav.kt` (rama `Routes.MAIN`: búsqueda en la barra)
+- Modify: `app/src/main/kotlin/dev/smsforwarder/ui/AppShell.kt` (`titleContent`, `navigationIcon` parameters)
+- Modify: `app/src/main/kotlin/dev/smsforwarder/ui/Nav.kt` (`Routes.MAIN` branch: search in the bar)
 - Modify: `app/src/main/kotlin/dev/smsforwarder/ui/main/MainScreen.kt`
 - Modify: `values/strings.xml`, `values-es/strings.xml`
-- Test: `app/src/test/kotlin/dev/smsforwarder/ui/MainScreenTest.kt`, `AppShellTest.kt`, `NavTest.kt` (si comprueba la búsqueda)
+- Test: `app/src/test/kotlin/dev/smsforwarder/ui/MainScreenTest.kt`, `AppShellTest.kt`, `NavTest.kt` (if it checks the search)
 
 **Interfaces:**
 - Consumes: T1 (`StatusTone`, `toneColors`, `StatusPill`), T3 (`sentToday`).
 - Produces:
-  - `fun issueTone(issue: HealthIssue): StatusTone` en `MainScreen.kt`: ERROR para `SMS_PERMISSION`, `TOKEN_REJECTED`, `NOT_CONFIGURED`, `NO_RULES`, `MIUI_SMS_BLOCKED`, `MIGRATION_FAILED`; PENDING para el resto. `when` sin `else`.
-  - `fun bannerTone(issues: Set<HealthIssue>): StatusTone?` (null si vacío; ERROR si alguno bloquea).
-  - `MainScreen(...)` pierde `searchOpen` como disparador del campo (el campo vive en la barra) y gana `onClearFilters: () -> Unit = {}`; mantiene `onSweepNow`, `onFilterChange`, `onOpenIssue`.
-  - `@Composable fun MainSearchField(query: String, onQueryChange: (String) -> Unit)` (lo usa `Nav.kt` como `titleContent`).
+  - `fun issueTone(issue: HealthIssue): StatusTone` in `MainScreen.kt`: ERROR for `SMS_PERMISSION`, `TOKEN_REJECTED`, `NOT_CONFIGURED`, `NO_RULES`, `MIUI_SMS_BLOCKED`, `MIGRATION_FAILED`; PENDING for the rest. `when` without `else`.
+  - `fun bannerTone(issues: Set<HealthIssue>): StatusTone?` (null if empty; ERROR if any blocks).
+  - `MainScreen(...)` loses `searchOpen` as the trigger for the field (the field lives in the bar) and gains `onClearFilters: () -> Unit = {}`; keeps `onSweepNow`, `onFilterChange`, `onOpenIssue`.
+  - `@Composable fun MainSearchField(query: String, onQueryChange: (String) -> Unit)` (used by `Nav.kt` as `titleContent`).
 
-- [ ] **Step 1: Tests que fallan** (sustituyen a `showsWarningCardWithButtonForAutostartOff`, `showsPausedLineOnlyWhenPaused`, `showsStatusLineAndSweepButton`):
-  - `IssueToneTest` (puro): cada uno de los 11 valores de `HealthIssue` con su tono; `bannerTone(setOf(AUTOSTART_OFF, TOKEN_REJECTED)) == ERROR`; `bannerTone(setOf(BATTERY_OPTIMIZED)) == PENDING`; `bannerTone(emptySet()) == null`.
-  - `singleIssueBannerShowsItsTitleAndOpensIt`: `issues = {AUTOSTART_OFF}` → texto `issue_autostart_off` visible; pulsarlo → `onOpenIssue(AUTOSTART_OFF)`.
-  - `severalIssuesShowCountAndOpenSheet`: dos avisos → texto del plural `main_issues_count` con 2; pulsar → aparecen los dos títulos; pulsar uno → `onOpenIssue` con ese valor.
-  - `panelShowsForwardingAndCounters`: `paused = false`, `sentToday = 4`, `queued = 2`, `errors = 1` → `main_forwarding`, "4", "2", "1" y las tres etiquetas visibles.
-  - `panelShowsPausedWhenPaused`: → `forwarding_paused` visible, `main_forwarding` no existe.
-  - `refreshButtonSweeps`: nodo con `contentDescription == main_sweep_now` → click → `onSweepNow` llamado.
-  - `tappingErrorsCounterFilters`: click en el contador de errores → `onFilterChange(StatusFilter.ERROR)`; en "En cola" → `QUEUED`.
-  - `searchHidesPanelAndBanner`: `query = "x"` con un aviso → ni el panel ni el aviso existen.
-  - `AppShellTest.titleContentReplacesTitle`: con `titleContent` el título no se muestra.
+- [ ] **Step 1: Failing tests** (replace `showsWarningCardWithButtonForAutostartOff`, `showsPausedLineOnlyWhenPaused`, `showsStatusLineAndSweepButton`):
+  - `IssueToneTest` (pure): each of the 11 `HealthIssue` values with its tone; `bannerTone(setOf(AUTOSTART_OFF, TOKEN_REJECTED)) == ERROR`; `bannerTone(setOf(BATTERY_OPTIMIZED)) == PENDING`; `bannerTone(emptySet()) == null`.
+  - `singleIssueBannerShowsItsTitleAndOpensIt`: `issues = {AUTOSTART_OFF}` → text `issue_autostart_off` visible; tapping it → `onOpenIssue(AUTOSTART_OFF)`.
+  - `severalIssuesShowCountAndOpenSheet`: two warnings → text of the `main_issues_count` plural with 2; tapping → both titles appear; tapping one → `onOpenIssue` with that value.
+  - `panelShowsForwardingAndCounters`: `paused = false`, `sentToday = 4`, `queued = 2`, `errors = 1` → `main_forwarding`, "4", "2", "1" and the three labels visible.
+  - `panelShowsPausedWhenPaused`: → `forwarding_paused` visible, `main_forwarding` does not exist.
+  - `refreshButtonSweeps`: node with `contentDescription == main_sweep_now` → click → `onSweepNow` called.
+  - `tappingErrorsCounterFilters`: click on the errors counter → `onFilterChange(StatusFilter.ERROR)`; on "Queued" → `QUEUED`.
+  - `searchHidesPanelAndBanner`: `query = "x"` with a warning → neither the panel nor the warning exists.
+  - `AppShellTest.titleContentReplacesTitle`: with `titleContent` the title is not shown.
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.MainScreenTest' --tests 'dev.smsforwarder.ui.IssueToneTest' --tests 'dev.smsforwarder.ui.AppShellTest'` → FAIL.
-- [ ] **Step 3:** Implementar según spec §2 puntos 1–3 y "Answers to builder questions". Panel: `Card` con `CardDefaults.cardColors(containerColor = colorScheme.surfaceContainer)`; línea 1 = punto 10 dp del tono (OK o PENDING si `paused`) + texto + `main_last_sweep` con `agoLabel` a la derecha + `IconButton(Icons.Filled.Refresh)`; línea 2 = tres contadores (número en `titleMedium`, etiqueta en `labelSmall`); "Errores" en `colorScheme.error` si > 0; los contadores pulsables con `Role.Button`. Aviso: `Surface` con `toneColors(bannerTone)`, icono del tono, texto, chevron. Hoja: `ModalBottomSheet` con `SettingRow` por aviso (icono del tono de cada uno). Búsqueda: en `Nav.kt`, cuando `searchOpen`, `titleContent = { MainSearchField(...) }` y `navigationIcon` = flecha atrás que hace `setQuery("")` y cierra; la lupa de `actions` solo se ve cerrada. Borrar `main_status_line` y `main_open_settings` si quedan sin uso.
-- [ ] **Step 4:** → PASS; además `NavTest` y `SmokeTest`.
-- [ ] **Step 5: Medir** en el emulador, claro y oscuro: captura de Inicio con un aviso y con dos (sembrar con los receptores de debug o quitando un permiso). Comparar con las capturas de la auditoría si siguen en el scratchpad; si no, con capturas de `main` tomadas antes de instalar la rama. Reducir capturas a JPEG ≤ 1000 px antes de mirarlas.
+- [ ] **Step 3:** Implement per spec §2 points 1–3 and "Answers to builder questions". Panel: `Card` with `CardDefaults.cardColors(containerColor = colorScheme.surfaceContainer)`; line 1 = 10 dp dot of the tone (OK or PENDING if `paused`) + text + `main_last_sweep` with `agoLabel` on the right + `IconButton(Icons.Filled.Refresh)`; line 2 = three counters (number in `titleMedium`, label in `labelSmall`); "Errors" in `colorScheme.error` if > 0; the counters are tappable with `Role.Button`. Warning: `Surface` with `toneColors(bannerTone)`, tone icon, text, chevron. Sheet: `ModalBottomSheet` with a `SettingRow` per warning (icon of each one's tone). Search: in `Nav.kt`, when `searchOpen`, `titleContent = { MainSearchField(...) }` and `navigationIcon` = back arrow that does `setQuery("")` and closes; the magnifier in `actions` is only shown when closed. Delete `main_status_line` and `main_open_settings` if they are left unused.
+- [ ] **Step 4:** → PASS; also `NavTest` and `SmokeTest`.
+- [ ] **Step 5: Measure** on the emulator, light and dark: screenshot of Home with one warning and with two (seed with the debug receivers or by removing a permission). Compare with the audit screenshots if they are still in the scratchpad; if not, with screenshots of `main` taken before installing the branch. Reduce screenshots to JPEG ≤ 1000 px before looking at them.
 - [ ] **Step 6: Commit** `feat(ui): home status panel, single health banner, search in the top bar`.
 
-### Task 5: Inicio, filtros y lista
+### Task 5: Home, filters and list
 
 **Files:**
 - Modify: `app/src/main/kotlin/dev/smsforwarder/ui/main/MainScreen.kt`, `ui/main/Strings.kt`, `ui/Nav.kt` (`onClearFilters`)
-- Modify: `values/strings.xml`, `values-es/strings.xml` (`delivery_*` sin ✓/✗)
-- Test: `MainScreenTest.kt`, `ScreenshotsTest.kt` (si referencia `deliveryLine`)
+- Modify: `values/strings.xml`, `values-es/strings.xml` (`delivery_*` without ✓/✗)
+- Test: `MainScreenTest.kt`, `ScreenshotsTest.kt` (if it references `deliveryLine`)
 
 **Interfaces:**
 - Consumes: T1 (`StatusPill`, `toneOf`), T2 (`EmptyState`, `InsetDivider`), T3 (`groupByDay`, `DayKind`), T4 (`onClearFilters`).
 - Produces:
-  - `deliveryChipText(chip)` devuelve texto sin glifos: `delivery_sent` = `%1$s %2$d`, `delivery_sent_nocode` = `%1$s`, `delivery_error` = `%1$s %2$d`, `delivery_error_nocode` = `%1$s` (en y es); `delivery_queued`, `delivery_config`, `delivery_canceled` sin cambios.
-  - `@Composable fun DeliveryPills(chips: List<DeliveryChipUi>, fallback: StatusLabel)`: `FlowRow` con una `StatusPill` por entrega (`toneOf(chip.status)`, texto `deliveryChipText`); sin entregas, una píldora con `toneOf(label.kind)` y `statusText(label)`.
-  - `@Composable internal fun rowTime(millis: Long, kind: DayKind): String`: hora corta para TODAY/YESTERDAY, fecha corta para OTHER (locale de `LocalConfiguration`).
-  - `deliveryLine` se elimina.
+  - `deliveryChipText(chip)` returns text without glyphs: `delivery_sent` = `%1$s %2$d`, `delivery_sent_nocode` = `%1$s`, `delivery_error` = `%1$s %2$d`, `delivery_error_nocode` = `%1$s` (en and es); `delivery_queued`, `delivery_config`, `delivery_canceled` unchanged.
+  - `@Composable fun DeliveryPills(chips: List<DeliveryChipUi>, fallback: StatusLabel)`: `FlowRow` with one `StatusPill` per delivery (`toneOf(chip.status)`, text `deliveryChipText`); with no deliveries, one pill with `toneOf(label.kind)` and `statusText(label)`.
+  - `@Composable internal fun rowTime(millis: Long, kind: DayKind): String`: short time for TODAY/YESTERDAY, short date for OTHER (locale from `LocalConfiguration`).
+  - `deliveryLine` is removed.
 
-- [ ] **Step 1: Tests que fallan** (reescriben `rowRendersDeliveryLine` y `deliveryLineCoversErrorConfigAndCanceled`; `rowShowsLabel`, `rowShowsPreviewWhenTextIsVisible`, `hideTextKeepsSenderAndHidesBody`, `filterChipsAreShownAndReportTheChoice`, `emptyResultOfASearchSaysNoMatch`, `destinationChipsFilter` se conservan y se adaptan):
-  - `rowRendersOnePillPerDelivery`: chips `Main SENT 204` y `T2 QUEUED` → nodos con texto `str(delivery_sent, "Main", 204)` y `str(delivery_queued, "T2")`, cada uno por separado.
-  - `pillsCoverErrorConfigAndCanceled`: los tres textos visibles por separado.
-  - `rowWithoutDeliveriesShowsStatusPill`: fila sin entregas con `RECOVERED 200` → `status_recovered_code` visible.
-  - `rowsAreGroupedUnderDayHeaders`: filas de hoy y de ayer → `main_day_today` y `main_day_yesterday` visibles. (El estado de test pasa `receivedAt` relativo a `System.currentTimeMillis()`; `MainScreen` usa el reloj real para agrupar.)
-  - `longSenderKeepsTimeVisible`: remitente de 60 caracteres → la hora de la fila `assertExists()` y el remitente tiene `maxLines = 1` (comprobar que su texto existe y que el nodo de la hora está dentro de los límites de la raíz).
-  - `filterRowHasStatusAndDestinationChips`: con dos destinos, `main_filter_queued` y "T2" en la misma fila desplazable.
-  - `emptyStateWhileFilteringOffersClearFilters`: `query = "x"`, sin filas → `main_no_results` y `main_clear_filters`; pulsar → `onClearFilters` llamado.
-  - `emptyStateWithoutFilterHasNoClearButton`: `main_empty` visible, `main_clear_filters` no existe.
+- [ ] **Step 1: Failing tests** (rewrite `rowRendersDeliveryLine` and `deliveryLineCoversErrorConfigAndCanceled`; `rowShowsLabel`, `rowShowsPreviewWhenTextIsVisible`, `hideTextKeepsSenderAndHidesBody`, `filterChipsAreShownAndReportTheChoice`, `emptyResultOfASearchSaysNoMatch`, `destinationChipsFilter` are kept and adapted):
+  - `rowRendersOnePillPerDelivery`: chips `Main SENT 204` and `T2 QUEUED` → nodes with text `str(delivery_sent, "Main", 204)` and `str(delivery_queued, "T2")`, each one separately.
+  - `pillsCoverErrorConfigAndCanceled`: the three texts visible separately.
+  - `rowWithoutDeliveriesShowsStatusPill`: a row with no deliveries with `RECOVERED 200` → `status_recovered_code` visible.
+  - `rowsAreGroupedUnderDayHeaders`: rows from today and yesterday → `main_day_today` and `main_day_yesterday` visible. (The test state passes `receivedAt` relative to `System.currentTimeMillis()`; `MainScreen` uses the real clock to group.)
+  - `longSenderKeepsTimeVisible`: a 60-character sender → the row's time `assertExists()` and the sender has `maxLines = 1` (check that its text exists and that the time node is within the root's bounds).
+  - `filterRowHasStatusAndDestinationChips`: with two destinations, `main_filter_queued` and "T2" in the same scrollable row.
+  - `emptyStateWhileFilteringOffersClearFilters`: `query = "x"`, no rows → `main_no_results` and `main_clear_filters`; tapping → `onClearFilters` called.
+  - `emptyStateWithoutFilterHasNoClearButton`: `main_empty` visible, `main_clear_filters` does not exist.
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.MainScreenTest'` → FAIL.
-- [ ] **Step 3:** Implementar spec §2 puntos 4–6. Fila: padding vertical 12 dp, línea 1 = remitente (`titleSmall`, `maxLines = 1`, ellipsis, `weight(1f)`) + hora; línea 2 = vista previa (`bodyMedium`, `onSurfaceVariant`, `maxLines = 1`), oculta con `hideText`; línea 3 = `DeliveryPills`. `InsetDivider` entre filas. Cabecera de día: `labelLarge`, `onSurfaceVariant`, `stickyHeader` no (se mantiene simple: `item`). Fila de filtros: una `Row` con `horizontalScroll`, chips de estado, `VerticalDivider` de 24 dp de alto y chips de destino cuando hay más de uno. `onClearFilters` en `Nav.kt` llama a `setQuery("")`, `setFilter(ALL)`, `setDestinationFilter(null)`. Iconos de `EmptyState`: `Icons.Filled.Search` al filtrar, `ic_tab_home` (de T11; hasta entonces `Icons.Filled.Email`) sin filtrar.
-- [ ] **Step 4:** → PASS; `ScreenshotsTest` compila y pasa.
-- [ ] **Step 5: Medir** en emulador claro/oscuro y a 360 dp (`adb shell wm size 720x1600` con densidad 320 → 360 dp; restaurar con `wm size reset`): fila de chips desplazable sin cortes, filas de 2–3 líneas.
+- [ ] **Step 3:** Implement spec §2 points 4–6. Row: 12 dp vertical padding, line 1 = sender (`titleSmall`, `maxLines = 1`, ellipsis, `weight(1f)`) + time; line 2 = preview (`bodyMedium`, `onSurfaceVariant`, `maxLines = 1`), hidden with `hideText`; line 3 = `DeliveryPills`. `InsetDivider` between rows. Day header: `labelLarge`, `onSurfaceVariant`, no `stickyHeader` (kept simple: `item`). Filter row: a `Row` with `horizontalScroll`, status chips, a 24 dp tall `VerticalDivider` and destination chips when there is more than one. `onClearFilters` in `Nav.kt` calls `setQuery("")`, `setFilter(ALL)`, `setDestinationFilter(null)`. `EmptyState` icons: `Icons.Filled.Search` when filtering, `ic_tab_home` (from T11; until then `Icons.Filled.Email`) when not filtering.
+- [ ] **Step 4:** → PASS; `ScreenshotsTest` compiles and passes.
+- [ ] **Step 5: Measure** on the emulator light/dark and at 360 dp (`adb shell wm size 720x1600` with density 320 → 360 dp; restore with `wm size reset`): scrollable chip row without cut-offs, 2–3 line rows.
 - [ ] **Step 6: Commit** `feat(ui): home rows with delivery pills, day headers and empty state`.
 
-### Task 6: Detalle
+### Task 6: Detail
 
 **Files:**
 - Modify: `app/src/main/kotlin/dev/smsforwarder/ui/detail/DetailScreen.kt`, strings
@@ -224,59 +224,59 @@ Se reutilizan: `forwarding_paused` (el panel muestra "Forwarding paused"), `main
 
 **Interfaces:**
 - Consumes: T1 (`StatusPill`, `toneOf`), T2 (`SectionTitle`, `DestructiveButton`), T5 (`deliveryChipText`).
-- Produces: nada nuevo para otras tareas.
+- Produces: nothing new for other tasks.
 
-- [ ] **Step 1: Tests que fallan:** `headerShowsSenderAndStatusPill` (remitente y `statusText` de su etiqueta), `destinationsSectionListsEachDeliveryWithPill` (título `detail_destinations`, nombre de cada entrega y su píldora), `retryOnlyWhenItApplies` (estado con error → botón de reintentar existe; enviado → no existe), `deleteIsDestructiveAndStillConfirms` (pulsar borrar abre el diálogo de confirmación de hoy; confirmar llama `onDelete`), `attemptsSectionShowsHttpCode` (título `detail_attempts` y el código en una píldora). Los tests existentes que miran textos se adaptan.
+- [ ] **Step 1: Failing tests:** `headerShowsSenderAndStatusPill` (sender and the `statusText` of its label), `destinationsSectionListsEachDeliveryWithPill` (title `detail_destinations`, name of each delivery and its pill), `retryOnlyWhenItApplies` (error state → retry button exists; sent → it does not exist), `deleteIsDestructiveAndStillConfirms` (tapping delete opens today's confirmation dialog; confirming calls `onDelete`), `attemptsSectionShowsHttpCode` (title `detail_attempts` and the code in a pill). Existing tests that look at texts are adapted.
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.DetailScreenTest'` → FAIL.
-- [ ] **Step 3:** Implementar spec §4. Cuerpo del mensaje en `Card` `surfaceContainerLow` con `SelectionContainer`. Acciones en una `Row` (`FlowRow` si no caben a 360 dp): Reintentar `Button`, Reenviar `OutlinedButton`, Borrar `DestructiveButton`. Píldora de intento: tono OK para 2xx, ERROR para el resto, NEUTRAL sin código.
-- [ ] **Step 4:** → PASS. Usar `assertExists()` donde el viewport de Robolectric corte.
-- [ ] **Step 5: Medir** en emulador claro/oscuro, SMS con dos entregas (una en error).
+- [ ] **Step 3:** Implement spec §4. Message body in a `surfaceContainerLow` `Card` with `SelectionContainer`. Actions in a `Row` (`FlowRow` if they do not fit at 360 dp): Retry `Button`, Resend `OutlinedButton`, Delete `DestructiveButton`. Attempt pill: OK tone for 2xx, ERROR for the rest, NEUTRAL with no code.
+- [ ] **Step 4:** → PASS. Use `assertExists()` where the Robolectric viewport cuts things off.
+- [ ] **Step 5: Measure** on the emulator light/dark, an SMS with two deliveries (one failed).
 - [ ] **Step 6: Commit** `feat(ui): detail header, destinations and attempts with status pills`.
 
-### Task 7: Listas: Destinos, Reglas, Recuperar
+### Task 7: Lists: Destinations, Rules, Recovery
 
 **Files:**
-- Modify: `ui/destinations/DestinationsScreen.kt`, `ui/rules/RulesScreen.kt`, `ui/recovery/RecoveryScreen.kt`, `ui/Nav.kt` (FAB extendido si vive en `AppShell`/`Nav`), strings
+- Modify: `ui/destinations/DestinationsScreen.kt`, `ui/rules/RulesScreen.kt`, `ui/recovery/RecoveryScreen.kt`, `ui/Nav.kt` (extended FAB if it lives in `AppShell`/`Nav`), strings
 - Test: `DestinationsScreenTest.kt`, `RulesScreenTest.kt`, `RecoveryScreenTest.kt`
 
 **Interfaces:**
 - Consumes: T1, T2 (`EmptyState`, `InsetDivider`, `BottomActionBar`).
 
-- [ ] **Step 1: Tests que fallan:**
-  - Destinos: `errorCountIsAnErrorPill` (fila con 3 errores → texto plural `destination_error_count` con 3); `emptyStateAddOpensEditor` (lista vacía → `EmptyState` con `action_add`; pulsar → misma lambda que el FAB); `fabIsExtendedWithAddText` (nodo con texto `destination_add` o `action_add`, el que se elija, y click → callback).
-  - Reglas: `noDestinationsIsAnErrorPill` (`rule_no_destinations` visible); `emptyStateAddOpensEditor`.
-  - Recuperar: `alreadySavedRowShowsNeutralPill` (`recovery_already_saved` visible en una píldora y la fila no seleccionable, como hoy); `sendSelectedIsPinnedAtBottom` (el botón existe y está fuera del `LazyColumn`: comprobar que sigue visible tras `performScrollToIndex` al final).
+- [ ] **Step 1: Failing tests:**
+  - Destinations: `errorCountIsAnErrorPill` (row with 3 errors → plural text `destination_error_count` with 3); `emptyStateAddOpensEditor` (empty list → `EmptyState` with `action_add`; tapping → same lambda as the FAB); `fabIsExtendedWithAddText` (node with text `destination_add` or `action_add`, whichever is chosen, and click → callback).
+  - Rules: `noDestinationsIsAnErrorPill` (`rule_no_destinations` visible); `emptyStateAddOpensEditor`.
+  - Recovery: `alreadySavedRowShowsNeutralPill` (`recovery_already_saved` visible in a pill and the row not selectable, as today); `sendSelectedIsPinnedAtBottom` (the button exists and is outside the `LazyColumn`: check that it is still visible after `performScrollToIndex` to the end).
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.DestinationsScreenTest' --tests 'dev.smsforwarder.ui.RulesScreenTest' --tests 'dev.smsforwarder.ui.RecoveryScreenTest'` → FAIL.
-- [ ] **Step 3:** Implementar spec §5. Interruptor de destino conserva su etiqueta accesible. Filas ya guardadas de Recuperar: textos con `colorScheme.onSurface.copy(alpha = 0.38f)`. FAB: `ExtendedFloatingActionButton(icon = Icons.Filled.Add, text = action_add)`. Las dos versiones de "Enviar seleccionados" (onboarding y Ajustes → Recuperar) usan la misma `BottomActionBar`.
+- [ ] **Step 3:** Implement spec §5. The destination switch keeps its accessible label. Already-saved rows in Recovery: texts with `colorScheme.onSurface.copy(alpha = 0.38f)`. FAB: `ExtendedFloatingActionButton(icon = Icons.Filled.Add, text = action_add)`. Both versions of "Send selected" (onboarding and Settings → Recovery) use the same `BottomActionBar`.
 - [ ] **Step 4:** → PASS.
-- [ ] **Step 5: Medir** en emulador claro/oscuro: Destinos con un destino con errores y uno en pausa; Reglas con una sin destinos; Recuperar con filas ya guardadas.
+- [ ] **Step 5: Measure** on the emulator light/dark: Destinations with one destination with errors and one paused; Rules with one with no destinations; Recovery with already-saved rows.
 - [ ] **Step 6: Commit** `feat(ui): list pills, inset dividers, empty states and extended FABs`.
 
-### Task 8: Editores de destino y regla
+### Task 8: Destination and rule editors
 
 **Files:**
-- Modify: `ui/destinations/DestinationEditorScreen.kt`, `ui/destinations/DestinationEditorViewModel.kt` (solo el valor por defecto), `ui/rules/RuleEditorScreen.kt`, strings
+- Modify: `ui/destinations/DestinationEditorScreen.kt`, `ui/destinations/DestinationEditorViewModel.kt` (only the default value), `ui/rules/RuleEditorScreen.kt`, strings
 - Test: `DestinationEditorScreenTest.kt`, `DestinationEditorViewModelTest.kt`, `RuleEditorScreenTest.kt`
 
 **Interfaces:**
 - Consumes: T2 (`BottomActionBar`, `DestructiveButton`).
-- Produces: `DestinationEditorState.template` por defecto `TemplateKind.STANDARD_JSON`.
+- Produces: `DestinationEditorState.template` defaults to `TemplateKind.STANDARD_JSON`.
 
-- [ ] **Step 1: Tests que fallan:**
-  - `newDestinationDefaultsToStandardJson` (ViewModel: `reset()` para destino nuevo → `template == STANDARD_JSON` y `name == defaultName(STANDARD_JSON)`); revisar los tests existentes que daban por hecho `CUSTOM` y adaptarlos eligiendo `CUSTOM` explícitamente con `chooseTemplate`.
-  - `editingKeepsSavedTemplate` (destino guardado como `CUSTOM` sigue en `CUSTOM` al abrirlo).
-  - `templateControlSelectsTemplate` (pulsar la opción Telegram → `chooseTemplate(TELEGRAM)`; vale para segmentado o desplegable).
-  - `headerRowHasNameValueSecretAndRemove` (una cabecera → sus cuatro controles; borrar → callback).
-  - `storedSecretHelperHasLockIcon` (texto existente de "guardado" visible junto a un icono; comprobar el texto).
-  - `saveIsPinnedAtBottom` (en ambos editores, el botón Guardar existe tras desplazar al final del formulario).
-  - Regla: `matchModeIsSegmented` (pulsar un modo → callback con ese modo; `Role.RadioButton` en los segmentos).
+- [ ] **Step 1: Failing tests:**
+  - `newDestinationDefaultsToStandardJson` (ViewModel: `reset()` for a new destination → `template == STANDARD_JSON` and `name == defaultName(STANDARD_JSON)`); review the existing tests that assumed `CUSTOM` and adapt them by choosing `CUSTOM` explicitly with `chooseTemplate`.
+  - `editingKeepsSavedTemplate` (a destination saved as `CUSTOM` stays `CUSTOM` when opened).
+  - `templateControlSelectsTemplate` (tapping the Telegram option → `chooseTemplate(TELEGRAM)`; works for segmented or dropdown).
+  - `headerRowHasNameValueSecretAndRemove` (one header → its four controls; delete → callback).
+  - `storedSecretHelperHasLockIcon` (existing "stored" text visible next to an icon; check the text).
+  - `saveIsPinnedAtBottom` (in both editors, the Save button exists after scrolling to the end of the form).
+  - Rule: `matchModeIsSegmented` (tapping a mode → callback with that mode; `Role.RadioButton` on the segments).
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.DestinationEditor*' --tests 'dev.smsforwarder.ui.RuleEditorScreenTest'` → FAIL.
-- [ ] **Step 3:** Implementar spec §6. Antes de decidir el control de plantilla, medir en el emulador a 360 dp (ver "Decisiones"). Método HTTP: el `ExposedDropdownMenuBox` actual con `fillMaxWidth()` y su etiqueta. Cabeceras: `OutlinedCard` por cabecera; "Añadir cabecera" `OutlinedButton` con `Icons.Filled.Add`. Cuerpo y JSON: `textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace)`. Ayuda de secreto guardado: `Row` con `Icons.Filled.Lock` 16 dp. Guardar en `BottomActionBar` (`Scaffold.bottomBar`), Probar `OutlinedButton` encima de Guardar en la misma barra; Borrar `DestructiveButton` al final del formulario.
+- [ ] **Step 3:** Implement spec §6. Before deciding the template control, measure on the emulator at 360 dp (see "Decisions"). HTTP method: the current `ExposedDropdownMenuBox` with `fillMaxWidth()` and its label. Headers: an `OutlinedCard` per header; "Add header" `OutlinedButton` with `Icons.Filled.Add`. Body and JSON: `textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace)`. Stored-secret helper: `Row` with a 16 dp `Icons.Filled.Lock`. Save in `BottomActionBar` (`Scaffold.bottomBar`), Test `OutlinedButton` above Save in the same bar; Delete `DestructiveButton` at the end of the form.
 - [ ] **Step 4:** → PASS.
-- [ ] **Step 5: Medir** en emulador claro/oscuro y a 360 dp: editor de destino nuevo, de uno con dos cabeceras, editor de regla.
+- [ ] **Step 5: Measure** on the emulator light/dark and at 360 dp: editor for a new destination, for one with two headers, rule editor.
 - [ ] **Step 6: Commit** `feat(ui): editors with segmented choices, header cards and pinned save`.
 
-### Task 9: Ajustes
+### Task 9: Settings
 
 **Files:**
 - Modify: `ui/settings/SettingsScreen.kt`, strings
@@ -285,79 +285,79 @@ Se reutilizan: `forwarding_paused` (el panel muestra "Forwarding paused"), `main
 **Interfaces:**
 - Consumes: T1 (`toneColors(PENDING)`), T2 (`SectionTitle`, `SettingRow`, `SingleChoiceDialog`).
 
-- [ ] **Step 1: Tests que fallan** (adaptan los actuales de radios):
-  - `sweepIntervalRowShowsCurrentValueAndOpensDialog`: la fila muestra el valor actual como texto secundario; pulsar → diálogo con todas las opciones; elegir otra → `setSweepInterval(valor)` y el diálogo se cierra. Igual para `stuckAfter`, `retention` y `language` (un test por grupo; un helper común).
-  - `themeIsSegmented`: tres segmentos; pulsar Oscuro → `setTheme(ThemeMode.DARK)`.
-  - `tokenAlertWarningHasIcon`: el texto de aviso existente visible junto a `Icons.Filled.Info` (comprobar el texto).
-  - `maintenanceRowsOpenTheirScreens`: pulsar "Recuperar SMS" → `onOpenRecovery`; la fila de permisos → su callback.
-  - `sectionTitlesAreHeadings`: al menos un nodo `heading` por sección.
+- [ ] **Step 1: Failing tests** (adapt the current radio ones):
+  - `sweepIntervalRowShowsCurrentValueAndOpensDialog`: the row shows the current value as secondary text; tapping → dialog with all the options; choosing another → `setSweepInterval(value)` and the dialog closes. Same for `stuckAfter`, `retention` and `language` (one test per group; a shared helper).
+  - `themeIsSegmented`: three segments; tapping Dark → `setTheme(ThemeMode.DARK)`.
+  - `tokenAlertWarningHasIcon`: the existing warning text visible next to `Icons.Filled.Info` (check the text).
+  - `maintenanceRowsOpenTheirScreens`: tapping "Recover SMS" → `onOpenRecovery`; the permissions row → its callback.
+  - `sectionTitlesAreHeadings`: at least one `heading` node per section.
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.SettingsScreenTest'` → FAIL.
-- [ ] **Step 3:** Implementar spec §7. Los interruptores (reenvío, ocultar texto, notificar, color dinámico) quedan como `ListItem` con `Switch` en `trailingContent` y `toggleable` en la fila.
+- [ ] **Step 3:** Implement spec §7. The switches (forwarding, hide text, notify, dynamic color) stay as `ListItem` with a `Switch` in `trailingContent` and `toggleable` on the row.
 - [ ] **Step 4:** → PASS.
-- [ ] **Step 5: Medir** en emulador claro/oscuro y a 360 dp (segmentado de tema). Altura total de Ajustes antes/después anotada (objetivo: menos de dos pantallas).
+- [ ] **Step 5: Measure** on the emulator light/dark and at 360 dp (theme segmented control). Total height of Settings before/after noted (goal: under two screens).
 - [ ] **Step 6: Commit** `feat(ui): compact settings with value rows and choice dialogs`.
 
 ### Task 10: Onboarding
 
 **Files:**
 - Modify: `ui/onboarding/OnboardingScreen.kt`, strings
-- Test: crear `app/src/test/kotlin/dev/smsforwarder/ui/OnboardingScreenTest.kt` (hoy solo hay test del ViewModel)
+- Test: create `app/src/test/kotlin/dev/smsforwarder/ui/OnboardingScreenTest.kt` (today there is only a ViewModel test)
 
 **Interfaces:**
 - Consumes: T1 (`StatusPill`), T2 (`BottomActionBar`).
 
-- [ ] **Step 1: Tests que fallan:**
-  - `showsStepProgress`: paso 3 de 8 → texto `onboarding_progress` con 3 y 8.
-  - `permissionStatusIsAPill`: permiso concedido → píldora con el texto de estado actual de "concedido"; denegado → el de "denegado". (Usar las claves que el paso de permisos ya usa.)
-  - `connectionResultIsAPill`: resultado OK y resultado de error → sus textos actuales visibles.
-  - `continueIsPinnedAndAdvances`: pulsar Continuar → callback de avanzar.
-  - `noBackArrow`: no existe nodo con la descripción de volver.
+- [ ] **Step 1: Failing tests:**
+  - `showsStepProgress`: step 3 of 8 → text `onboarding_progress` with 3 and 8.
+  - `permissionStatusIsAPill`: permission granted → pill with the current "granted" status text; denied → the "denied" one. (Use the keys the permissions step already uses.)
+  - `connectionResultIsAPill`: OK result and error result → their current texts visible.
+  - `continueIsPinnedAndAdvances`: tapping Continue → advance callback.
+  - `noBackArrow`: no node with the back description exists.
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.OnboardingScreenTest'` → FAIL.
-- [ ] **Step 3:** Implementar spec §8. `LinearProgressIndicator(progress = { step / total.toFloat() })` con el texto encima. Título `headlineSmall`. Acciones del paso como `FilledTonalButton` a todo el ancho en columna. Tono de la prueba de conexión: OK si pasa, ERROR si falla, PENDING mientras prueba.
-- [ ] **Step 4:** → PASS; `OnboardingViewModelTest` sin cambios.
-- [ ] **Step 5: Medir** en emulador claro/oscuro los pasos de permisos y conexión (borrar datos de la app debug para volver al onboarding: `adb -s emulator-5554 shell pm clear <paquete debug>`).
+- [ ] **Step 3:** Implement spec §8. `LinearProgressIndicator(progress = { step / total.toFloat() })` with the text above it. Title `headlineSmall`. Step actions as full-width `FilledTonalButton`s in a column. Connection test tone: OK if it passes, ERROR if it fails, PENDING while testing.
+- [ ] **Step 4:** → PASS; `OnboardingViewModelTest` unchanged.
+- [ ] **Step 5: Measure** on the emulator light/dark the permissions and connection steps (clear the debug app's data to get back to onboarding: `adb -s emulator-5554 shell pm clear <debug package>`).
 - [ ] **Step 6: Commit** `feat(ui): onboarding progress, status pills and pinned continue`.
 
-### Task 11: Menú, exportar, Acerca de e iconos de pestañas
+### Task 11: Menu, export, About and tab icons
 
 **Files:**
 - Modify: `ui/AppShell.kt`, `ui/transfer/TransferDialogs.kt`, `ui/about/AboutScreen.kt`
 - Create: `res/drawable/ic_upload.xml`, `ic_download.xml`, `ic_tab_home.xml`, `ic_tab_home_filled.xml`, `ic_tab_rules_filled.xml`, `ic_tab_destinations_filled.xml`
-- Modify: `ui/main/MainScreen.kt` (icono del estado vacío, si en T5 quedó el provisional)
+- Modify: `ui/main/MainScreen.kt` (empty-state icon, if the provisional one was left in T5)
 - Test: `AppShellTest.kt`, `TransferDialogsTest.kt`, `AboutScreenTest.kt`
 
 **Interfaces:**
 - Consumes: T1 (`toneColors(PENDING)`), T2 (`SettingRow`).
 
-- [ ] **Step 1: Tests que fallan:**
-  - `menuItemsKeepOrderAndCallbacks`: Exportar, Importar, Acerca de, en ese orden, cada uno con su callback (el test actual, adaptado si mira solo texto).
-  - `exportWarningAppearsOnlyWhenChecked`: casilla desmarcada → texto de aviso existente no existe; marcar → existe.
-  - `aboutLinkOpensCode`: el enlace al código es texto pulsable con `Role.Button`/`LinkAnnotation` y dispara el mismo callback que hoy.
-  - `aboutDiagnosticsIsARow`: pulsar la fila de diagnóstico → callback de exportar diagnóstico.
-  - `selectedTabUsesFilledIcon`: no se prueba en Robolectric (icono no inspeccionable con sentido); se comprueba en la captura de T12.
+- [ ] **Step 1: Failing tests:**
+  - `menuItemsKeepOrderAndCallbacks`: Export, Import, About, in that order, each with its callback (the current test, adapted if it only looks at text).
+  - `exportWarningAppearsOnlyWhenChecked`: checkbox unchecked → existing warning text does not exist; checked → it exists.
+  - `aboutLinkOpensCode`: the code link is tappable text with `Role.Button`/`LinkAnnotation` and fires the same callback as today.
+  - `aboutDiagnosticsIsARow`: tapping the diagnostics row → export diagnostics callback.
+  - `selectedTabUsesFilledIcon`: not tested in Robolectric (the icon cannot be meaningfully inspected); checked in the T12 screenshot.
 - [ ] **Step 2:** `--tests 'dev.smsforwarder.ui.AppShellTest' --tests 'dev.smsforwarder.ui.TransferDialogsTest' --tests 'dev.smsforwarder.ui.AboutScreenTest'` → FAIL.
-- [ ] **Step 3:** Implementar spec §9 y §10. Menú: `leadingIcon` = `ic_upload` (exportar), `ic_download` (importar), `Icons.Outlined.Info`; `HorizontalDivider` antes de Acerca de. Aviso de exportar: `Row` con `Icons.Filled.Warning` y texto en `toneColors(PENDING).onContainer` sobre su container. Pestañas: icono relleno si `selected`, contorno si no.
-- [ ] **Step 4:** → PASS; `IconTest` y `NavTest` en verde.
-- [ ] **Step 5: Medir** en emulador claro/oscuro: menú abierto, diálogo de exportar marcado, Acerca de, barra inferior con cada pestaña seleccionada.
+- [ ] **Step 3:** Implement spec §9 and §10. Menu: `leadingIcon` = `ic_upload` (export), `ic_download` (import), `Icons.Outlined.Info`; `HorizontalDivider` before About. Export warning: `Row` with `Icons.Filled.Warning` and text in `toneColors(PENDING).onContainer` over its container. Tabs: filled icon if `selected`, outline if not.
+- [ ] **Step 4:** → PASS; `IconTest` and `NavTest` green.
+- [ ] **Step 5: Measure** on the emulator light/dark: open menu, export dialog checked, About, bottom bar with each tab selected.
 - [ ] **Step 6: Commit** `feat(ui): menu icons, export warning, about rows and tab icon pairs`.
 
-### Task 12: Verificación de conjunto y cierre
+### Task 12: Overall verification and closing
 
 **Files:**
-- Modify: `app/build.gradle.kts` (`versionName "2.1.0"`, `versionCode` +1), `README.md` (capturas si las enlaza), `docs/superpowers/specs/2026-11-04-visual-redesign-design.md` (línea de estado: implementado)
-- Test: suite completa
+- Modify: `app/build.gradle.kts` (`versionName "2.1.0"`, `versionCode` +1), `README.md` (screenshots if it links them), `docs/superpowers/specs/2026-11-04-visual-redesign-design.md` (status line: implemented)
+- Test: full suite
 
 - [ ] **Step 1:** `JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :core:test :app:testDebugUnitTest` → BUILD SUCCESSFUL.
-- [ ] **Step 2:** `./gradlew :app:assembleDebug :app:lintDebug` → sin errores nuevos de lint.
-- [ ] **Step 3: Capturas** en el emulador de todas las pantallas (Inicio con y sin avisos, Detalle, Destinos, editor de destino, Reglas, editor de regla, Ajustes, Onboarding en permisos y conexión, Recuperar, Acerca de, menú, diálogo de exportar), en claro y oscuro, con color dinámico encendido y apagado. Comparación contra las capturas de la auditoría delegada a un subagente sonnet que devuelve solo el veredicto por pantalla.
-- [ ] **Step 4: Casos de Review Focus 2:** `font_scale 1.3` a 360 dp en Inicio, Ajustes y editor de destino; restaurar `font_scale 1.0` y `wm size reset`. Anotar el resultado.
-- [ ] **Step 5: TalkBack rápido:** con `android-ui`, comprobar que el botón de barrido, la lupa, el contador de errores y las píldoras tienen texto o descripción.
+- [ ] **Step 2:** `./gradlew :app:assembleDebug :app:lintDebug` → no new lint errors.
+- [ ] **Step 3: Screenshots** on the emulator of all screens (Home with and without warnings, Detail, Destinations, destination editor, Rules, rule editor, Settings, Onboarding at permissions and connection, Recovery, About, menu, export dialog), light and dark, with dynamic color on and off. Comparison against the audit screenshots delegated to a sonnet subagent that returns only the verdict per screen.
+- [ ] **Step 4: Review Focus 2 cases:** `font_scale 1.3` at 360 dp on Home, Settings and the destination editor; restore `font_scale 1.0` and `wm size reset`. Note the result.
+- [ ] **Step 5: Quick TalkBack check:** with `android-ui`, check that the sweep button, the magnifier, the errors counter and the pills have text or a description.
 - [ ] **Step 6:** `android-emu-stop`.
-- [ ] **Step 7: Revisión OCR** de la rama contra `c06432d` (skill `ocr-review`). Corregir High/Medium en commits pequeños.
-- [ ] **Step 8: Commit** `chore: 2.1.0 visual redesign` y presentar al usuario las capturas antes/después. El push y la release esperan su OK.
+- [ ] **Step 7: OCR review** of the branch against `c06432d` (skill `ocr-review`). Fix High/Medium in small commits.
+- [ ] **Step 8: Commit** `chore: 2.1.0 visual redesign` and present the before/after screenshots to the user. Push and release wait for their OK.
 
 ---
 
-## Orden y dependencias
+## Order and dependencies
 
-T1 → T2 → T3 → T4 → T5 son secuenciales (T4 y T5 tocan `MainScreen.kt` y `Nav.kt`). Después de T5, T6, T7, T8, T9, T10 y T11 tocan ficheros distintos y solo dependen de T1–T2 (T11 toca `MainScreen.kt` solo para el icono del estado vacío; si se ejecuta en paralelo, ese cambio pasa a T12). `strings.xml` lo tocan casi todas: en ejecución paralela, cada tarea añade sus claves al final de su bloque y los conflictos se resuelven al integrar. T12 al final.
+T1 → T2 → T3 → T4 → T5 are sequential (T4 and T5 touch `MainScreen.kt` and `Nav.kt`). After T5, T6, T7, T8, T9, T10 and T11 touch different files and only depend on T1–T2 (T11 touches `MainScreen.kt` only for the empty-state icon; if run in parallel, that change moves to T12). `strings.xml` is touched by almost all of them: in parallel execution, each task adds its keys at the end of its block and conflicts are resolved on integration. T12 last.
