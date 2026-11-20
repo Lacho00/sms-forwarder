@@ -1,6 +1,6 @@
 # Screenshots of the main screens
 
-`ScreenshotsTest` renders Inicio, Reglas, Destinos and the SMS detail in light and dark with fake data
+`ScreenshotsTest` renders Home, Rules, Destinations and the SMS detail in light and dark with fake data
 (AAA, TEST, BANK, `h.example`) and writes PNGs to `app/build/screenshots/<locale>/`. It is skipped by the normal
 `:app:testDebugUnitTest`; it only runs with `-Pscreenshots`:
 

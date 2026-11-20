@@ -1,42 +1,50 @@
 # SMS Forwarder
 
-Aplicación Android que reenvía los SMS de los remitentes elegidos a un endpoint HTTPS
-configurado. Guarda cada mensaje en una cola local y lo reintenta hasta recibir un 200;
-además barre periódicamente la bandeja de entrada como red de seguridad.
+Android app that forwards SMS from the senders you choose to a configured HTTPS endpoint.
+It stores each message in a local queue and retries until it gets a 200; it also sweeps the
+inbox periodically as a safety net.
 
-## Instalación
+## Installation
 
 [<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png"
 alt="Get it on Obtainium" height="54">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/Lacho00/sms-forwarder)
 
-- [Obtainium](https://obtainium.imranr.dev/): instala y actualiza desde las Releases de GitHub.
-- [GitHub Releases](https://github.com/Lacho00/sms-forwarder/releases/latest): APK firmada.
+- [Obtainium](https://obtainium.imranr.dev/): installs and updates from GitHub Releases.
+- [GitHub Releases](https://github.com/Lacho00/sms-forwarder/releases/latest): signed APK.
 
-Ambos canales usan la misma firma, así que se pasa de uno a otro sin desinstalar.
+Both channels use the same signature, so you can switch between them without uninstalling.
 
-## Uso (1.1.0)
+## Features
 
-- Navegación inferior con Inicio y Ajustes; Acerca de en el menú.
-- Inicio: búsqueda y filtros por estado, ocultar el texto de los SMS y borrado suave
-  (un SMS borrado de la app no se reenvía aunque siga en la bandeja).
-- Ajustes por grupos: pausa del reenvío, intervalo del barrido, retención del historial,
-  avisos por tipo y color dinámico.
-- Interfaz en español e inglés.
-- Licencia MIT ([LICENSE](LICENSE)).
+- Bottom navigation with Home, Rules, Destinations and Settings; About, Export and Import in the
+  overflow menu.
+- Home: search and status filters, hide SMS text, and soft delete
+  (an SMS deleted from the app is not forwarded again even if it is still in the inbox).
+- Rules: choose which senders (and, optionally, which message bodies) go to which destinations.
+- Destinations: several endpoints, each with its own method, headers, body template and
+  connection test. Secrets are stored in the Android Keystore.
+- Export and import of destinations and rules as a JSON file; secrets are left out unless you choose
+  to include them.
+- Settings by group: forwarding pause, sweep interval, history retention,
+  notifications by type, and dynamic color.
+- Diagnostic report without personal data, from About.
+- Interface in English and Spanish.
+- No Google services, no trackers.
+- MIT license ([LICENSE](LICENSE)).
 
-## Compilación
+## Building
 
-La app también compila en local con el SDK de Android y JDK 17 (`./gradlew :core:test`,
-`:app:testDebugUnitTest`), pero la referencia es GitHub Actions. Capturas de las pantallas:
+The app also builds locally with the Android SDK and JDK 17 (`./gradlew :core:test`,
+`:app:testDebugUnitTest`), but GitHub Actions is the reference. Screenshots:
 [docs/screenshots.md](docs/screenshots.md).
 
-`scripts/e2e-emulator.sh` prueba el envío de punta a punta en un emulador con la compilación debug (siembra por broadcast, solo debug).
+`scripts/e2e-emulator.sh` tests delivery end to end on an emulator with the debug build (seeding by broadcast, debug only).
 
-## Firma
+## Signing
 
-Ver [docs/signing.md](docs/signing.md). Las versiones se publican con una etiqueta `vX.Y.Z`;
-la Release incluye la APK firmada.
+See [docs/signing.md](docs/signing.md). Releases are published with a `vX.Y.Z` tag;
+the Release includes the signed APK.
 
-## Pruebas manuales
+## Manual testing
 
 [docs/manual-test-checklist.md](docs/manual-test-checklist.md).

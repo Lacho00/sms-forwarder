@@ -1,84 +1,84 @@
 # SMS Forwarder Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Revisiones de código: solo con la skill `ocr-review` (OCR). Si la sub-skill pide revisores (spec reviewer, code quality reviewer, `code-reviewer`), se sustituyen por `ocr-review` sobre el diff de la task.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Code reviews: only with the `ocr-review` skill (OCR). If the sub-skill asks for reviewers (spec reviewer, code quality reviewer, `code-reviewer`), replace them with `ocr-review` on the task's diff.
 
-**Goal:** App Android (Kotlin + Compose) que guarda cada SMS de remitentes elegidos en una cola local y lo reenvía al Worker existente hasta recibir 200, con barrido de la bandeja como red de seguridad.
+**Goal:** Android app (Kotlin + Compose) that saves every SMS from chosen senders in a local queue and forwards it to the existing Worker until it receives 200, with an inbox sweep as a safety net.
 
-**Architecture:** Dos módulos Gradle. `:core` es Kotlin puro (JVM, sin Android): filtro, identidad del SMS, JSON, clasificación de respuestas, reglas de cola. Se prueba en local solo con JDK 17. `:app` es la app Android: Room, WorkManager, receptor, barrido, Keystore, notificaciones y UI Compose. Sus tests (Robolectric) corren solo en GitHub Actions.
+**Architecture:** Two Gradle modules. `:core` is pure Kotlin (JVM, no Android): filter, SMS identity, JSON, response classification, queue rules. It is tested locally with only JDK 17. `:app` is the Android app: Room, WorkManager, receiver, sweep, Keystore, notifications and Compose UI. Its tests (Robolectric) run only in GitHub Actions.
 
-**Tech Stack:** Kotlin 2.4.21, AGP 9.4.1, Gradle 9.8.1, Compose BOM 2026.09.00 (Material 3), Room 2.8.5 + KSP 2.3.12, WorkManager 2.12.0, DataStore 1.2.1, OkHttp 5.5.0, kotlinx-serialization-json 1.11.0 (solo `buildJsonObject`/`parseToJsonElement`, sin plugin), kotlinx-coroutines 1.11.0, JUnit 4 + kotlin-test, Robolectric 4.17, MockWebServer 3 (OkHttp 5).
+**Tech Stack:** Kotlin 2.4.21, AGP 9.4.1, Gradle 9.8.1, Compose BOM 2026.09.00 (Material 3), Room 2.8.5 + KSP 2.3.12, WorkManager 2.12.0, DataStore 1.2.1, OkHttp 5.5.0, kotlinx-serialization-json 1.11.0 (only `buildJsonObject`/`parseToJsonElement`, no plugin), kotlinx-coroutines 1.11.0, JUnit 4 + kotlin-test, Robolectric 4.17, MockWebServer 3 (OkHttp 5).
 
 **Spec:** `docs/superpowers/specs/2026-10-17-sms-forwarder-design.md`
 
 ## Global Constraints
 
-- `minSdk = 31`, `compileSdk = 37` (lo exige Compose BOM 2026.09.00), `targetSdk = 36`. Paquete y `applicationId`: `dev.smsforwarder`. La build debug lleva `applicationIdSuffix = ".debug"` (convive con la release).
-- Versiones fijadas arriba en `gradle/libs.versions.toml`. Antes de la Task 1, comprobar con context7 la configuración de AGP 9 (Kotlin integrado en AGP: **no** aplicar `org.jetbrains.kotlin.android`) y la compatibilidad AGP 9.4.1 / Gradle 9.8.1 / KSP 2.3.12. Si algo no encaja, ajustar la versión mínima necesaria y anotarlo en el commit.
-- No hay Android SDK en local. Local: solo `./gradlew :core:test` con JDK 17 (`/usr/lib/jvm/java-17-openjdk`). Todo lo de `:app` se verifica en GitHub Actions (`gh run watch`).
-- `settings.gradle.kts` incluye `:app` solo si existe `ANDROID_HOME` o `local.properties`. Así `:core` compila sin SDK.
-- Sin remitentes por defecto en el código: la lista empieza vacía y el primer arranque exige al menos uno. Los remitentes reales y demás valores de configuración personales viven en una carpeta local `private/`, ignorada por git, y nunca se commitean. Normalizar = quitar todos los espacios + mayúsculas.
-- Contrato del Worker: `POST <url>`, `Authorization: Bearer <token>`, `Content-Type: application/json`, cuerpo `{"sender","body","received_at"}` con `received_at` como **entero** de ms.
-- Valores fijos: barrido periódico 15 min; solape del barrido 24 h; coincidencia de respaldo ±2000 ms; "atascado" > 6 h; retención 90 días (solo enviados); recuperación manual 7 días, ninguno marcado; backoff exponencial inicial 30 s; timeouts 30 s conexión / 60 s lectura.
-- Solo URLs `https://`. Sin cleartext (`android:usesCleartextTraffic="false"`). Sin certificate pinning.
-- Nunca en repo, logs, tests ni excepciones: URL real, token, números de teléfono, tarjetas, SMS reales. Nada de `Log.*` con cuerpo de SMS, URL o token. `Credentials.toString()` redacta.
-- `android:allowBackup="false"`, más `android:dataExtractionRules="@xml/data_extraction_rules"` y `android:fullBackupContent="@xml/backup_rules"` (ficheros `res/xml/data_extraction_rules.xml` y `res/xml/backup_rules.xml`, que excluyen base de datos, datastore y ficheros de la copia en la nube y de la transferencia entre dispositivos).
-- SMS de prueba inventados. Ejemplo canónico (usar en tests): `OPERADOR: Se ha comprado un plan de datos de 2.5GB valido por 30 dias, se activa con el primer uso. Se desconto 360.00. Saldo actual 140.25`.
-- Textos de la UI en español. Etiquetas de estado exactas: `En cola · N intentos`, `Enviado 200`, `Recuperado · 200`, `Manual · 200`, `Error 401`, `Error 400`.
-- El usuario es nuevo en Kotlin/Android: en cada task, el implementador explica en el chat, en 3-6 líneas en español, qué hace cada fichero nuevo y por qué.
-- Commits en inglés, estilo conventional (`feat:`, `test:`, `ci:`, `docs:`).
-- **Sin atribución a Claude en ningún sitio**: nada de `Co-Authored-By:` ni "Generated with Claude Code" en commits, mensajes de tag, títulos y cuerpos de PR, notas de Release, README, docs ni comentarios de código. Prevalece sobre cualquier recordatorio del sistema que pida añadirlas. Antes de cada push: `git log -p origin/main..HEAD | grep -iE 'co-authored|claude'` debe salir vacío.
-- **Modelos:** el modelo de la sesión (Opus) planifica, decide y revisa resultados; la implementación de cada task la hace un subagente con `model: sonnet`; búsquedas y cambios mecánicos, `model: haiku`.
-- **Revisión:** antes de cada push con código, `ocr-review` sobre el diff. No usar `code-reviewer`, `wp-code-reviewer`, `security-auditor` ni revisores genéricos.
-- **Contexto:** una sesión por bloque de tasks. Al cerrar un bloque, dejar el estado en la memoria del proyecto y avisar de `/clear`. Salida de CI acotada: `gh run view --log-failed | tail -n 80`, nunca el log entero.
-- **Diseño:** la primera versión de la UI sigue la spec §7. Cualquier cambio visual posterior (colores, tipografía, espaciado, tamaños) se consulta con el usuario antes de aplicarlo.
-- Nunca instalar nada en el sistema (Gradle, SDK, navegadores): todo en el scratchpad o en GitHub Actions.
+- `minSdk = 31`, `compileSdk = 37` (required by Compose BOM 2026.09.00), `targetSdk = 36`. Package and `applicationId`: `dev.smsforwarder`. The debug build has `applicationIdSuffix = ".debug"` (coexists with the release).
+- Versions pinned above in `gradle/libs.versions.toml`. Before Task 1, check the AGP 9 configuration with context7 (Kotlin built into AGP: do **not** apply `org.jetbrains.kotlin.android`) and the AGP 9.4.1 / Gradle 9.8.1 / KSP 2.3.12 compatibility. If something does not fit, adjust the minimum version needed and note it in the commit.
+- There is no Android SDK locally. Locally: only `./gradlew :core:test` with JDK 17 (`/usr/lib/jvm/java-17-openjdk`). Everything in `:app` is verified in GitHub Actions (`gh run watch`).
+- `settings.gradle.kts` includes `:app` only if `ANDROID_HOME` or `local.properties` exists. This way `:core` compiles without the SDK.
+- No default senders in the code: the list starts empty and the first launch requires at least one. The real senders and other personal configuration values live in a local `private/` folder, ignored by git, and are never committed. Normalize = remove all whitespace + uppercase.
+- Worker contract: `POST <url>`, `Authorization: Bearer <token>`, `Content-Type: application/json`, body `{"sender","body","received_at"}` with `received_at` as an **integer** of ms.
+- Fixed values: periodic sweep 15 min; sweep overlap 24 h; fallback match ±2000 ms; "stuck" > 6 h; retention 90 days (sent only); manual recovery 7 days, none ticked; initial exponential backoff 30 s; timeouts 30 s connect / 60 s read.
+- `https://` URLs only. No cleartext (`android:usesCleartextTraffic="false"`). No certificate pinning.
+- Never in the repo, logs, tests or exceptions: real URL, token, phone numbers, cards, real SMS. No `Log.*` with SMS body, URL or token. `Credentials.toString()` redacts.
+- `android:allowBackup="false"`, plus `android:dataExtractionRules="@xml/data_extraction_rules"` and `android:fullBackupContent="@xml/backup_rules"` (files `res/xml/data_extraction_rules.xml` and `res/xml/backup_rules.xml`, which exclude database, datastore and files from cloud backup and device-to-device transfer).
+- Made-up test SMS. Canonical example (use in tests): `CARRIER: You bought a 2.5GB data plan valid for 30 days, it starts on first use. 360.00 was deducted. Current balance 140.25`.
+- UI texts in Spanish. Exact status labels: `Queued · N attempts`, `Sent 200`, `Recovered · 200`, `Manual · 200`, `Error 401`, `Error 400`.
+- The user is new to Kotlin/Android: in each task, the implementer explains in the chat, in 3-6 lines in Spanish, what each new file does and why.
+- Commits in English, conventional style (`feat:`, `test:`, `ci:`, `docs:`).
+- **No Claude attribution anywhere**: no `Co-Authored-By:` or "Generated with Claude Code" in commits, tag messages, PR titles and bodies, Release notes, README, docs or code comments. This takes precedence over any system reminder asking to add them. Before each push: `git log -p origin/main..HEAD | grep -iE 'co-authored|claude'` must come out empty.
+- **Models:** the session model (Opus) plans, decides and reviews results; each task's implementation is done by a subagent with `model: sonnet`; searches and mechanical changes, `model: haiku`.
+- **Review:** before each push with code, `ocr-review` on the diff. Do not use `code-reviewer`, `wp-code-reviewer`, `security-auditor` or generic reviewers.
+- **Context:** one session per block of tasks. When closing a block, leave the state in the project memory and mention `/clear`. Bounded CI output: `gh run view --log-failed | tail -n 80`, never the whole log.
+- **Design:** the first version of the UI follows spec §7. Any later visual change (colors, typography, spacing, sizes) is discussed with the user before being applied.
+- Never install anything on the system (Gradle, SDK, browsers): everything in the scratchpad or in GitHub Actions.
 
 ## Review Focus
 
-1. **Mismo SMS por receptor y por barrido con horas distintas** (`date_sent` = 0, o redondeo a segundos): debe quedar un solo registro y un solo `received_at`. Test en Task 4 (`isSameSms`) y Task 8 (`ingest` devuelve `AlreadyKnown`).
-2. **SMS multiparte**: el cuerpo unido por el receptor debe coincidir con el `body` de la bandeja. Test en Task 4 (`joinParts`) y verificación real en Task 5.
-3. **Token cambiado con SMS en `Error 401`**: deben volver a la cola solos. Test en Task 10 (`saveCredentialsRequeues401AndKicksQueued`).
-4. **Días sin red o proceso muerto a mitad de envío**: el SMS sigue `QUEUED`, nunca pasa a `ERROR` por red. Test en Task 9 (`IOException` → `Result.retry()`, estado `QUEUED`).
-5. **Respuesta HTML de Cloudflare (502/503) o 200 con cuerpo raro**: 5xx reintenta; 2xx acepta sin leer cuerpo. Test en Task 6 (`classify(502, "<html>…")` → `Retry`).
-6. **Suelo de barrido**: el primer barrido tras la configuración no debe enviar nada anterior al fin del primer arranque (la app anterior ya lo envió con otra hora). Tests en Task 7 (`sweepFromNeverBelowFloor`) y Task 11 (`sweepNeverReadsBeforeFloor`).
-7. **Nada activo antes del primer arranque**: receptor y barrido no hacen nada mientras `onboardingDone` sea falso. Tests en Task 11 (`SmsReceiverTest.ignoredBeforeOnboarding`, `sweepBeforeOnboardingDoesNothing`).
+1. **Same SMS through receiver and sweep with different times** (`date_sent` = 0, or rounding to seconds): there must be a single record and a single `received_at`. Test in Task 4 (`isSameSms`) and Task 8 (`ingest` returns `AlreadyKnown`).
+2. **Multipart SMS**: the body joined by the receiver must match the inbox `body`. Test in Task 4 (`joinParts`) and real verification in Task 5.
+3. **Token changed with SMS in `Error 401`**: they must go back to the queue on their own. Test in Task 10 (`saveCredentialsRequeues401AndKicksQueued`).
+4. **Days without network or process killed mid-send**: the SMS stays `QUEUED`, never goes to `ERROR` because of the network. Test in Task 9 (`IOException` → `Result.retry()`, state `QUEUED`).
+5. **Cloudflare HTML response (502/503) or 200 with an odd body**: 5xx retries; 2xx accepts without reading the body. Test in Task 6 (`classify(502, "<html>…")` → `Retry`).
+6. **Sweep floor**: the first sweep after setup must not send anything older than the end of the first launch (the previous app already sent it with a different time). Tests in Task 7 (`sweepFromNeverBelowFloor`) and Task 11 (`sweepNeverReadsBeforeFloor`).
+7. **Nothing active before the first launch**: receiver and sweep do nothing while `onboardingDone` is false. Tests in Task 11 (`SmsReceiverTest.ignoredBeforeOnboarding`, `sweepBeforeOnboardingDoesNothing`).
 
 ---
 
 ## File Structure
 
 ```
-settings.gradle.kts                 # incluye :core siempre, :app si hay SDK
-build.gradle.kts                    # plugins con apply false
-gradle/libs.versions.toml           # todas las versiones
+settings.gradle.kts                 # includes :core always, :app if there is an SDK
+build.gradle.kts                    # plugins with apply false
+gradle/libs.versions.toml           # all versions
 gradle/wrapper/…, gradlew, gradlew.bat
 .github/workflows/ci.yml            # push/PR: core test, app test, lint, assembleDebug, gitleaks
-.github/workflows/release.yml       # tag v*: assembleRelease firmado + GitHub Release
-docs/signing.md                     # crear la clave y los secretos, paso a paso
-docs/manual-test-checklist.md       # pruebas en el teléfono real
+.github/workflows/release.yml       # tag v*: signed assembleRelease + GitHub Release
+docs/signing.md                     # create the key and the secrets, step by step
+docs/manual-test-checklist.md       # tests on the real phone
 core/build.gradle.kts
 core/src/main/kotlin/dev/smsforwarder/core/
   Clock.kt                          # fun interface Clock
   SenderFilter.kt                   # normalize, matches
   SmsIdentity.kt                    # SmsRecord, localKey, effectiveReceivedAt, isSameSms, joinParts
   IngestPayload.kt                  # encode JSON
-  SendOutcome.kt                    # classify respuestas, ConnectionTestResult
+  SendOutcome.kt                    # classify responses, ConnectionTestResult
   QueuePolicy.kt                    # SmsStatus, SmsOrigin, StatusLabel, isStuck, retentionCutoff, sweepFrom
-  UrlValidator.kt                   # solo https
+  UrlValidator.kt                   # https only
 core/src/test/kotlin/dev/smsforwarder/core/*Test.kt
 app/build.gradle.kts
 app/src/main/AndroidManifest.xml
 app/src/main/kotlin/dev/smsforwarder/
-  SmsForwarderApp.kt                # Application: crea AppGraph, programa barrido periódico
-  AppGraph.kt                       # contenedor manual de dependencias (sin Hilt)
+  SmsForwarderApp.kt                # Application: creates AppGraph, schedules the periodic sweep
+  AppGraph.kt                       # manual dependency container (no Hilt)
   data/SmsEntity.kt, AttemptEntity.kt, SmsDao.kt, AppDatabase.kt
-  data/SmsRepository.kt             # ingest con deduplicación, cambios de estado
-  data/SettingsRepository.kt        # DataStore: remitentes, tema, cursor, onboarding
+  data/SmsRepository.kt             # ingest with deduplication, state changes
+  data/SettingsRepository.kt        # DataStore: senders, theme, cursor, onboarding
   data/SecretStore.kt               # Keystore AES-GCM + DataStore
   sms/SmsReceiver.kt                # SMS_RECEIVED
-  sms/BootReceiver.kt               # BOOT_COMPLETED → barrido
+  sms/BootReceiver.kt               # BOOT_COMPLETED → sweep
   sms/InboxReader.kt                # content://sms/inbox
-  sms/Sweeper.kt                    # lógica del barrido
+  sms/Sweeper.kt                    # sweep logic
   work/SendWorker.kt, SweepWorker.kt, WorkScheduler.kt
   net/IngestClient.kt               # OkHttp
   health/HealthChecker.kt, MiuiIntents.kt
@@ -86,26 +86,26 @@ app/src/main/kotlin/dev/smsforwarder/
   ui/MainActivity.kt, ui/theme/Theme.kt, ui/Nav.kt
   ui/onboarding/*, ui/main/*, ui/detail/*, ui/settings/*, ui/recovery/*
 app/src/debug/
-  AndroidManifest.xml               # receptor y actividad de diagnóstico
-  kotlin/dev/smsforwarder/diag/*    # pantalla de diagnóstico (solo debug)
+  AndroidManifest.xml               # receiver and diagnostics activity
+  kotlin/dev/smsforwarder/diag/*    # diagnostics screen (debug only)
 app/src/test/kotlin/dev/smsforwarder/**  # Robolectric
 ```
 
 ---
 
-### Task 1: Esqueleto Gradle y módulo `:core`
+### Task 1: Gradle skeleton and `:core` module
 
 **Files:**
 - Create: `settings.gradle.kts`, `build.gradle.kts`, `gradle/libs.versions.toml`, `gradle.properties`, wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.{jar,properties}`), `core/build.gradle.kts`, `core/src/main/kotlin/dev/smsforwarder/core/Clock.kt`, `README.md`
-- Modify: `.gitignore` (añadir `.idea/`, `*.iml`, `.kotlin/`)
+- Modify: `.gitignore` (add `.idea/`, `*.iml`, `.kotlin/`)
 - Test: `core/src/test/kotlin/dev/smsforwarder/core/ClockTest.kt`
 
 **Interfaces:**
-- Produces: `fun interface Clock { fun now(): Long }` y `object SystemClock : Clock` (ms epoch).
+- Produces: `fun interface Clock { fun now(): Long }` and `object SystemClock : Clock` (epoch ms).
 
-- [ ] **Step 1: Wrapper.** No hay Gradle instalado. Descargar `gradle-9.8.1-bin.zip` de `services.gradle.org` al scratchpad, descomprimir allí y ejecutar `<scratch>/gradle-9.8.1/bin/gradle wrapper --gradle-version 9.8.1` en la raíz con `JAVA_HOME=/usr/lib/jvm/java-17-openjdk`. No instalar nada en el sistema.
-- [ ] **Step 2: Catálogo y settings.** Versiones de la cabecera en `libs.versions.toml`. `settings.gradle.kts`: `include(":core")` y `if (System.getenv("ANDROID_HOME") != null || file("local.properties").exists()) include(":app")`. `core` usa el plugin `org.jetbrains.kotlin.jvm`, `jvmToolchain(17)`, dependencias `kotlinx-serialization-json`, test `kotlin("test-junit")`.
-- [ ] **Step 3: Test que falla.**
+- [ ] **Step 1: Wrapper.** Gradle is not installed. Download `gradle-9.8.1-bin.zip` from `services.gradle.org` into the scratchpad, unzip it there and run `<scratch>/gradle-9.8.1/bin/gradle wrapper --gradle-version 9.8.1` in the root with `JAVA_HOME=/usr/lib/jvm/java-17-openjdk`. Do not install anything on the system.
+- [ ] **Step 2: Catalog and settings.** Versions from the header in `libs.versions.toml`. `settings.gradle.kts`: `include(":core")` and `if (System.getenv("ANDROID_HOME") != null || file("local.properties").exists()) include(":app")`. `core` uses the `org.jetbrains.kotlin.jvm` plugin, `jvmToolchain(17)`, dependencies `kotlinx-serialization-json`, test `kotlin("test-junit")`.
+- [ ] **Step 3: Failing test.**
 
 ```kotlin
 class ClockTest {
@@ -117,21 +117,21 @@ class ClockTest {
 ```
 
 - [ ] **Step 4:** `JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :core:test` → FAIL (`Unresolved reference: SystemClock`).
-- [ ] **Step 5:** Implementar `Clock.kt`.
-- [ ] **Step 6:** Mismo comando → `BUILD SUCCESSFUL`.
-- [ ] **Step 7:** `README.md` mínimo: qué es, cómo se compila (Actions), enlace a `docs/signing.md` (aún por escribir). Commit `chore: gradle skeleton with pure-kotlin core module`.
+- [ ] **Step 5:** Implement `Clock.kt`.
+- [ ] **Step 6:** Same command → `BUILD SUCCESSFUL`.
+- [ ] **Step 7:** Minimal `README.md`: what it is, how it is built (Actions), link to `docs/signing.md` (still to be written). Commit `chore: gradle skeleton with pure-kotlin core module`.
 
-### Task 2: App mínima, CI y repo en GitHub
+### Task 2: Minimal app, CI and GitHub repo
 
 **Files:**
-- Create: `app/build.gradle.kts`, `app/src/main/AndroidManifest.xml`, `app/src/main/kotlin/dev/smsforwarder/ui/MainActivity.kt`, `app/src/main/kotlin/dev/smsforwarder/ui/theme/Theme.kt`, `app/src/main/res/values/strings.xml`, `app/src/main/res/xml/data_extraction_rules.xml`, `app/src/main/res/xml/backup_rules.xml`, `app/src/test/kotlin/dev/smsforwarder/SmokeTest.kt`, `.github/workflows/ci.yml`, `.gitleaks.toml` (opcional, solo si hace falta allowlist)
+- Create: `app/build.gradle.kts`, `app/src/main/AndroidManifest.xml`, `app/src/main/kotlin/dev/smsforwarder/ui/MainActivity.kt`, `app/src/main/kotlin/dev/smsforwarder/ui/theme/Theme.kt`, `app/src/main/res/values/strings.xml`, `app/src/main/res/xml/data_extraction_rules.xml`, `app/src/main/res/xml/backup_rules.xml`, `app/src/test/kotlin/dev/smsforwarder/SmokeTest.kt`, `.github/workflows/ci.yml`, `.gitleaks.toml` (optional, only if an allowlist is needed)
 
 **Interfaces:**
-- Produces: `@Composable fun SmsForwarderTheme(mode: ThemeMode, content: @Composable () -> Unit)` con `enum class ThemeMode { SYSTEM, LIGHT, DARK }` (en `ui/theme/Theme.kt`). Color dinámico siempre disponible (con `minSdk 31` no hace falta comprobar `SDK_INT`).
+- Produces: `@Composable fun SmsForwarderTheme(mode: ThemeMode, content: @Composable () -> Unit)` with `enum class ThemeMode { SYSTEM, LIGHT, DARK }` (in `ui/theme/Theme.kt`). Dynamic color always available (with `minSdk 31` there is no need to check `SDK_INT`).
 
-- [ ] **Step 1:** `app/build.gradle.kts`: plugins `com.android.application`, `org.jetbrains.kotlin.plugin.compose`, `com.google.devtools.ksp`; valores de Global Constraints; `buildFeatures { compose = true }`; `testOptions.unitTests.isIncludeAndroidResources = true`; `implementation(project(":core"))`; `debugImplementation` de `androidx.compose.ui:ui-test-manifest` (lo exige `createAndroidComposeRule`) y `testImplementation` de `androidx.compose.ui:ui-test-junit4`. Release: `isMinifyEnabled = true`, `isShrinkResources = true`.
-- [ ] **Step 2:** Manifest: `allowBackup="false"`, `dataExtractionRules`, `fullBackupContent`, `usesCleartextTraffic="false"`, `MainActivity` launcher. Crear `res/xml/data_extraction_rules.xml` (`<cloud-backup>` y `<device-transfer>` con `<exclude>` de `database`, `sharedpref` y `file`; el datastore vive bajo `files/datastore`) y `res/xml/backup_rules.xml` (`<full-backup-content>` con los mismos `<exclude>`). `MainActivity` muestra `Text("SMS Forwarder")` dentro de `SmsForwarderTheme(ThemeMode.SYSTEM)`.
-- [ ] **Step 3:** Smoke test Robolectric:
+- [ ] **Step 1:** `app/build.gradle.kts`: plugins `com.android.application`, `org.jetbrains.kotlin.plugin.compose`, `com.google.devtools.ksp`; values from Global Constraints; `buildFeatures { compose = true }`; `testOptions.unitTests.isIncludeAndroidResources = true`; `implementation(project(":core"))`; `debugImplementation` of `androidx.compose.ui:ui-test-manifest` (required by `createAndroidComposeRule`) and `testImplementation` of `androidx.compose.ui:ui-test-junit4`. Release: `isMinifyEnabled = true`, `isShrinkResources = true`.
+- [ ] **Step 2:** Manifest: `allowBackup="false"`, `dataExtractionRules`, `fullBackupContent`, `usesCleartextTraffic="false"`, `MainActivity` launcher. Create `res/xml/data_extraction_rules.xml` (`<cloud-backup>` and `<device-transfer>` with `<exclude>` of `database`, `sharedpref` and `file`; the datastore lives under `files/datastore`) and `res/xml/backup_rules.xml` (`<full-backup-content>` with the same `<exclude>`s). `MainActivity` shows `Text("SMS Forwarder")` inside `SmsForwarderTheme(ThemeMode.SYSTEM)`.
+- [ ] **Step 3:** Robolectric smoke test:
 
 ```kotlin
 @RunWith(RobolectricTestRunner::class)
@@ -141,51 +141,51 @@ class SmokeTest {
 }
 ```
 
-- [ ] **Step 4:** `ci.yml`, en `push` y `pull_request`. Un job `build` en `ubuntu-latest`:
+- [ ] **Step 4:** `ci.yml`, on `push` and `pull_request`. A `build` job on `ubuntu-latest`:
   - `actions/checkout`, `actions/setup-java` (temurin 17), `gradle/actions/setup-gradle`;
-  - `./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease` (la release sale sin firmar: `signingConfig` solo se aplica si existe `SIGNING_STORE_FILE`, ver Task 15);
-  - subir `app/build/outputs/apk/debug/*.apk` como artifact `app-debug`.
+  - `./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease` (the release comes out unsigned: `signingConfig` only applies if `SIGNING_STORE_FILE` exists, see Task 15);
+  - upload `app/build/outputs/apk/debug/*.apk` as artifact `app-debug`.
   
-  Un job `gitleaks` con `gitleaks/gitleaks-action@v2` y `fetch-depth: 0`.
+  A `gitleaks` job with `gitleaks/gitleaks-action@v2` and `fetch-depth: 0`.
 - [ ] **Step 5:** Commit `ci: minimal compose app with build, test, lint and gitleaks`.
-- [ ] **Step 6: Pedir confirmación al usuario** antes de crear el repo público (es publicar). Con su ok: `gh repo create sms-forwarder --public --source . --push`.
-- [ ] **Step 7:** `gh run watch` → los dos jobs en verde. Si falla, arreglar y repetir; no seguir con rojo.
+- [ ] **Step 6: Ask the user for confirmation** before creating the public repo (it is publishing). With their ok: `gh repo create sms-forwarder --public --source . --push`.
+- [ ] **Step 7:** `gh run watch` → both jobs green. If it fails, fix and repeat; do not continue on red.
 
-### Task 3: Filtro de remitentes (`:core`)
+### Task 3: Sender filter (`:core`)
 
 **Files:**
 - Create: `core/src/main/kotlin/dev/smsforwarder/core/SenderFilter.kt`
 - Test: `core/src/test/kotlin/dev/smsforwarder/core/SenderFilterTest.kt`
 
 **Interfaces:**
-- Produces: `object SenderFilter { fun normalize(sender: String): String; fun matches(sender: String, allowed: Collection<String>): Boolean }` (sin lista por defecto; con lista vacía `matches` es siempre falso)`
+- Produces: `object SenderFilter { fun normalize(sender: String): String; fun matches(sender: String, allowed: Collection<String>): Boolean }` (no default list; with an empty list `matches` is always false)`
 
-- [ ] **Step 1: Tests que fallan.**
+- [ ] **Step 1: Failing tests.**
 
 ```kotlin
 @Test fun normalizeRemovesAllWhitespaceAndUppercases() =
     assertEquals("BANCOX", SenderFilter.normalize(" Banco x\t"))
 @Test fun matchesIgnoringCaseAndSpaces() {
-    val allowed = listOf("OPERADOR", "BANCO")
-    assertTrue(SenderFilter.matches("operador ", allowed))
+    val allowed = listOf("CARRIER", "BANCO")
+    assertTrue(SenderFilter.matches("carrier ", allowed))
     assertTrue(SenderFilter.matches("BANCO", listOf(" banco")))
 }
 @Test fun doesNotMatchPrefixOrOtherSenders() {
-    val allowed = listOf("OPERADOR", "BANCO")
-    assertFalse(SenderFilter.matches("OPERADOR-PROMO", allowed))
+    val allowed = listOf("CARRIER", "BANCO")
+    assertFalse(SenderFilter.matches("CARRIER-PROMO", allowed))
     assertFalse(SenderFilter.matches("+10000000000", allowed))
     assertFalse(SenderFilter.matches("", allowed))
 }
 @Test fun emptyAllowedListMatchesNothing() =
-    assertFalse(SenderFilter.matches("OPERADOR", emptyList()))
+    assertFalse(SenderFilter.matches("CARRIER", emptyList()))
 ```
 
 - [ ] **Step 2:** `./gradlew :core:test` → FAIL.
-- [ ] **Step 3:** Implementar. Espacio = `Char.isWhitespace()`; mayúsculas con `uppercase(Locale.ROOT)`.
+- [ ] **Step 3:** Implement. Space = `Char.isWhitespace()`; uppercase with `uppercase(Locale.ROOT)`.
 - [ ] **Step 4:** `./gradlew :core:test` → PASS.
 - [ ] **Step 5:** Commit `feat(core): sender filter with whitespace and case normalization`.
 
-### Task 4: Identidad del SMS y unión de multiparte (`:core`)
+### Task 4: SMS identity and multipart joining (`:core`)
 
 **Files:**
 - Create: `core/src/main/kotlin/dev/smsforwarder/core/SmsIdentity.kt`
@@ -194,16 +194,16 @@ class SmokeTest {
 **Interfaces:**
 - Consumes: `SenderFilter.normalize`.
 - Produces:
-  - `data class SmsRecord(val sender: String, val body: String, val receivedAt: Long, val phoneDate: Long?, val subId: Int?)`. `receivedAt` = hora del centro de servicio en ms, el valor que se envía.
-  - `object SmsIdentity`, con:
+  - `data class SmsRecord(val sender: String, val body: String, val receivedAt: Long, val phoneDate: Long?, val subId: Int?)`. `receivedAt` = service center time in ms, the value that is sent.
+  - `object SmsIdentity`, with:
     - `fun effectiveReceivedAt(dateSent: Long?, date: Long): Long`;
-    - `fun bodyHash(body: String): String` (SHA-256 hex completo);
+    - `fun bodyHash(body: String): String` (full SHA-256 hex);
     - `fun localKey(r: SmsRecord): String` = `normalize(sender) + "|" + receivedAt + "|" + bodyHash(body)`;
     - `fun isSameSms(a: SmsRecord, b: SmsRecord): Boolean`;
     - `const val FALLBACK_WINDOW_MS = 2_000L`.
   - `fun joinParts(parts: List<String>): String`.
 
-- [ ] **Step 1: Tests que fallan** (usar el SMS canónico de Global Constraints como `BODY`).
+- [ ] **Step 1: Failing tests** (use the canonical SMS from Global Constraints as `BODY`).
 
 ```kotlin
 @Test fun effectiveReceivedAtPrefersDateSent() = assertEquals(1000L, SmsIdentity.effectiveReceivedAt(1000L, 5000L))
@@ -212,13 +212,13 @@ class SmokeTest {
     assertEquals(5000L, SmsIdentity.effectiveReceivedAt(null, 5000L))
 }
 @Test fun localKeyIsStableAcrossSenderFormatting() = assertEquals(
-    SmsIdentity.localKey(SmsRecord("OPERADOR", BODY, 1_792_260_900_000, null, 1)),
-    SmsIdentity.localKey(SmsRecord(" operador", BODY, 1_792_260_900_000, 1_792_260_901_234, 2)))
+    SmsIdentity.localKey(SmsRecord("CARRIER", BODY, 1_792_260_900_000, null, 1)),
+    SmsIdentity.localKey(SmsRecord(" carrier", BODY, 1_792_260_900_000, 1_792_260_901_234, 2)))
 @Test fun sameSmsWithinTwoSeconds() = assertTrue(SmsIdentity.isSameSms(
-    SmsRecord("OPERADOR", BODY, 1_792_260_900_000, null, null),
-    SmsRecord("OPERADOR", BODY, 1_792_260_901_999, null, null)))
+    SmsRecord("CARRIER", BODY, 1_792_260_900_000, null, null),
+    SmsRecord("CARRIER", BODY, 1_792_260_901_999, null, null)))
 @Test fun notSameBeyondWindowOrDifferentBody() {
-    val a = SmsRecord("OPERADOR", BODY, 1_792_260_900_000, null, null)
+    val a = SmsRecord("CARRIER", BODY, 1_792_260_900_000, null, null)
     assertFalse(SmsIdentity.isSameSms(a, a.copy(receivedAt = a.receivedAt + 2_001)))
     assertFalse(SmsIdentity.isSameSms(a, a.copy(body = BODY + " ")))
     assertFalse(SmsIdentity.isSameSms(a, a.copy(sender = "BANCO")))
@@ -228,13 +228,13 @@ class SmokeTest {
 ```
 
 - [ ] **Step 2:** `./gradlew :core:test` → FAIL.
-- [ ] **Step 3:** Implementar. `isSameSms`: igual `localKey`, o (mismo remitente normalizado, mismo `body` exacto y `|Δ receivedAt| <= FALLBACK_WINDOW_MS`).
+- [ ] **Step 3:** Implement. `isSameSms`: same `localKey`, or (same normalized sender, exactly the same `body` and `|Δ receivedAt| <= FALLBACK_WINDOW_MS`).
 - [ ] **Step 4:** `./gradlew :core:test` → PASS.
 - [ ] **Step 5:** Commit `feat(core): sms identity, local key and multipart join`.
 
-### Task 5: Pantalla de diagnóstico (solo debug) y verificación en el teléfono
+### Task 5: Diagnostics screen (debug only) and verification on the phone
 
-Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** hasta que el usuario confirme los valores.
+First real check of spec §5. **Blocks tasks 8 onwards** until the user confirms the values.
 
 **Files:**
 - Create: `app/src/debug/AndroidManifest.xml`, `app/src/debug/kotlin/dev/smsforwarder/diag/DiagReceiver.kt`, `app/src/debug/kotlin/dev/smsforwarder/diag/DiagStore.kt`, `app/src/debug/kotlin/dev/smsforwarder/diag/DiagActivity.kt`
@@ -242,28 +242,28 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 
 **Interfaces:**
 - Consumes: `SenderFilter`, `SmsIdentity.bodyHash`, `joinParts`.
-- Produces: nada para la release (todo en `src/debug`).
+- Produces: nothing for the release (everything in `src/debug`).
 
-- [ ] **Step 1:** Test: `DiagStore` (fichero JSON en `filesDir/diag.json`, máximo 20 entradas, la más nueva primero). Guardar 21 y releer da 20, y la primera es la última guardada. Campos: `sender`, `pduTimestamp`, `bodyHash` (12 primeros caracteres), `bodyLength`, `parts`, `subId`, `capturedAt`. **Nunca** el cuerpo.
-- [ ] **Step 2:** Implementar `DiagStore`, `DiagReceiver` (manifest de debug, `SMS_RECEIVED`, sin filtrar remitente; `subId` del extra `SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX`, el mismo que usa el receptor real de la Task 11) y `DiagActivity`, con launcher propio "SMS Diag":
-  - pide `RECEIVE_SMS` y `READ_SMS`;
-  - lista las capturas del receptor;
-  - lista las 20 filas más recientes de `content://sms/inbox` con `address`, `date`, `date_sent`, `sub_id`, hash y longitud del cuerpo;
-  - marca en verde las parejas con igual `localKey` y en ámbar las que solo casan por `isSameSms`.
-- [ ] **Step 3:** Push → `gh run watch` → verde. `gh run download -n app-debug`.
-- [ ] **Step 4: Con el usuario**, paso a paso:
-  1. Instala la APK debug. Por USB con `adb install`, o pasándola al teléfono.
-  2. Concede los permisos.
-  3. Espera o provoca un SMS de uno de tus remitentes (por ejemplo, consultar saldo).
-  4. Si puede, que llegue uno multiparte.
-  5. Abre "SMS Diag" y comunica, sin enviar capturas con datos reales: color de la pareja, `date_sent` ≠ 0, misma longitud de cuerpo.
-- [ ] **Step 5:** Según el resultado:
-  - Todo verde: anotar en la spec §5 "verificado en teléfono 2026-10-xx".
-  - Ámbar o sin pareja: ajustar §5 y la Task 4 (por ejemplo, ventana mayor o normalizar `\r\n`) con el usuario antes de seguir.
+- [ ] **Step 1:** Test: `DiagStore` (JSON file in `filesDir/diag.json`, at most 20 entries, newest first). Saving 21 and re-reading gives 20, and the first is the last one saved. Fields: `sender`, `pduTimestamp`, `bodyHash` (first 12 characters), `bodyLength`, `parts`, `subId`, `capturedAt`. **Never** the body.
+- [ ] **Step 2:** Implement `DiagStore`, `DiagReceiver` (debug manifest, `SMS_RECEIVED`, no sender filtering; `subId` from the `SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX` extra, the same one the real receiver in Task 11 uses) and `DiagActivity`, with its own launcher "SMS Diag":
+  - asks for `RECEIVE_SMS` and `READ_SMS`;
+  - lists the receiver's captures;
+  - lists the 20 most recent rows of `content://sms/inbox` with `address`, `date`, `date_sent`, `sub_id`, hash and body length;
+  - marks in green the pairs with equal `localKey` and in amber those that only match through `isSameSms`.
+- [ ] **Step 3:** Push → `gh run watch` → green. `gh run download -n app-debug`.
+- [ ] **Step 4: With the user**, step by step:
+  1. Install the debug APK. Over USB with `adb install`, or by transferring it to the phone.
+  2. Grant the permissions.
+  3. Wait for or trigger an SMS from one of your senders (for example, a balance query).
+  4. If possible, get a multipart one to arrive.
+  5. Open "SMS Diag" and report, without sending screenshots with real data: color of the pair, `date_sent` ≠ 0, same body length.
+- [ ] **Step 5:** Depending on the result:
+  - All green: note in spec §5 "verified on the phone 2026-10-xx".
+  - Amber or no pair: adjust §5 and Task 4 (for example, a larger window or normalizing `\r\n`) with the user before continuing.
   
   Commit `feat(debug): sms diagnostics screen`.
 
-### Task 6: JSON, clasificación de respuestas y URL (`:core`)
+### Task 6: JSON, response classification and URL (`:core`)
 
 **Files:**
 - Create: `core/src/main/kotlin/dev/smsforwarder/core/IngestPayload.kt`, `SendOutcome.kt`, `UrlValidator.kt`
@@ -273,16 +273,16 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 - Produces:
   - `object IngestPayload { fun encode(sender: String, body: String, receivedAt: Long): String }`;
   - `sealed interface SendOutcome { data object Accepted; data class Retry(val httpCode: Int?, val reason: String); data class Rejected(val httpCode: Int, val errorCode: String?) }`;
-  - `fun classify(httpCode: Int?, responseBody: String?): SendOutcome` (`httpCode == null` = error de red);
+  - `fun classify(httpCode: Int?, responseBody: String?): SendOutcome` (`httpCode == null` = network error);
   - `enum class ConnectionTestResult { OK, BAD_TOKEN, UNREACHABLE }` + `fun interpretConnectionTest(httpCode: Int?): ConnectionTestResult`;
   - `object UrlValidator { fun isValid(url: String): Boolean }`.
 
-- [ ] **Step 1: Tests que fallan.**
+- [ ] **Step 1: Failing tests.**
 
 ```kotlin
 @Test fun encodesReceivedAtAsNumberAndEscapes() {
-    val json = Json.parseToJsonElement(IngestPayload.encode("OPERADOR", "a \"b\"\nc", 1_792_260_900_000)).jsonObject
-    assertEquals("OPERADOR", json["sender"]!!.jsonPrimitive.content)
+    val json = Json.parseToJsonElement(IngestPayload.encode("CARRIER", "a \"b\"\nc", 1_792_260_900_000)).jsonObject
+    assertEquals("CARRIER", json["sender"]!!.jsonPrimitive.content)
     assertEquals("a \"b\"\nc", json["body"]!!.jsonPrimitive.content)
     assertFalse(json["received_at"]!!.jsonPrimitive.isString)
     assertEquals(1_792_260_900_000, json["received_at"]!!.jsonPrimitive.long)
@@ -312,14 +312,14 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 ```
 
 - [ ] **Step 2:** `./gradlew :core:test` → FAIL.
-- [ ] **Step 3:** Implementar:
-  - JSON con `buildJsonObject`;
-  - el código de error de un 400/401 sale del campo `error` del cuerpo, si es JSON válido;
-  - `UrlValidator` usa `java.net.URI` y exige `scheme == "https"` y host no vacío.
+- [ ] **Step 3:** Implement:
+  - JSON with `buildJsonObject`;
+  - the error code of a 400/401 comes from the `error` field of the body, if it is valid JSON;
+  - `UrlValidator` uses `java.net.URI` and requires `scheme == "https"` and a non-empty host.
 - [ ] **Step 4:** `./gradlew :core:test` → PASS.
 - [ ] **Step 5:** Commit `feat(core): ingest payload, response classification and url validation`.
 
-### Task 7: Reglas de cola y etiquetas (`:core`)
+### Task 7: Queue rules and labels (`:core`)
 
 **Files:**
 - Create: `core/src/main/kotlin/dev/smsforwarder/core/QueuePolicy.kt`
@@ -329,7 +329,7 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 - Produces:
   - `enum class SmsStatus { QUEUED, SENT, ERROR }`;
   - `enum class SmsOrigin { RECEIVER, SWEEP, MANUAL }`;
-  - `object QueuePolicy`, con:
+  - `object QueuePolicy`, with:
     - `const val STUCK_AFTER_MS = 6 * 3_600_000L`;
     - `const val RETENTION_MS = 90 * 86_400_000L`;
     - `const val SWEEP_OVERLAP_MS = 24 * 3_600_000L`;
@@ -339,7 +339,7 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
     - `fun sweepFrom(cursor: Long, floor: Long): Long = max(cursor - SWEEP_OVERLAP_MS, floor)`.
   - `fun statusLabel(status: SmsStatus, origin: SmsOrigin, attempts: Int, lastHttpCode: Int?): String`.
 
-- [ ] **Step 1: Tests que fallan.**
+- [ ] **Step 1: Failing tests.**
 
 ```kotlin
 @Test fun stuckAfterSixHoursQueued() {
@@ -352,9 +352,9 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 @Test fun sweepFromSubtracts24h() = assertEquals(100L, QueuePolicy.sweepFrom(100L + 86_400_000L, 0L))
 @Test fun sweepFromNeverBelowFloor() = assertEquals(500L, QueuePolicy.sweepFrom(100L + 86_400_000L, 500L))
 @Test fun labels() {
-    assertEquals("En cola · 3 intentos", statusLabel(SmsStatus.QUEUED, SmsOrigin.RECEIVER, 3, null))
-    assertEquals("Enviado 200", statusLabel(SmsStatus.SENT, SmsOrigin.RECEIVER, 1, 200))
-    assertEquals("Recuperado · 200", statusLabel(SmsStatus.SENT, SmsOrigin.SWEEP, 1, 200))
+    assertEquals("Queued · 3 attempts", statusLabel(SmsStatus.QUEUED, SmsOrigin.RECEIVER, 3, null))
+    assertEquals("Sent 200", statusLabel(SmsStatus.SENT, SmsOrigin.RECEIVER, 1, 200))
+    assertEquals("Recovered · 200", statusLabel(SmsStatus.SENT, SmsOrigin.SWEEP, 1, 200))
     assertEquals("Manual · 200", statusLabel(SmsStatus.SENT, SmsOrigin.MANUAL, 1, 200))
     assertEquals("Error 401", statusLabel(SmsStatus.ERROR, SmsOrigin.RECEIVER, 2, 401))
     assertEquals("Error 400", statusLabel(SmsStatus.ERROR, SmsOrigin.SWEEP, 1, 400))
@@ -362,11 +362,11 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 ```
 
 - [ ] **Step 2:** `./gradlew :core:test` → FAIL.
-- [ ] **Step 3:** Implementar.  `isStuck` es true para `ERROR` con 400 o 401.
+- [ ] **Step 3:** Implement. `isStuck` is true for `ERROR` with 400 or 401.
 - [ ] **Step 4:** `./gradlew :core:test` → PASS.
 - [ ] **Step 5:** Commit `feat(core): queue policy and status labels`.
 
-### Task 8: Base de datos Room y repositorio de SMS
+### Task 8: Room database and SMS repository
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/data/SmsEntity.kt`, `AttemptEntity.kt`, `SmsDao.kt`, `AppDatabase.kt`, `SmsRepository.kt`, `app/src/main/kotlin/dev/smsforwarder/AppGraph.kt`, `SmsForwarderApp.kt`
@@ -376,47 +376,47 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 **Interfaces:**
 - Consumes: `SmsRecord`, `SmsIdentity`, `SmsStatus`, `SmsOrigin`, `QueuePolicy`, `Clock`.
 - Produces:
-  - `SmsEntity`, en la tabla `sms`, con:
-    - `id: Long` (PK auto);
-    - `localKey: String` (índice único);
+  - `SmsEntity`, in table `sms`, with:
+    - `id: Long` (auto PK);
+    - `localKey: String` (unique index);
     - `sender`, `senderNormalized`, `body: String`;
-    - `receivedAt: Long` (índice), `phoneDate: Long?`, `subId: Int?`;
+    - `receivedAt: Long` (index), `phoneDate: Long?`, `subId: Int?`;
     - `origin: SmsOrigin`, `status: SmsStatus`;
     - `attempts: Int`, `lastHttpCode: Int?`, `lastError: String?`;
     - `firstSeenAt: Long`, `sentAt: Long?`, `stuckNotified: Boolean`.
     
     `toRecord(): SmsRecord`.
-  - `AttemptEntity`, en la tabla `attempt`, con `id`, `smsId` (FK con cascada), `at`, `httpCode: Int?`, `error: String?`.
+  - `AttemptEntity`, in table `attempt`, with `id`, `smsId` (FK with cascade), `at`, `httpCode: Int?`, `error: String?`.
   - `sealed interface IngestResult { data class Inserted(val id: Long); data class AlreadyKnown(val id: Long) }`.
-  - `class SmsRepository(db: AppDatabase, clock: Clock)`, con:
+  - `class SmsRepository(db: AppDatabase, clock: Clock)`, with:
     - `suspend fun ingest(record: SmsRecord, origin: SmsOrigin): IngestResult`;
     - `suspend fun get(id: Long): SmsEntity?`;
-    - `fun observeAll(): Flow<List<SmsEntity>>` (más reciente primero);
+    - `fun observeAll(): Flow<List<SmsEntity>>` (most recent first);
     - `fun observeAttempts(smsId: Long): Flow<List<AttemptEntity>>`;
-    - `suspend fun recordAttempt(id: Long, outcome: SendOutcome)` (actualiza estado, `attempts`, `lastHttpCode`, `sentAt`, inserta `AttemptEntity`);
-    - `suspend fun requeue(id: Long)`, que devuelve el SMS a `QUEUED` y pone `stuckNotified = false`;
-    - `suspend fun queuedIds(): List<Long>` (todos los `QUEUED`);
+    - `suspend fun recordAttempt(id: Long, outcome: SendOutcome)` (updates state, `attempts`, `lastHttpCode`, `sentAt`, inserts an `AttemptEntity`);
+    - `suspend fun requeue(id: Long)`, which puts the SMS back to `QUEUED` and sets `stuckNotified = false`;
+    - `suspend fun queuedIds(): List<Long>` (all `QUEUED`);
     - `suspend fun idsWithError401(): List<Long>`;
-    - `suspend fun purgeOld()`, que borra solo `SENT` con `receivedAt < retentionCutoff`;
-    - `suspend fun stuckToNotify(): List<SmsEntity>` (excluye las filas 401: las cubre la notificación de token) y `suspend fun markStuckNotified(id: Long)`.
-  - `class AppGraph(context: Context)`: `val db`, `val clock = SystemClock`, `val smsRepository` (se irán añadiendo campos en las tasks siguientes). `SmsForwarderApp.graph: AppGraph`.
+    - `suspend fun purgeOld()`, which deletes only `SENT` with `receivedAt < retentionCutoff`;
+    - `suspend fun stuckToNotify(): List<SmsEntity>` (excludes the 401 rows: the token notification covers them) and `suspend fun markStuckNotified(id: Long)`.
+  - `class AppGraph(context: Context)`: `val db`, `val clock = SystemClock`, `val smsRepository` (fields will be added in later tasks). `SmsForwarderApp.graph: AppGraph`.
 
-- [ ] **Step 1: Tests Robolectric que fallan** (BD en memoria, `Clock` fijo):
+- [ ] **Step 1: Failing Robolectric tests** (in-memory DB, fixed `Clock`):
   - `ingestTwiceSameRecordIsAlreadyKnown`
-  - `ingestWithin2sSameBodyIsAlreadyKnownAndKeepsFirstReceivedAt`: inserta por `RECEIVER` con `receivedAt = T`, ingiere por `SWEEP` con `T + 1500` → `AlreadyKnown`, y `get(id).receivedAt == T`.
+  - `ingestWithin2sSameBodyIsAlreadyKnownAndKeepsFirstReceivedAt`: inserts through `RECEIVER` with `receivedAt = T`, ingests through `SWEEP` with `T + 1500` → `AlreadyKnown`, and `get(id).receivedAt == T`.
   - `recordAttemptRetryKeepsQueued`: `Retry(null, "io")` → `QUEUED`, `attempts == 1`.
   - `recordAttemptAcceptedSetsSent`
   - `recordAttempt401SetsErrorAndIsListedIn401`
   - `purgeOldKeepsQueuedAndErrorEvenIfOld`
-- [ ] **Step 2:** Push → `gh run watch` → FAIL en `testDebugUnitTest`.
-- [ ] **Step 3:** Implementar:
-  - `ingest` en una transacción: busca por `localKey`; si no está, busca candidatos con mismo `senderNormalized` y `receivedAt` entre `T ± 2000` y comprueba con `isSameSms`; si no hay coincidencia, inserta.
-  - `TypeConverter` para los enums.
-  - `exportSchema = true` con `room.schemaLocation` en `app/schemas`.
+- [ ] **Step 2:** Push → `gh run watch` → FAIL in `testDebugUnitTest`.
+- [ ] **Step 3:** Implement:
+  - `ingest` in a transaction: look up by `localKey`; if not found, look up candidates with the same `senderNormalized` and `receivedAt` between `T ± 2000` and check with `isSameSms`; if there is no match, insert.
+  - `TypeConverter` for the enums.
+  - `exportSchema = true` with `room.schemaLocation` in `app/schemas`.
 - [ ] **Step 4:** Push → `gh run watch` → PASS.
 - [ ] **Step 5:** Commit `feat(app): room queue with dedup-aware ingest`.
 
-### Task 9: Cliente HTTP, credenciales cifradas y `SendWorker`
+### Task 9: HTTP client, encrypted credentials and `SendWorker`
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/net/IngestClient.kt`, `data/SecretStore.kt`, `work/SendWorker.kt`, `work/WorkScheduler.kt`
@@ -426,39 +426,39 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 **Interfaces:**
 - Consumes: `IngestPayload`, `classify`, `SendOutcome`, `SmsRepository`.
 - Produces:
-  - `data class Credentials(val url: String, val token: String)`, cuyo `toString()` devuelve `"Credentials(***)"`;
-  - `interface SecretStore`, con `suspend fun get(): Credentials?` y `suspend fun set(c: Credentials)`;
-    - `class KeystoreSecretStore(context)`: clave AES-256-GCM con alias `smsfwd-secrets` en `AndroidKeyStore`; texto cifrado + IV en base64 en DataStore (`secrets.preferences_pb`); `get()` captura `GeneralSecurityException` (incluye `AEADBadTagException` y `KeyPermanentlyInvalidatedException`) y la clave ausente: devuelve `null` y borra el blob guardado. Se prueba en JVM con un cifrador falso si es viable; si no, va a la lista manual de la Task 15.
-  - `class IngestClient(http: OkHttpClient)`, con:
+  - `data class Credentials(val url: String, val token: String)`, whose `toString()` returns `"Credentials(***)"`;
+  - `interface SecretStore`, with `suspend fun get(): Credentials?` and `suspend fun set(c: Credentials)`;
+    - `class KeystoreSecretStore(context)`: AES-256-GCM key with alias `smsfwd-secrets` in `AndroidKeyStore`; ciphertext + IV in base64 in DataStore (`secrets.preferences_pb`); `get()` catches `GeneralSecurityException` (includes `AEADBadTagException` and `KeyPermanentlyInvalidatedException`) and a missing key: returns `null` and deletes the stored blob. It is tested on the JVM with a fake cipher if feasible; if not, it goes to the manual list in Task 15.
+  - `class IngestClient(http: OkHttpClient)`, with:
     - `suspend fun send(c: Credentials, sender: String, body: String, receivedAt: Long): SendOutcome`;
     - `suspend fun testConnection(c: Credentials): ConnectionTestResult` (POST `{}`).
     
-    `fun defaultHttpClient(): OkHttpClient` (timeouts de Global Constraints).
-  - `class SendWorker : CoroutineWorker`, con input `KEY_SMS_ID = "smsId"`.
-  - `object WorkScheduler`, con:
-    - `fun enqueueSend(context, smsId: Long, replace: Boolean = false)`: único `"send-$smsId"`, `KEEP` por defecto y `REPLACE` si `replace = true`, red `CONNECTED`, backoff exponencial 30 s, `setExpedited(RUN_AS_NON_EXPEDITED_WORK_REQUEST)` (sin expedited en la ruta con `replace = true`);
-    - `fun kickQueued(context, ids: List<Long>)`: `enqueueSend(context, id, replace = true)` para cada id;
-    - `fun schedulePeriodicSweep(context)` y `fun sweepNow(context)`, rellenados en la Task 11.
-  - Para los tests, `SendWorker` obtiene sus dependencias de `AppGraph`, con un `SecretStore` sustituible.
+    `fun defaultHttpClient(): OkHttpClient` (timeouts from Global Constraints).
+  - `class SendWorker : CoroutineWorker`, with input `KEY_SMS_ID = "smsId"`.
+  - `object WorkScheduler`, with:
+    - `fun enqueueSend(context, smsId: Long, replace: Boolean = false)`: unique `"send-$smsId"`, `KEEP` by default and `REPLACE` if `replace = true`, `CONNECTED` network, exponential backoff 30 s, `setExpedited(RUN_AS_NON_EXPEDITED_WORK_REQUEST)` (no expedited on the path with `replace = true`);
+    - `fun kickQueued(context, ids: List<Long>)`: `enqueueSend(context, id, replace = true)` for each id;
+    - `fun schedulePeriodicSweep(context)` and `fun sweepNow(context)`, filled in in Task 11.
+  - For the tests, `SendWorker` gets its dependencies from `AppGraph`, with a replaceable `SecretStore`.
 
-- [ ] **Step 1: Tests que fallan.**
-  - `CredentialsTest.toStringRedacts`: `toString()` no contiene ni la URL ni el token.
+- [ ] **Step 1: Failing tests.**
+  - `CredentialsTest.toStringRedacts`: `toString()` contains neither the URL nor the token.
   - `IngestClientTest` (MockWebServer):
-    - `sendsBearerJsonAndNumberReceivedAt`: verifica la cabecera `Authorization: Bearer test-token`, el `Content-Type` y que el cuerpo tenga `received_at` numérico;
+    - `sendsBearerJsonAndNumberReceivedAt`: verifies the `Authorization: Bearer test-token` header, the `Content-Type` and that the body has a numeric `received_at`;
     - `maps401ToRejected`;
     - `disconnectIsRetry` (`SocketPolicy.DISCONNECT_AT_START`);
     - `testConnectionSendsEmptyObject`.
   - `SendWorkerTest` (`TestListenableWorkerBuilder`, `FakeSecretStore`, MockWebServer):
     - `ioErrorReturnsRetryAndStaysQueued`;
     - `200MarksSent`;
-    - `401ReturnsSuccessAndMarksError`: el trabajo termina sin reintento;
+    - `401ReturnsSuccessAndMarksError`: the work finishes without retry;
     - `missingCredentialsReturnsRetry`.
 - [ ] **Step 2:** Push → FAIL.
-- [ ] **Step 3:** Implementar. Si el SMS ya está `SENT`, `SendWorker` devuelve `success()`. `Retry` → `Result.retry()`. `Accepted`/`Rejected` → `Result.success()`. Ningún log con URL, token ni cuerpo.
+- [ ] **Step 3:** Implement. If the SMS is already `SENT`, `SendWorker` returns `success()`. `Retry` → `Result.retry()`. `Accepted`/`Rejected` → `Result.success()`. No log with URL, token or body.
 - [ ] **Step 4:** Push → PASS.
 - [ ] **Step 5:** Commit `feat(app): encrypted credentials, ingest client and send worker`.
 
-### Task 10: Ajustes persistentes
+### Task 10: Persistent settings
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/data/SettingsRepository.kt`
@@ -467,93 +467,93 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 
 **Interfaces:**
 - Consumes: `ThemeMode`, `SecretStore`, `SmsRepository.idsWithError401`, `SmsRepository.queuedIds`, `WorkScheduler.enqueueSend`.
-- Produces: `class SettingsRepository(context, secretStore, smsRepository, scheduler: (Long) -> Unit)`, con:
-  - `val senders: Flow<List<String>>`, `suspend fun addSender(s: String)`, `suspend fun removeSender(s: String)` (compara valores normalizados);
+- Produces: `class SettingsRepository(context, secretStore, smsRepository, scheduler: (Long) -> Unit)`, with:
+  - `val senders: Flow<List<String>>`, `suspend fun addSender(s: String)`, `suspend fun removeSender(s: String)` (compares normalized values);
   - `val themeMode: Flow<ThemeMode>`, `suspend fun setThemeMode(m: ThemeMode)`;
   - `suspend fun sweepCursor(): Long?`, `suspend fun setSweepCursor(t: Long)`;
   - `suspend fun sweepFloor(): Long?`, `suspend fun setSweepFloor(t: Long)`;
   - `val onboardingDone: Flow<Boolean>`, `suspend fun setOnboardingDone()`;
-  - `suspend fun saveCredentials(c: Credentials)`, que guarda y después reencola todos los SMS de `idsWithError401()` y todos los `QUEUED` (los de antes de las credenciales estaban en backoff por `missingCredentialsReturnsRetry`);
+  - `suspend fun saveCredentials(c: Credentials)`, which saves and then requeues all SMS from `idsWithError401()` and all `QUEUED` ones (those from before the credentials were in backoff because of `missingCredentialsReturnsRetry`);
   - `suspend fun lastNotifiedIssues(): Set<String>`, `suspend fun setLastNotifiedIssues(s: Set<String>)`.
 
-- [ ] **Step 1: Tests que fallan:**
-  - `sendersStartEmpty`: sin configuración previa, `senders` emite una lista vacía;
-  - `addSenderIgnoresDuplicateAfterNormalization`: con `"OPERADOR"` ya guardado, añadir `" operador"` no crea una segunda entrada;
-  - `saveCredentialsRequeues401AndKicksQueued`: con un SMS en `Error 401` y otro `QUEUED`, tras guardar el primero está `QUEUED` y el `scheduler` recibió los dos ids;
-  - `removeSenderMatchesNormalized`: quitar `"operador "` elimina `"OPERADOR"`;
+- [ ] **Step 1: Failing tests:**
+  - `sendersStartEmpty`: with no prior configuration, `senders` emits an empty list;
+  - `addSenderIgnoresDuplicateAfterNormalization`: with `"CARRIER"` already stored, adding `" carrier"` does not create a second entry;
+  - `saveCredentialsRequeues401AndKicksQueued`: with one SMS in `Error 401` and another `QUEUED`, after saving, the first is `QUEUED` and the `scheduler` received both ids;
+  - `removeSenderMatchesNormalized`: removing `"carrier "` deletes `"CARRIER"`;
   - `themeDefaultsToSystem`.
 - [ ] **Step 2:** Push → FAIL.
-- [ ] **Step 3:** Implementar con DataStore Preferences (`settings.preferences_pb`). Remitentes guardados tal como los escribe el usuario.
+- [ ] **Step 3:** Implement with DataStore Preferences (`settings.preferences_pb`). Senders stored as the user typed them.
 - [ ] **Step 4:** Push → PASS.
 - [ ] **Step 5:** Commit `feat(app): settings repository with 401 requeue on token change`.
 
-### Task 11: Receptor, lector de bandeja, barrido y arranque
+### Task 11: Receiver, inbox reader, sweep and boot
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/sms/SmsReceiver.kt`, `sms/BootReceiver.kt`, `sms/InboxReader.kt`, `sms/Sweeper.kt`, `work/SweepWorker.kt`
-- Modify: `AndroidManifest.xml` (permisos `RECEIVE_SMS`, `READ_SMS`, `RECEIVE_BOOT_COMPLETED`, `POST_NOTIFICATIONS`, `INTERNET`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (lo usa el botón de batería con `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`); receptores con `exported=true` y `android:permission="android.permission.BROADCAST_SMS"` en el de SMS), `WorkScheduler.kt`, `SmsForwarderApp.kt` (programar barrido periódico en `onCreate`)
+- Modify: `AndroidManifest.xml` (permissions `RECEIVE_SMS`, `READ_SMS`, `RECEIVE_BOOT_COMPLETED`, `POST_NOTIFICATIONS`, `INTERNET`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (used by the battery button with `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`); receivers with `exported=true` and `android:permission="android.permission.BROADCAST_SMS"` on the SMS one), `WorkScheduler.kt`, `SmsForwarderApp.kt` (schedule the periodic sweep in `onCreate`)
 - Test: `app/src/test/kotlin/dev/smsforwarder/sms/SweeperTest.kt`, `sms/SmsReceiverTest.kt`
 
 **Interfaces:**
 - Consumes: `SenderFilter`, `SmsIdentity`, `joinParts`, `SmsRepository.ingest`, `SettingsRepository`, `WorkScheduler.enqueueSend`/`kickQueued`, `SmsRepository.queuedIds`, `QueuePolicy.sweepFrom`.
 - Produces:
   - `data class InboxRow(val address: String, val body: String, val date: Long, val dateSent: Long, val subId: Int?)`;
-  - `interface InboxReader { fun readSince(fromDate: Long): List<InboxRow>?; fun hasAnyRow(): Boolean? }`: `readSince` devuelve `null` si el cursor es `null` o hay `SecurityException`; `hasAnyRow()` consulta toda la bandeja sin filtro de fecha con `LIMIT 1` y devuelve `null` si hay `SecurityException`;
+  - `interface InboxReader { fun readSince(fromDate: Long): List<InboxRow>?; fun hasAnyRow(): Boolean? }`: `readSince` returns `null` if the cursor is `null` or there is a `SecurityException`; `hasAnyRow()` queries the whole inbox with no date filter and `LIMIT 1` and returns `null` on `SecurityException`;
     - `class ContentInboxReader(context)`;
-  - `class Sweeper(reader, smsRepository, settings, clock, enqueue: (Long) -> Unit, onRecovered: (List<SmsEntity>) -> Unit)`, con `suspend fun sweep(): SweepResult`;
-  - `data class SweepResult(val recovered: Int, val inboxUnreadable: Boolean)`: `inboxUnreadable` es true si `readSince` devuelve `null` o si `hasAnyRow() == false` con el permiso concedido;
-  - `SweepWorker`: periódico `"sweep-periodic"` cada 15 min (`KEEP`) y puntual `"sweep-now"` (`REPLACE`), sin restricción de red. Ejecuta `sweep()`, después `purgeOld()`, después `WorkScheduler.kickQueued` con `queuedIds()`, y luego llama a `HealthChecker` y al aviso de atascados (enganchados en la Task 12).
+  - `class Sweeper(reader, smsRepository, settings, clock, enqueue: (Long) -> Unit, onRecovered: (List<SmsEntity>) -> Unit)`, with `suspend fun sweep(): SweepResult`;
+  - `data class SweepResult(val recovered: Int, val inboxUnreadable: Boolean)`: `inboxUnreadable` is true if `readSince` returns `null` or if `hasAnyRow() == false` with the permission granted;
+  - `SweepWorker`: periodic `"sweep-periodic"` every 15 min (`KEEP`) and one-off `"sweep-now"` (`REPLACE`), with no network constraint. It runs `sweep()`, then `purgeOld()`, then `WorkScheduler.kickQueued` with `queuedIds()`, and then calls `HealthChecker` and the stuck notification (hooked in Task 12).
 
-- [ ] **Step 1: Tests que fallan** (`FakeInboxReader`):
-  - `sweepBeforeOnboardingDoesNothing`: con `onboardingDone` falso no lee ni inserta nada.
-  - `sweepNeverReadsBeforeFloor`: con cursor = suelo + 1 h, el `fromDate` pedido es el suelo. Sin cursor pero con suelo, lee desde el suelo.
-  - `sweepIngestsMatchingSendersSinceCursorMinus24h`: comprobar el `fromDate` pedido (con el suelo muy anterior).
+- [ ] **Step 1: Failing tests** (`FakeInboxReader`):
+  - `sweepBeforeOnboardingDoesNothing`: with `onboardingDone` false it reads and inserts nothing.
+  - `sweepNeverReadsBeforeFloor`: with cursor = floor + 1 h, the requested `fromDate` is the floor. With no cursor but with a floor, it reads from the floor.
+  - `sweepIngestsMatchingSendersSinceCursorMinus24h`: check the requested `fromDate` (with the floor much earlier).
   - `sweepSkipsSmsAlreadyFromReceiverAndDoesNotNotify`.
-  - `sweepRecoversMissingAndCallsOnRecovered`: `origin == SWEEP` y se llama a `enqueue`.
+  - `sweepRecoversMissingAndCallsOnRecovered`: `origin == SWEEP` and `enqueue` is called.
   - `sweepUsesDateWhenDateSentIsZero`.
   - `nullInboxReportsUnreadable`.
-  - `emptyWholeInboxWithPermissionIsUnreadable`: `hasAnyRow() == false` con permiso concedido → `inboxUnreadable`.
-  - `SmsReceiverTest.multipartFromFilteredSenderIsStoredOnceAndEnqueued`: construir el intent `SMS_RECEIVED` con dos PDU de prueba; helper de test que genere los PDU (GSM 7-bit, remitente alfanumérico `OPERADOR`).
+  - `emptyWholeInboxWithPermissionIsUnreadable`: `hasAnyRow() == false` with the permission granted → `inboxUnreadable`.
+  - `SmsReceiverTest.multipartFromFilteredSenderIsStoredOnceAndEnqueued`: build the `SMS_RECEIVED` intent with two test PDUs; a test helper that generates the PDUs (GSM 7-bit, alphanumeric sender `CARRIER`).
   - `SmsReceiverTest.otherSenderIgnored`.
-  - `SmsReceiverTest.ignoredBeforeOnboarding`: con `onboardingDone` falso no se guarda nada.
+  - `SmsReceiverTest.ignoredBeforeOnboarding`: with `onboardingDone` false nothing is stored.
 - [ ] **Step 2:** Push → FAIL.
-- [ ] **Step 3:** Implementar:
-  - **Receptor:** `Telephony.Sms.Intents.getMessagesFromIntent`, `joinParts`, `receivedAt = messages[0].timestampMillis`, `subId` del extra `SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX`. Dentro de `goAsync()`, en `CoroutineScope(Dispatchers.IO)`, lee `onboardingDone` y, si es falso, termina sin `ingest`; si no, hace `ingest` y, si es `Inserted`, `enqueueSend`; luego `finish()`.
-  - **Barrido:** si `onboardingDone` es falso, no hace nada. Lee desde `QueuePolicy.sweepFrom(cursor, floor)`; sin cursor pero con suelo, desde el suelo. El cursor avanza al máximo `date` leído o, si no hay filas, a `now`.
+- [ ] **Step 3:** Implement:
+  - **Receiver:** `Telephony.Sms.Intents.getMessagesFromIntent`, `joinParts`, `receivedAt = messages[0].timestampMillis`, `subId` from the `SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX` extra. Inside `goAsync()`, in `CoroutineScope(Dispatchers.IO)`, it reads `onboardingDone` and, if false, finishes without `ingest`; otherwise it does `ingest` and, if `Inserted`, `enqueueSend`; then `finish()`.
+  - **Sweep:** if `onboardingDone` is false, it does nothing. It reads from `QueuePolicy.sweepFrom(cursor, floor)`; with no cursor but with a floor, from the floor. The cursor advances to the maximum `date` read or, if there are no rows, to `now`.
   - **Boot:** `sweepNow`.
-  - **Apertura de la app:** `sweepNow` desde `MainActivity.onResume` (el barrido relanza los `QUEUED`).
+  - **App open:** `sweepNow` from `MainActivity.onResume` (the sweep re-kicks the `QUEUED` ones).
 - [ ] **Step 4:** Push → PASS.
 - [ ] **Step 5:** Commit `feat(app): sms receiver, inbox sweep and boot hook`.
 
-### Task 12: Salud del sistema y notificaciones
+### Task 12: System health and notifications
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/health/HealthChecker.kt`, `health/MiuiIntents.kt`, `notify/Notifier.kt`
-- Modify: `SweepWorker.kt`, `SendWorker.kt`, `SmsForwarderApp.kt` (crear canal), `AppGraph.kt`
+- Modify: `SweepWorker.kt`, `SendWorker.kt`, `SmsForwarderApp.kt` (create channel), `AppGraph.kt`
 - Test: `app/src/test/kotlin/dev/smsforwarder/health/HealthCheckerTest.kt`, `notify/NotifierTest.kt`
 
 **Interfaces:**
 - Consumes: `SweepResult.inboxUnreadable`, `SmsRepository.stuckToNotify`/`markStuckNotified`/`idsWithError401`, `SettingsRepository.lastNotifiedIssues`.
 - Produces:
-  - `enum class HealthIssue { SMS_PERMISSION, NOTIFICATION_PERMISSION, BATTERY_OPTIMIZED, BACKGROUND_RESTRICTED, AUTOSTART_OFF, AUTOSTART_UNKNOWN, MIUI_SMS_BLOCKED, TOKEN_REJECTED, NOT_CONFIGURED, NO_SENDERS }`, con `NO_SENDERS` cuando `SettingsRepository.senders` está vacía;
-  - `class HealthChecker(context, smsRepository, secretStore)`, con `suspend fun check(inboxUnreadable: Boolean = false): Set<HealthIssue>`;
-  - `object MiuiIntents`, con:
-    - `fun autostartState(context): Boolean?`: best-effort por reflexión sobre `AppOpsManager.checkOpNoThrow` con op `10008`; `null` si no es MIUI o falla;
-    - `fun autostart(context): Intent`: componente `com.miui.securitycenter/com.miui.permcenter.autostart.AutoStartManagementActivity`;
-    - `fun permissions(context): Intent`: `com.miui.securitycenter/com.miui.permcenter.permissions.PermissionsEditorActivity` con extra `extra_pkgname`;
+  - `enum class HealthIssue { SMS_PERMISSION, NOTIFICATION_PERMISSION, BATTERY_OPTIMIZED, BACKGROUND_RESTRICTED, AUTOSTART_OFF, AUTOSTART_UNKNOWN, MIUI_SMS_BLOCKED, TOKEN_REJECTED, NOT_CONFIGURED, NO_SENDERS }`, with `NO_SENDERS` when `SettingsRepository.senders` is empty;
+  - `class HealthChecker(context, smsRepository, secretStore)`, with `suspend fun check(inboxUnreadable: Boolean = false): Set<HealthIssue>`;
+  - `object MiuiIntents`, with:
+    - `fun autostartState(context): Boolean?`: best-effort via reflection on `AppOpsManager.checkOpNoThrow` with op `10008`; `null` if it is not MIUI or it fails;
+    - `fun autostart(context): Intent`: component `com.miui.securitycenter/com.miui.permcenter.autostart.AutoStartManagementActivity`;
+    - `fun permissions(context): Intent`: `com.miui.securitycenter/com.miui.permcenter.permissions.PermissionsEditorActivity` with extra `extra_pkgname`;
     - `fun battery(context): Intent`;
     - `fun forIssue(context, issue): Intent`.
     
-    Cada intent cae a `Settings.ACTION_APPLICATION_DETAILS_SETTINGS` si `resolveActivity` es `null`.
-  - `class Notifier(context)`, con:
+    Each intent falls back to `Settings.ACTION_APPLICATION_DETAILS_SETTINGS` if `resolveActivity` is `null`.
+  - `class Notifier(context)`, with:
     - `fun recovered(items: List<SmsEntity>)`: id 1001;
     - `fun stuck(item: SmsEntity)`: id `2000 + smsId`;
     - `fun health(issues: Set<HealthIssue>)`: id 3001;
-    - `fun tokenRejected(count: Int)`: id 3002, una sola notificación "Token rechazado: N SMS esperando".
+    - `fun tokenRejected(count: Int)`: id 3002, a single notification "Token rejected: N SMS waiting".
     
-    Canal `alerts`. Al tocar cualquiera se abre `MainActivity`.
+    Channel `alerts`. Tapping any of them opens `MainActivity`.
 
-- [ ] **Step 1: Tests que fallan:**
+- [ ] **Step 1: Failing tests:**
   - `emptySendersIsReportedAsNoSenders`;
   - `smsPermissionDeniedIsReported` (Robolectric `ShadowApplication.denyPermissions`);
   - `token401PresentIsReported`;
@@ -561,20 +561,20 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
   - `nonMiuiAutostartIsUnknownNotOff`;
   - `NotifierTest.tokenRejectedIsSingleNotification`;
   - `SendWorkerTest.401DoesNotNotifyPerSms`;
-  - `NotifierTest.recoveredTextNamesSenderAndTime`: el texto contiene `"Recuperado 1 SMS de OPERADOR de las 11:42"` y `"revisa Inicio automático"`; zona horaria fija en el test.
+  - `NotifierTest.recoveredTextNamesSenderAndTime`: the text contains `"Recovered 1 SMS from CARRIER received at 11:42"` and `"check Autostart"`; fixed time zone in the test.
 - [ ] **Step 2:** Push → FAIL.
-- [ ] **Step 3:** Implementar y enganchar en `SweepWorker`, en este orden:
-  1. `onRecovered` llama a `Notifier.recovered`.
-  2. Para cada `stuckToNotify()` (ya sin filas 401), llamar a `Notifier.stuck` y después a `markStuckNotified`.
-  3. Calcular `issues` (incluye `NO_SENDERS`, que sí dispara notificación además de la tarjeta de la UI). Si difieren de `lastNotifiedIssues()` y no están vacíos, llamar a `Notifier.health`. En los dos casos, guardar `issues`.
+- [ ] **Step 3:** Implement and hook into `SweepWorker`, in this order:
+  1. `onRecovered` calls `Notifier.recovered`.
+  2. For each `stuckToNotify()` (already without 401 rows), call `Notifier.stuck` and then `markStuckNotified`.
+  3. Compute `issues` (includes `NO_SENDERS`, which does trigger a notification in addition to the UI card). If they differ from `lastNotifiedIssues()` and are not empty, call `Notifier.health`. In both cases, save `issues`.
   
-  `AUTOSTART_UNKNOWN` no dispara notificación, solo se muestra en la UI.
+  `AUTOSTART_UNKNOWN` does not trigger a notification, it is only shown in the UI.
   
-  En `SendWorker`, un `Rejected(401)` llama a `Notifier.tokenRejected` con el número de filas 401 (`idsWithError401().size`) y no llama a `stuck`. Un `Rejected(400)` llama a `Notifier.stuck` y después a `markStuckNotified`. `HealthIssue.TOKEN_REJECTED` se mantiene para la tarjeta de la UI.
+  In `SendWorker`, a `Rejected(401)` calls `Notifier.tokenRejected` with the number of 401 rows (`idsWithError401().size`) and does not call `stuck`. A `Rejected(400)` calls `Notifier.stuck` and then `markStuckNotified`. `HealthIssue.TOKEN_REJECTED` is kept for the UI card.
 - [ ] **Step 4:** Push → PASS.
 - [ ] **Step 5:** Commit `feat(app): health checks and alert notifications`.
 
-### Task 13: UI: tema, navegación, pantalla principal y detalle
+### Task 13: UI: theme, navigation, main screen and detail
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/ui/Nav.kt`, `ui/main/MainViewModel.kt`, `ui/main/MainScreen.kt`, `ui/detail/DetailViewModel.kt`, `ui/detail/DetailScreen.kt`
@@ -584,29 +584,29 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 **Interfaces:**
 - Consumes: `SmsRepository.observeAll/observeAttempts/requeue/get`, `statusLabel`, `HealthChecker`, `MiuiIntents.forIssue`, `WorkScheduler.sweepNow/enqueueSend`, `SettingsRepository.themeMode`.
 - Produces:
-  - rutas `onboarding`, `main`, `detail/{id}`, `settings`, `recovery`. `MainActivity` arranca en `onboarding` si `onboardingDone == false`.
+  - routes `onboarding`, `main`, `detail/{id}`, `settings`, `recovery`. `MainActivity` starts at `onboarding` if `onboardingDone == false`.
   - `@Composable fun MainScreen(state: MainUiState, onOpenIssue: (HealthIssue) -> Unit, onSweepNow: () -> Unit, onOpen: (Long) -> Unit, onSettings: () -> Unit)`;
   - `data class MainUiState(val issues: Set<HealthIssue>, val lastSweepAt: Long?, val queued: Int, val errors: Int, val rows: List<RowUi>)`;
   - `data class RowUi(val id: Long, val sender: String, val subId: Int?, val receivedAt: Long, val preview: String, val label: String)`.
 
-- [ ] **Step 1: Tests Compose (Robolectric) que fallan:**
-  - `showsWarningCardWithButtonForAutostartOff`: texto "Inicio automático desactivado" y botón "Abrir ajustes".
-  - `showsStatusLineAndSweepButton`: "Barrer bandeja ahora".
-  - `rowShowsLabel`: aparece "Recuperado · 200".
+- [ ] **Step 1: Failing Compose (Robolectric) tests:**
+  - `showsWarningCardWithButtonForAutostartOff`: text "Autostart is off" and button "Open settings".
+  - `showsStatusLineAndSweepButton`: "Sweep inbox now".
+  - `rowShowsLabel`: "Recovered · 200" appears.
   - `DetailScreenTest.retryVisibleOnlyOnError`.
 - [ ] **Step 2:** Push → FAIL.
-- [ ] **Step 3:** Implementar según el boceto A de la spec §7:
-  - avisos arriba;
-  - línea de estado con "Último barrido: hace N min · Cola: X";
-  - `LazyColumn` del historial;
-  - engranaje en la `TopAppBar`;
-  - el detalle muestra texto completo, remitente, SIM, hora, origen e intentos.
+- [ ] **Step 3:** Implement according to sketch A of spec §7:
+  - warnings at the top;
+  - status line with "Last sweep: N min ago · Queue: X";
+  - history `LazyColumn`;
+  - gear icon in the `TopAppBar`;
+  - the detail shows full text, sender, SIM, time, origin and attempts.
   
-  `lastSweepAt` sale de `SettingsRepository`: añadir `lastSweepAt()`/`setLastSweepAt()` ahí y escribirlo en `SweepWorker`. `SmsForwarderTheme` lee `themeMode`.
+  `lastSweepAt` comes from `SettingsRepository`: add `lastSweepAt()`/`setLastSweepAt()` there and write it in `SweepWorker`. `SmsForwarderTheme` reads `themeMode`.
 - [ ] **Step 4:** Push → PASS.
 - [ ] **Step 5:** Commit `feat(ui): main screen with alerts, status and history; sms detail`.
 
-### Task 14: UI: primer arranque, recuperación manual y ajustes
+### Task 14: UI: first launch, manual recovery and settings
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/smsforwarder/ui/onboarding/OnboardingScreen.kt`, `ui/onboarding/OnboardingViewModel.kt`, `ui/recovery/RecoveryScreen.kt`, `ui/recovery/RecoveryViewModel.kt`, `ui/settings/SettingsScreen.kt`, `ui/settings/SettingsViewModel.kt`
@@ -616,86 +616,86 @@ Primera comprobación real de la spec §5. **Bloquea las tasks 8 en adelante** h
 **Interfaces:**
 - Consumes: `InboxReader`, `SenderFilter`, `SmsIdentity`, `SmsRepository.ingest`, `SettingsRepository` (`setSweepFloor`, `setSweepCursor`, `setOnboardingDone`), `IngestClient.testConnection`, `UrlValidator`, `WorkScheduler`, `QueuePolicy.MANUAL_RECOVERY_MS`.
 - Produces:
-  - `class RecoveryViewModel`, con `val candidates: StateFlow<List<RecoveryItem>>`, `fun toggle(key: String)` y `suspend fun sendSelected(): Int`;
+  - `class RecoveryViewModel`, with `val candidates: StateFlow<List<RecoveryItem>>`, `fun toggle(key: String)` and `suspend fun sendSelected(): Int`;
   - `data class RecoveryItem(val key: String, val sender: String, val receivedAt: Long, val preview: String, val alreadyKnown: Boolean, val selected: Boolean)`.
 
-- [ ] **Step 1: Tests que fallan:**
+- [ ] **Step 1: Failing tests:**
   - `recoveryListsLast7DaysOfAllowedSendersNoneSelected`.
   - `recoveryMarksAlreadyKnownAndDisablesThem`.
   - `sendSelectedIngestsAsManualAndEnqueues`: `origin == MANUAL`.
   - `onboardingRejectsHttpUrl`.
-  - `onboardingRequiresAtLeastOneSender`: tras los permisos, el paso Remitentes no deja continuar con la lista vacía y sí con una entrada.
-  - `onboarding400MeansOkAndShowsCutoverReminder`: el recordatorio con "desinstala o desactiva la app anterior" se muestra al inicio, antes de los permisos, y exige confirmarlo; tras un 400 en Probar conexión solo se continúa (recordatorio corto antes de la recuperación).
-  - `settingsNeverShowsTokenValue`: tras guardar el token `test-token`, ningún nodo contiene `test-token`.
+  - `onboardingRequiresAtLeastOneSender`: after the permissions, the Senders step does not allow continuing with an empty list and does with one entry.
+  - `onboarding400MeansOkAndShowsCutoverReminder`: the reminder with "uninstall or disable the previous app" is shown at the start, before the permissions, and requires confirming it; after a 400 in Test connection it just continues (short reminder before recovery).
+  - `settingsNeverShowsTokenValue`: after saving the token `test-token`, no node contains `test-token`.
 - [ ] **Step 2:** Push → FAIL.
-- [ ] **Step 3:** Implementar:
-  - **Primer arranque**, en este orden:
-    1. Recordatorio de corte limpio (desinstalar o desactivar la app anterior), que se confirma.
-    2. Permisos `RECEIVE_SMS`, `READ_SMS` y `POST_NOTIFICATIONS` (este último solo si SDK ≥ 33). Si se deniega `RECEIVE_SMS`/`READ_SMS` sin diálogo (`shouldShowRequestPermissionRationale == false` en la primera petición), mostrar el aviso de "ajustes restringidos": Información de la app → ⋮ → "Permitir ajustes restringidos".
-    3. Botón para la optimización de batería.
-    4. Aviso de revisar Inicio automático y los SMS en Seguridad de MIUI, con botones de `MiuiIntents`.
-    5. **Remitentes**: añadir y quitar, sin valores por defecto; no se puede continuar con la lista vacía.
-    6. URL y token, con Probar conexión.
-    7. Pantalla de recuperación (con un recordatorio corto de la app anterior antes).
-    8. `setSweepFloor(now)`, `setSweepCursor(now)` y `setOnboardingDone()`.
-  - **Ajustes:**
-    - URL y token se sustituyen con `saveCredentials`. Nunca se rellena el campo del token.
-    - Probar conexión.
-    - Lista de remitentes con añadir y quitar.
-    - Tema: Sistema, Claro u Oscuro.
-    - Entrada a "Recuperar SMS".
+- [ ] **Step 3:** Implement:
+  - **First launch**, in this order:
+    1. Clean-cutover reminder (uninstall or disable the previous app), which is confirmed.
+    2. Permissions `RECEIVE_SMS`, `READ_SMS` and `POST_NOTIFICATIONS` (the latter only if SDK ≥ 33). If `RECEIVE_SMS`/`READ_SMS` is denied without a dialog (`shouldShowRequestPermissionRationale == false` on the first request), show the "restricted settings" notice: App info → ⋮ → "Allow restricted settings".
+    3. Button for battery optimization.
+    4. Notice to check Autostart and the SMS switches in MIUI Security, with `MiuiIntents` buttons.
+    5. **Senders**: add and remove, no default values; cannot continue with an empty list.
+    6. URL and token, with Test connection.
+    7. Recovery screen (with a short reminder about the previous app before it).
+    8. `setSweepFloor(now)`, `setSweepCursor(now)` and `setOnboardingDone()`.
+  - **Settings:**
+    - URL and token are replaced with `saveCredentials`. The token field is never filled in.
+    - Test connection.
+    - Sender list with add and remove.
+    - Theme: System, Light or Dark.
+    - Entry to "Recover SMS".
 - [ ] **Step 4:** Push → PASS.
 - [ ] **Step 5:** Commit `feat(ui): onboarding, manual recovery and settings`.
 
-### Task 15: Release firmada, documentación y prueba real
+### Task 15: Signed release, documentation and real test
 
 **Files:**
 - Create: `.github/workflows/release.yml`, `docs/signing.md`, `docs/manual-test-checklist.md`
-- Modify: `app/build.gradle.kts` (`signingConfigs.release` desde env; `versionCode`/`versionName` desde la etiqueta), `README.md`
+- Modify: `app/build.gradle.kts` (`signingConfigs.release` from env; `versionCode`/`versionName` from the tag), `README.md`
 
 **Interfaces:**
-- Consumes: todo lo anterior.
-- Produces: secretos `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`. Asset `sms-forwarder-vX.Y.Z.apk` en la Release.
+- Consumes: everything above.
+- Produces: secrets `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`. Asset `sms-forwarder-vX.Y.Z.apk` in the Release.
 
 - [ ] **Step 1:** `app/build.gradle.kts`:
-  - lee `GITHUB_REF_NAME`;
-  - si casa `^v(\d+)\.(\d+)\.(\d+)$`, `versionCode = X*10000 + Y*100 + Z` y `versionName = "X.Y.Z"`; si no, `versionCode = 1` y `versionName = "0.0.0-dev"`;
-  - `signingConfig` de release solo si existe la env `SIGNING_STORE_FILE`.
-- [ ] **Step 2:** `release.yml`, en `push: tags: ['v*']`, con `permissions: contents: write`:
-  1. Decodificar el secreto a `$RUNNER_TEMP/release.jks`.
-  2. Ejecutar `./gradlew :core:test :app:testReleaseUnitTest :app:assembleRelease`.
-  3. Renombrar la APK.
-  4. El job define las env `SIGNING_STORE_FILE=$RUNNER_TEMP/release.jks`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS` y `SIGNING_KEY_PASSWORD` desde los secretos, y `GH_TOKEN: ${{ github.token }}` para `gh release create`.
-  5. Publicar con `gh release create "$GITHUB_REF_NAME" <apk> --generate-notes` (sin atribución a Claude en las notas).
-  6. Borrar el `.jks` en un paso `if: always()`.
-- [ ] **Step 3:** `docs/signing.md`, en español y paso a paso:
+  - reads `GITHUB_REF_NAME`;
+  - if it matches `^v(\d+)\.(\d+)\.(\d+)$`, `versionCode = X*10000 + Y*100 + Z` and `versionName = "X.Y.Z"`; otherwise, `versionCode = 1` and `versionName = "0.0.0-dev"`;
+  - release `signingConfig` only if the `SIGNING_STORE_FILE` env exists.
+- [ ] **Step 2:** `release.yml`, on `push: tags: ['v*']`, with `permissions: contents: write`:
+  1. Decode the secret to `$RUNNER_TEMP/release.jks`.
+  2. Run `./gradlew :core:test :app:testReleaseUnitTest :app:assembleRelease`.
+  3. Rename the APK.
+  4. The job defines the envs `SIGNING_STORE_FILE=$RUNNER_TEMP/release.jks`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD` from the secrets, and `GH_TOKEN: ${{ github.token }}` for `gh release create`.
+  5. Publish with `gh release create "$GITHUB_REF_NAME" <apk> --generate-notes` (no Claude attribution in the notes).
+  6. Delete the `.jks` in an `if: always()` step.
+- [ ] **Step 3:** `docs/signing.md`, step by step:
   1. `keytool -genkeypair -v -keystore sms-forwarder.jks -keyalg RSA -keysize 4096 -validity 36500 -alias sms-forwarder`.
   2. `base64 -w0 sms-forwarder.jks`.
-  3. Crear los 4 secretos, por la web (Settings → Secrets and variables → Actions) o con `gh secret set`.
-  4. Guardar el `.jks` y las contraseñas fuera de GitHub. Sin ellos no se puede actualizar la app.
-  5. Desinstalar la build debug si molesta. No hace falta, porque tiene otro `applicationId`.
-- [ ] **Step 4:** `docs/manual-test-checklist.md`, casos de la spec §12:
-  - SMS normal;
-  - SMS multiparte;
-  - modo avión: el SMS queda en cola y se envía al volver la red;
-  - forzar la detención y abrir: el barrido recupera y notifica;
-  - token incorrecto: 401, notificación, corregir y reencolar;
-  - reinicio del teléfono;
-  - la app reenviadora anterior desactivada antes de configurar;
-  - modo claro y oscuro;
-  - quitar Inicio automático: aparece el aviso;
-  - Android 15, ajustes restringidos: si no sale el diálogo de permiso, el primer arranque explica "Permitir ajustes restringidos";
-  - clave perdida tras transferir a otro dispositivo: la app muestra `NOT_CONFIGURED`, no se cierra (y `KeystoreSecretStore.get()` devuelve `null` si no hay test JVM);
-  - el primer barrido tras la configuración no envía nada anterior a la configuración;
-  - un SMS que llega durante el primer arranque no se reenvía;
-  - el primer arranque no deja continuar sin al menos un remitente;
-  - vaciar la lista de remitentes en Ajustes muestra la tarjeta y la notificación de `NO_SENDERS`.
-- [ ] **Step 5:** Commit `ci: signed release workflow; docs: signing and manual test checklist`. Push → CI verde.
-- [ ] **Step 6: Con el usuario:**
-  1. Crea la clave y los secretos siguiendo `docs/signing.md`.
+  3. Create the 4 secrets, through the web UI (Settings → Secrets and variables → Actions) or with `gh secret set`.
+  4. Keep the `.jks` and the passwords outside GitHub. Without them the app cannot be updated.
+  5. Uninstall the debug build if it gets in the way. It is not necessary, because it has a different `applicationId`.
+- [ ] **Step 4:** `docs/manual-test-checklist.md`, cases from spec §12:
+  - normal SMS;
+  - multipart SMS;
+  - airplane mode: the SMS stays queued and is sent when the network returns;
+  - force stop and open: the sweep recovers and notifies;
+  - wrong token: 401, notification, fix and requeue;
+  - phone reboot;
+  - the previous forwarding app disabled before setup;
+  - light and dark mode;
+  - remove Autostart: the warning appears;
+  - Android 15, restricted settings: if the permission dialog does not appear, the first launch explains "Allow restricted settings";
+  - key lost after transferring to another device: the app shows `NOT_CONFIGURED`, does not crash (and `KeystoreSecretStore.get()` returns `null` if there is no JVM test);
+  - the first sweep after setup sends nothing older than the setup;
+  - an SMS that arrives during the first launch is not forwarded;
+  - the first launch does not let you continue without at least one sender;
+  - emptying the sender list in Settings shows the card and the `NO_SENDERS` notification.
+- [ ] **Step 5:** Commit `ci: signed release workflow; docs: signing and manual test checklist`. Push → CI green.
+- [ ] **Step 6: With the user:**
+  1. Create the key and the secrets following `docs/signing.md`.
   2. `git tag v1.0.0 && git push origin v1.0.0`.
-  3. `gh run watch`. La Release aparece con la APK.
-  4. Instala la APK en el teléfono y recorre la checklist.
-  5. Apunta en el chat los casos fallidos.
+  3. `gh run watch`. The Release appears with the APK.
+  4. Install the APK on the phone and go through the checklist.
+  5. Note the failed cases in the chat.
   
-  Los fallos se corrigen en tasks nuevas.
+  Failures are fixed in new tasks.
