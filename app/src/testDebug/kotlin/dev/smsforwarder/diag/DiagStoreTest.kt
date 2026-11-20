@@ -49,9 +49,9 @@ class DiagStoreTest {
 
     @Test fun neverWritesTheBody() {
         val file = File(tmp.root, DiagStore.FILE_NAME)
-        val body = "OPERADOR: saldo actual 140.25"
+        val body = "CARRIER: current balance 140.25"
         DiagStore(file).add(capture(1).copy(bodyHash = shortHash(body), bodyLength = body.length))
-        assertFalse(file.readText().contains("OPERADOR"))
+        assertFalse(file.readText().contains("CARRIER"))
         assertEquals(12, shortHash(body).length)
     }
 

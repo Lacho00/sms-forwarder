@@ -31,11 +31,11 @@ class SmsRepositoryTest {
     private lateinit var db: AppDatabase
     private lateinit var repo: SmsRepository
 
-    private val body = "OPERADOR: Se ha comprado un plan de datos de 2.5GB valido por 30 dias, " +
-        "se activa con el primer uso. Se desconto 360.00. Saldo actual 140.25"
+    private val body = "CARRIER: You bought a 2.5GB data plan valid for 30 days, " +
+        "it starts on first use. 360.00 was deducted. Current balance 140.25"
 
     private fun record(receivedAt: Long = now - 1_000L, text: String = body) =
-        SmsRecord("OPERADOR", text, receivedAt, null, null)
+        SmsRecord("CARRIER", text, receivedAt, null, null)
 
     @Before fun setUp() {
         val context = RuntimeEnvironment.getApplication()

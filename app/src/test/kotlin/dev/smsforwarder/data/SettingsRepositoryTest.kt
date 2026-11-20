@@ -43,7 +43,7 @@ class SettingsRepositoryTest {
     private lateinit var settings: SettingsRepository
     private val kicked = mutableListOf<Long>()
 
-    private fun record(text: String) = SmsRecord("OPERADOR", text, 1_799_999_999_000L, null, null)
+    private fun record(text: String) = SmsRecord("CARRIER", text, 1_799_999_999_000L, null, null)
 
     @Before fun setUp() {
         val context = RuntimeEnvironment.getApplication()
@@ -67,9 +67,9 @@ class SettingsRepositoryTest {
     }
 
     @Test fun addSenderIgnoresDuplicateAfterNormalization() = runBlocking {
-        settings.addSender("OPERADOR")
-        settings.addSender(" operador")
-        assertEquals(listOf("OPERADOR"), settings.senders.first())
+        settings.addSender("CARRIER")
+        settings.addSender(" carrier")
+        assertEquals(listOf("CARRIER"), settings.senders.first())
     }
 
     @Test fun saveCredentialsRequeues401AndKicksQueued() = runBlocking {
@@ -101,8 +101,8 @@ class SettingsRepositoryTest {
     }
 
     @Test fun removeSenderMatchesNormalized() = runBlocking {
-        settings.addSender("OPERADOR")
-        settings.removeSender("operador ")
+        settings.addSender("CARRIER")
+        settings.removeSender("carrier ")
         assertTrue(settings.senders.first().isEmpty())
     }
 

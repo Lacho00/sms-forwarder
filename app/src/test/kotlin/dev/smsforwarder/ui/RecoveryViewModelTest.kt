@@ -48,8 +48,8 @@ class RecoveryViewModelTest {
 
     private val now = 1_800_000_000_000L
     private val clock = Clock { now }
-    private val body = "OPERADOR: Se ha comprado un plan de datos de 2.5GB valido por 30 dias, " +
-        "se activa con el primer uso. Se desconto 360.00. Saldo actual 140.25"
+    private val body = "CARRIER: You bought a 2.5GB data plan valid for 30 days, " +
+        "it starts on first use. 360.00 was deducted. Current balance 140.25"
 
     private lateinit var db: AppDatabase
     private lateinit var sms: SmsRepository
@@ -76,11 +76,11 @@ class RecoveryViewModelTest {
         db.close()
     }
 
-    private fun row(date: Long, text: String = body, address: String = "OPERADOR", dateSent: Long = 0L) =
+    private fun row(date: Long, text: String = body, address: String = "CARRIER", dateSent: Long = 0L) =
         InboxRow(address, text, date, dateSent, null)
 
     @Test fun recoveryListsLast7DaysOfAllowedSendersNoneSelected() = runBlocking {
-        settings.addSender("OPERADOR")
+        settings.addSender("CARRIER")
         reader.rows = listOf(
             row(now - 2 * 86_400_000L, "$body uno"),
             row(now - 1_000, "$body dos"),
@@ -97,9 +97,9 @@ class RecoveryViewModelTest {
     }
 
     @Test fun recoveryMarksAlreadyKnownAndDisablesThem() = runBlocking {
-        settings.addSender("OPERADOR")
+        settings.addSender("CARRIER")
         val t = now - 10_000
-        sms.ingest(SmsRecord("OPERADOR", body, t, null, null), SmsOrigin.RECEIVER, setOf(1L))
+        sms.ingest(SmsRecord("CARRIER", body, t, null, null), SmsOrigin.RECEIVER, setOf(1L))
         reader.rows = listOf(
             row(date = t + 400, dateSent = t + 1_500),
             row(date = now - 5_000, text = "$body otro"),
@@ -116,7 +116,7 @@ class RecoveryViewModelTest {
     }
 
     @Test fun sendSelectedIngestsAsManualAndEnqueues() = runBlocking {
-        settings.addSender("OPERADOR")
+        settings.addSender("CARRIER")
         reader.rows = listOf(row(now - 5_000, "$body uno"), row(now - 6_000, "$body dos"))
         vm.load()
 

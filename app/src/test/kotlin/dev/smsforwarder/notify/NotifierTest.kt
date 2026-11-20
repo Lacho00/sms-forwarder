@@ -34,9 +34,9 @@ class NotifierTest {
     private fun entity(id: Long, receivedAt: Long) = SmsEntity(
         id = id,
         localKey = "key-$id",
-        sender = "OPERADOR",
-        senderNormalized = "OPERADOR",
-        body = "cuerpo de prueba",
+        sender = "CARRIER",
+        senderNormalized = "CARRIER",
+        body = "test body",
         receivedAt = receivedAt,
         phoneDate = null,
         subId = null,
@@ -81,7 +81,7 @@ class NotifierTest {
         val at = LocalDateTime.of(2026, 10, 29, 11, 42).toInstant(ZoneOffset.UTC).toEpochMilli()
         Notifier(context, utc).recovered(listOf(entity(1, at)))
         val shown = text(shadowOf(manager).getNotification(Notifier.ID_RECOVERED))
-        assertTrue(shown, shown.contains(context.getString(R.string.notif_recovered_one, "OPERADOR", "11:42")))
+        assertTrue(shown, shown.contains(context.getString(R.string.notif_recovered_one, "CARRIER", "11:42")))
     }
 
     @Test fun rejectedKeepsTheSameTextAsTheOldRejectedNotice() {
@@ -91,7 +91,7 @@ class NotifierTest {
         assertNotNull(n)
         val shown = text(n)
         assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_title)))
-        assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_rejected, "OPERADOR", "08:00", 400)))
+        assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_rejected, "CARRIER", "08:00", 400)))
     }
 
     @Test fun tokenRejectedNamesDestination() {
@@ -106,6 +106,6 @@ class NotifierTest {
         val item = entity(6, 1_800_000_000_000L).copy(status = SmsStatus.ERROR)
         Notifier(context, utc).configError(item, "Main")
         val shown = text(shadowOf(manager).getNotification(Notifier.STUCK_TAG, 6))
-        assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_config, "OPERADOR", "08:00", "Main")))
+        assertTrue(shown, shown.contains(context.getString(R.string.notif_stuck_config, "CARRIER", "08:00", "Main")))
     }
 }

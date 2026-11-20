@@ -106,7 +106,7 @@ class RulesTest {
     }
 
     @Test fun patternsAccepted() {
-        for (p in listOf("(CUP|USD)+", ".*codigo.*\\d{6}.*", "^\\+?53\\d+", "(a|aa)+$", "(?i)saldo")) {
+        for (p in listOf("(CUP|USD)+", ".*code.*\\d{6}.*", "^\\+?53\\d+", "(a|aa)+$", "(?i)balance")) {
             assertTrue(RuleEngine.validatePattern(p), p)
         }
     }
@@ -149,7 +149,7 @@ class RulesTest {
 
     @Test fun boundedPatternsAccepted() {
         val ok = listOf("a{1000}", "(?:\\d{3}){3}", "\\d{4,6}", "a{x", "[{1000}]{2}", "\\Q{9999}\\E", "[[:alpha:]]{2}", "a".repeat(500),
-            "(\\d{3}-){2}\\d{4}", "[a-z]{1000}", ".{0,1000}", "^\\+?53\\d+", "(?i)saldo.*CUP")
+            "(\\d{3}-){2}\\d{4}", "[a-z]{1000}", ".{0,1000}", "^\\+?53\\d+", "(?i)balance.*CUP")
         for (p in ok) assertTrue(RuleEngine.validatePattern(p), p)
     }
 

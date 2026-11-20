@@ -56,12 +56,12 @@ private fun DiagScreen() {
             Column {
                 if (!granted) Button(onClick = { launcher.launch(permissions) }) { Text("Conceder permisos SMS") }
                 Button(onClick = { refresh++ }) { Text("Actualizar") }
-                Text("Capturas del receptor (${captures.size})", style = MaterialTheme.typography.titleMedium)
+                Text("Receiver captures (${captures.size})", style = MaterialTheme.typography.titleMedium)
             }
         }
         items(captures) { c ->
             Text(
-                "${c.sender} · pdu=${c.pduTimestamp} · hash=${c.bodyHash} · len=${c.bodyLength} · partes=${c.parts} · sub=${c.subId}",
+                "${c.sender} · pdu=${c.pduTimestamp} · hash=${c.bodyHash} · len=${c.bodyLength} · parts=${c.parts} · sub=${c.subId}",
                 Modifier.padding(vertical = 4.dp),
             )
         }

@@ -44,7 +44,7 @@ class RuleRepositoryTest {
     }
 
     @Test fun addSenderCreatesExactRuleToPrimary() = runBlocking {
-        rules.addSender(" OPERADOR ")
+        rules.addSender(" CARRIER ")
 
         val primary = repos.destinations.primary()!!
         assertEquals("Primary", primary.name)
@@ -53,20 +53,20 @@ class RuleRepositoryTest {
         assertEquals(SuccessPolicy.ANY_2XX, primary.successPolicy)
         val active = rules.activeRules().single()
         assertEquals(SenderMode.EXACT, active.senderMode)
-        assertEquals("OPERADOR", active.senderPattern)
+        assertEquals("CARRIER", active.senderPattern)
         assertEquals(setOf(primary.id), active.destinationIds)
     }
 
     @Test fun addSenderTwiceNormalizedIsOne() = runBlocking {
-        rules.addSender("OPERADOR")
-        rules.addSender(" operador")
+        rules.addSender("CARRIER")
+        rules.addSender(" carrier")
         assertEquals(1, rules.activeRules().size)
-        assertEquals(listOf("OPERADOR"), rules.senders.first())
+        assertEquals(listOf("CARRIER"), rules.senders.first())
     }
 
     @Test fun removeSenderDeletesRule() = runBlocking {
-        rules.addSender("OPERADOR")
-        rules.removeSender("operador ")
+        rules.addSender("CARRIER")
+        rules.removeSender("carrier ")
         assertTrue(rules.activeRules().isEmpty())
         assertFalse(rules.hasActiveRules())
         assertTrue(rules.senders.first().isEmpty())
@@ -79,14 +79,14 @@ class RuleRepositoryTest {
     }
 
     @Test fun ruleToDeletedDestinationContributesNothing() = runBlocking {
-        rules.addSender("OPERADOR")
+        rules.addSender("CARRIER")
         val primary = repos.destinations.primary()!!
         db.destinationDao().update(primary.copy(deletedAt = 5L))
         assertTrue(rules.activeRules().isEmpty())
     }
 
     @Test fun pausedDestinationKeepsItsRules() = runBlocking {
-        rules.addSender("OPERADOR")
+        rules.addSender("CARRIER")
         val primary = repos.destinations.primary()!!
         db.destinationDao().update(primary.copy(enabled = false))
         assertEquals(1, rules.activeRules().size)

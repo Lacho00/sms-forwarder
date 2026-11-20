@@ -7,21 +7,21 @@ import kotlin.test.assertTrue
 
 class SenderFilterTest {
     @Test fun normalizeRemovesAllWhitespaceAndUppercases() =
-        assertEquals("BANCOX", SenderFilter.normalize(" Banco x\t"))
+        assertEquals("BANKX", SenderFilter.normalize(" Bank x\t"))
 
     @Test fun matchesIgnoringCaseAndSpaces() {
-        val allowed = listOf("OPERADOR", "BANCO")
-        assertTrue(SenderFilter.matches("operador ", allowed))
-        assertTrue(SenderFilter.matches("BANCO", listOf(" banco")))
+        val allowed = listOf("CARRIER", "BANK")
+        assertTrue(SenderFilter.matches("carrier ", allowed))
+        assertTrue(SenderFilter.matches("BANK", listOf(" bank")))
     }
 
     @Test fun doesNotMatchPrefixOrOtherSenders() {
-        val allowed = listOf("OPERADOR", "BANCO")
-        assertFalse(SenderFilter.matches("OPERADOR-PROMO", allowed))
+        val allowed = listOf("CARRIER", "BANK")
+        assertFalse(SenderFilter.matches("CARRIER-PROMO", allowed))
         assertFalse(SenderFilter.matches("+10000000000", allowed))
         assertFalse(SenderFilter.matches("", allowed))
     }
 
     @Test fun emptyAllowedListMatchesNothing() =
-        assertFalse(SenderFilter.matches("OPERADOR", emptyList()))
+        assertFalse(SenderFilter.matches("CARRIER", emptyList()))
 }

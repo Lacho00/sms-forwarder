@@ -42,8 +42,8 @@ class SmsReceiverTest {
     private val enqueued = mutableListOf<Long>()
     private val receiver = SmsReceiver().apply { enqueue = { _, id -> enqueued += id } }
 
-    private val part1 = "OPERADOR: Se ha comprado un plan de datos de 2.5GB valido por 30 dias, "
-    private val part2 = "se activa con el primer uso. Se desconto 360.00. Saldo actual 140.25"
+    private val part1 = "CARRIER: You bought a 2.5GB data plan valid for 30 days, "
+    private val part2 = "it starts on first use. 360.00 was deducted. Current balance 140.25"
 
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
@@ -59,14 +59,14 @@ class SmsReceiverTest {
 
     @Test fun multipartFromFilteredSenderIsStoredOnceAndEnqueued() = runBlocking {
         graph.settings.setOnboardingDone()
-        graph.settings.addSender("OPERADOR")
+        graph.settings.addSender("CARRIER")
 
-        receiver.process(context, smsIntent("OPERADOR", part1, part2))
+        receiver.process(context, smsIntent("CARRIER", part1, part2))
 
         val all = graph.smsRepository.observeAll().first()
         assertEquals(1, all.size)
         assertEquals(part1 + part2, all.single().body)
-        assertEquals("OPERADOR", all.single().sender)
+        assertEquals("CARRIER", all.single().sender)
         assertEquals(SmsOrigin.RECEIVER, all.single().origin)
         assertEquals(listOf(all.single().id), enqueued)
     }
@@ -77,14 +77,14 @@ class SmsReceiverTest {
         // Bypass the validating repository: a rule saved earlier with a pattern RE2/J rejects.
         val ruleId = graph.db.ruleDao().insert(
             dev.smsforwarder.data.RuleEntity(
-                name = "R", enabled = true, senderMode = dev.smsforwarder.core.SenderMode.CONTAINS, senderPattern = "OPERADOR",
+                name = "R", enabled = true, senderMode = dev.smsforwarder.core.SenderMode.CONTAINS, senderPattern = "CARRIER",
                 bodyMode = dev.smsforwarder.core.BodyMode.REGEX, bodyPattern = "(a)\\1",
                 sim = dev.smsforwarder.core.SimMatch.ANY, createdAt = 0,
             ),
         )
         graph.db.ruleDao().insertLinks(listOf(dev.smsforwarder.data.RuleDestinationEntity(ruleId, 1L)))
 
-        receiver.process(context, smsIntent("OPERADOR", "aa"))
+        receiver.process(context, smsIntent("CARRIER", "aa"))
 
         val events = graph.engineLog.recent(10)
         assertTrue(events.toString(), events.any { it.type == dev.smsforwarder.core.EngineEventType.RULE_TIMEOUT && it.ruleId == ruleId })
@@ -93,7 +93,7 @@ class SmsReceiverTest {
 
     @Test fun otherSenderIgnored() = runBlocking {
         graph.settings.setOnboardingDone()
-        graph.settings.addSender("OPERADOR")
+        graph.settings.addSender("CARRIER")
 
         receiver.process(context, smsIntent("OTRO", part1, part2))
 
@@ -104,7 +104,7 @@ class SmsReceiverTest {
     @Test fun smsIsNotRoutedWhileTheLegacyImportIsInSafeMode() = runBlocking {
         graph.destinationRepository.savePrimaryCredentials(Credentials("https://example.invalid/ingest", "test-token"))
         graph.settings.setOnboardingDone()
-        graph.settings.addSender("OPERADOR")
+        graph.settings.addSender("CARRIER")
         val failing = dev.smsforwarder.data.FakeDestinationSecretStore().apply { failOnSet = true }
         val legacy = object : SecretStore {
             override suspend fun get() = Credentials("https://example.invalid/ingest", "test-token")
@@ -116,16 +116,16 @@ class SmsReceiverTest {
         )
         graph.legacyImport = dev.smsforwarder.data.LegacyImport(graph.db, legacy, failing, unmarked)
 
-        receiver.process(context, smsIntent("OPERADOR", part1, part2))
+        receiver.process(context, smsIntent("CARRIER", part1, part2))
 
         assertTrue(graph.smsRepository.observeAll().first().isEmpty())
         assertTrue(enqueued.isEmpty())
     }
 
     @Test fun ignoredBeforeOnboarding() = runBlocking {
-        graph.settings.addSender("OPERADOR")
+        graph.settings.addSender("CARRIER")
 
-        receiver.process(context, smsIntent("OPERADOR", part1, part2))
+        receiver.process(context, smsIntent("CARRIER", part1, part2))
 
         assertTrue(graph.smsRepository.observeAll().first().isEmpty())
         assertTrue(enqueued.isEmpty())
@@ -137,10 +137,10 @@ class SmsReceiverTest {
         try {
             graph.destinationRepository.savePrimaryCredentials(Credentials(server.url("/ingest").toString(), "test-token"))
             graph.settings.setOnboardingDone()
-            graph.settings.addSender("OPERADOR")
+            graph.settings.addSender("CARRIER")
             graph.settings.setForwardingEnabled(false)
 
-            receiver.process(context, smsIntent("OPERADOR", part1, part2))
+            receiver.process(context, smsIntent("CARRIER", part1, part2))
             val id = graph.smsRepository.observeAll().first().single().id
             val worker = {
                 TestListenableWorkerBuilder<SendWorker>(context)

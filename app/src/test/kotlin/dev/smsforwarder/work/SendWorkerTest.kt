@@ -50,8 +50,8 @@ class SendWorkerTest {
     private lateinit var context: Context
     private lateinit var graph: AppGraph
 
-    private val body = "OPERADOR: Se ha comprado un plan de datos de 2.5GB valido por 30 dias, " +
-        "se activa con el primer uso. Se desconto 360.00. Saldo actual 140.25"
+    private val body = "CARRIER: You bought a 2.5GB data plan valid for 30 days, " +
+        "it starts on first use. 360.00 was deducted. Current balance 140.25"
 
     @Before fun setUp() {
         server = MockWebServer()
@@ -71,7 +71,7 @@ class SendWorkerTest {
     }
 
     private suspend fun insertSms(receivedAt: Long = 1_800_000_000_000L): Long {
-        val record = SmsRecord("OPERADOR", body, receivedAt, null, null)
+        val record = SmsRecord("CARRIER", body, receivedAt, null, null)
         return (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, setOf(1L)) as IngestResult.Inserted).id
     }
 
@@ -143,7 +143,7 @@ class SendWorkerTest {
             ),
         )
         graph.destinationSecretStore.set(other, DestinationSecrets(server.url("/second").toString(), emptyList()))
-        val record = SmsRecord("OPERADOR", body, 1_800_000_000_000L, null, null)
+        val record = SmsRecord("CARRIER", body, 1_800_000_000_000L, null, null)
         val id = (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, setOf(1L, other)) as IngestResult.Inserted).id
         server.dispatcher = object : mockwebserver3.Dispatcher() {
             override fun dispatch(request: mockwebserver3.RecordedRequest): MockResponse =
@@ -155,7 +155,7 @@ class SendWorkerTest {
         assertEquals(2, sends.size)
         assertEquals(setOf("accepted", "rejected"), sends.map { it.code }.toSet())
         val raw = java.io.File(context.noBackupFilesDir, "engine-events.log").readText()
-        assertEquals(false, raw.contains("OPERADOR"))
+        assertEquals(false, raw.contains("CARRIER"))
         assertEquals(false, raw.contains("://"))
         assertEquals(false, raw.contains("test-token"))
     }
@@ -258,7 +258,7 @@ class SendWorkerTest {
     }
 
     private suspend fun insertSmsTo(vararg destinations: Long): Long {
-        val record = SmsRecord("OPERADOR", body, 1_800_000_000_000L, null, null)
+        val record = SmsRecord("CARRIER", body, 1_800_000_000_000L, null, null)
         return (graph.smsRepository.ingest(record, SmsOrigin.RECEIVER, destinations.toSet()) as IngestResult.Inserted).id
     }
 
@@ -270,7 +270,7 @@ class SendWorkerTest {
         assertEquals("POST", request.method)
         assertEquals("Bearer test-token", request.headers["Authorization"])
         assertEquals("application/json; charset=utf-8", request.headers["Content-Type"])
-        assertEquals(IngestPayload.encode("OPERADOR", body, 1_800_000_000_000L), request.body!!.utf8())
+        assertEquals(IngestPayload.encode("CARRIER", body, 1_800_000_000_000L), request.body!!.utf8())
     }
 
     @Test fun downDestinationDoesNotBlockOther() = runBlocking {
