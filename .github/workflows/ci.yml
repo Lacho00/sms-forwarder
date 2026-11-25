@@ -2,14 +2,21 @@ name: CI
 
 on:
   push:
+    branches: [main]
+    paths-ignore: ['**.md']
   pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -17,13 +24,23 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      # Tests and lint run on the PR, against its merge with main. A push to main
+      # does not run them again: it only adds the release build. A direct push to
+      # main, or a merge after main moved on, gets no test run of its own.
       - name: Test, lint and assemble
-        run: ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease
+        if: github.event_name == 'pull_request'
+        run: ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      # R8 (minify + shrinkResources) only runs in the release build. Check it once
+      # per merge to main, so a broken keep rule shows up before the next tag.
+      - name: Assemble release (R8)
+        if: github.event_name == 'push'
+        run: ./gradlew :app:assembleRelease
       - name: Room schemas are committed
         run: |
           git diff --exit-code app/schemas
           test -z "$(git status --porcelain app/schemas)"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: github.event_name == 'pull_request'
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
@@ -40,6 +57,7 @@ jobs:
 
   gitleaks:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
