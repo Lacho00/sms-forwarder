@@ -257,7 +257,7 @@ run on MIUI. The real guarantee is that the SMS remains in the inbox and the nex
 - Real senders and personal configuration values live in a local `private/` folder, ignored by
   git, and are never committed.
 - The repo is public, so:
-  - gitleaks in CI on every push and PR;
+  - gitleaks in CI on every PR and on every push to `main` that touches more than Markdown;
   - `.gitignore` with `*.jks`, `*.keystore`, `local.properties`, `.superpowers/`, `.codebase-memory/`;
   - made-up test SMS in a realistic format, for example: "CARRIER: Se ha comprado un plan de
     datos de 2.5GB valido por 30 dias, se activa con el primer uso. Se desconto 360.00. Saldo
@@ -277,8 +277,11 @@ Android SDK locally, so without this split every test would have to go through G
 ## 11. Build and release
 
 - GitHub Actions:
-  - On every push and PR: build, JVM unit tests, lint, gitleaks and an unsigned `assembleRelease`,
-    so that an R8/minify breakage shows up before tagging.
+  - On every PR: build, JVM unit tests, lint and gitleaks. Branches only build through their PR,
+    not through a branch push, and a newer push cancels the older run.
+  - On every push to `main` that touches more than Markdown: an unsigned `assembleRelease` and
+    gitleaks, so that an R8/minify breakage shows up before tagging. Tests and lint do not run
+    again there: `main` relies on the PR run.
   - When a `vX.Y.Z` tag is pushed: signed release APK, published in a GitHub Release.
 - Signing: a single key. The user generates it on their PC with `keytool` (the plan gives the
   commands step by step), converts it to base64 and stores it in the repo secrets along with
